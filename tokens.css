@@ -1,0 +1,141 @@
+/* ============================================================
+   SteelBox Design Tokens
+   Ported from Claude Design handoff — single source of truth
+   for all three surfaces: Marketplace, Admin, Field App
+   ============================================================ */
+
+:root {
+  /* ── Brand colors ── */
+  --primary: #0057B8;
+  --primary-cont: #D6E4FF;
+  --primary-dark: #0048A3;
+
+  --cta: #E65100;
+  --cta-h: #BF360C;
+  --cta-cont: #FFE0CC;
+
+  /* ── Semantic / grade colors ── */
+  --green: #1B7A5A;
+  --green-cont: #E6F4EE;
+  --green-tert-cont: #B7F0DA;
+
+  --amber: #B45309;
+  --amber-cont: #FEF3C7;
+
+  --purple: #6D28D9;
+  --purple-cont: #EDE9FE;
+
+  --blue2: #2563EB;
+
+  --slate: #374151;
+  --slate-cont: #F3F4F6;
+
+  --warning: #F9A825;
+  --warning-cont: #FFF8E1;
+
+  /* ── Surfaces ── */
+  --pg: #F4F5F7;
+  --surf: #F4F5F7;
+  --surf1: #EEF2FF;
+  --surf-w: #FFFFFF;
+  --surf-field: #F8F9FF;
+
+  /* ── Ink / text ── */
+  --ink: #0D0E12;
+  --ink2: #44474F;
+  --ink3: #6B7280;
+  --on-surf: #1A1C2E;
+  --on-surf-var: #44475A;
+
+  /* ── Borders ── */
+  --div: #E2E4E9;
+  --div2: #C4C6D0;
+  --outline: #C4C6D0;
+  --outline-var: #E1E2EC;
+
+  /* ── Typography ── */
+  --sans: 'DM Sans', system-ui, sans-serif;
+  --mono: 'DM Mono', ui-monospace, monospace;
+  --sans-field: 'Roboto', sans-serif;
+  --display-field: 'Google Sans Display', sans-serif;
+  --sans-field-ui: 'Google Sans', sans-serif;
+  --mono-field: 'Roboto Mono', monospace;
+
+  /* ── Radii ── */
+  --r4: 4px;
+  --r8: 8px;
+  --r12: 12px;
+  --r16: 16px;
+  --r24: 24px;
+  --pill: 999px;
+
+  /* ── Shadows ── */
+  --sh1: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --sh2: 0 4px 16px rgba(0, 0, 0, 0.10);
+  --sh3: 0 12px 40px rgba(0, 0, 0, 0.14);
+  --shadow: rgba(26, 28, 46, 0.08);
+  --shadow-md: rgba(26, 28, 46, 0.14);
+
+  /* ── Layout: Marketplace ── */
+  --nav-h: 48px;
+  --sb-w: 200px;
+
+  /* ── Layout: Admin ── */
+  --admin-nav-w: 252px;
+  --admin-top-h: 56px;
+
+  /* ── Grade badge colors (used in JS too — keep in sync with GRADE_META) ── */
+  --grade-a: #1B7A5A;
+  --grade-b: #2563EB;
+  --grade-c: #D97706;
+  --grade-r: #6D28D9;
+  --grade-x: #374151;
+}
+
+/* ── Global reset ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--sans);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+}
+
+/* ── Utility: mono text ── */
+.mono {
+  font-family: var(--mono);
+}
+
+/* ── Animation ── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.96) translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
