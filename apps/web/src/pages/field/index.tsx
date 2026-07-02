@@ -8,42 +8,161 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useSnackbar } from '../../hooks'
 import { Snackbar } from '../../components/ui'
+import { activity, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, containers as containersApi, availability as availabilityApi, messages as messagesApi, customers as customersApi, parseTrucks, parseWorkHours, encodeWorkHours, type ActivityEvent, type Depot, type Driver, type SchedJob, type DayHours, type Availability, type Message, type Customer } from '../../lib/api'
+
+// The signed-in field driver (demo — fixed to one driver for now).
+const DRIVER_ID = 'drv_01'
+const ACTOR = 'Mike Torres'
+
+// ── Stroke icons (match the admin portal's simple iconography) ──
+const ICON_PATHS: Record<string, React.ReactNode> = {
+  home:   <><rect x="2" y="2" width="7" height="7" rx="1.5" /><rect x="11" y="2" width="7" height="7" rx="1.5" /><rect x="2" y="11" width="7" height="7" rx="1.5" /><rect x="11" y="11" width="7" height="7" rx="1.5" /></>,
+  truck:  <><rect x="1" y="6" width="11" height="9" rx="1.5" /><path d="M12 9h4l3 3v3h-7V9z" /><circle cx="5" cy="16.5" r="1.5" fill="currentColor" stroke="none" /><circle cx="15" cy="16.5" r="1.5" fill="currentColor" stroke="none" /></>,
+  box:    <><rect x="2" y="6" width="16" height="11" rx="1.5" /><path d="M2 9h16" /><path d="M8 6v11" /></>,
+  camera: <><path d="M2 7h2.5L6 5h8l1.5 2H18a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V8a1 1 0 011-1z" /><circle cx="10" cy="11" r="3" /></>,
+  calendar: <><rect x="2" y="4" width="16" height="14" rx="2" /><line x1="2" y1="8.5" x2="18" y2="8.5" /><line x1="7" y1="2" x2="7" y2="6" /><line x1="13" y1="2" x2="13" y2="6" /></>,
+  pin:    <><path d="M10 2a5.5 5.5 0 0 0-5.5 5.5c0 4 5.5 10 5.5 10s5.5-6 5.5-10A5.5 5.5 0 0 0 10 2z" /><circle cx="10" cy="7.5" r="1.8" /></>,
+  phone:  <><path d="M6.5 2h7a1 1 0 011 1v14a1 1 0 01-1 1h-7a1 1 0 01-1-1V3a1 1 0 011-1z" /><line x1="9" y1="15.5" x2="11" y2="15.5" /></>,
+  sms:    <><path d="M3 4h14a1 1 0 011 1v8a1 1 0 01-1 1H8l-4 3v-3H3a1 1 0 01-1-1V5a1 1 0 011-1z" /></>,
+  check:  <><polyline points="3,10.5 8,16 17,5" /></>,
+  pen:    <><path d="M13.5 3.5l3 3L7 16H4v-3z" /><path d="M12 5l3 3" /></>,
+  receipt: <><path d="M5 2h10v16l-2.5-1.5L10 18l-2.5-1.5L5 18z" /><line x1="8" y1="6.5" x2="12" y2="6.5" /><line x1="8" y1="9.5" x2="12" y2="9.5" /></>,
+  user:   <><circle cx="10" cy="6.5" r="3" /><path d="M3.5 17a6.5 6.5 0 0 1 13 0" /></>,
+  star:   <><path d="M10 2.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 7.8l5-.7z" /></>,
+  arrow:  <><polyline points="8,4 14,10 8,16" /></>,
+  ret:    <><path d="M8 4L4 8l4 4" /><path d="M4 8h9a4 4 0 0 1 4 4v2" /></>,
+  alert:  <><path d="M10 2.5L1.5 17.5h17L10 2.5z" /><line x1="10" y1="8" x2="10" y2="12" /><circle cx="10" cy="14.6" r="0.5" fill="currentColor" stroke="none" /></>,
+  refresh: <><path d="M15.5 6.5A6.5 6.5 0 1 0 17 11" /><polyline points="16 2.5 16 6.5 12 6.5" /></>,
+  inbox: <><path d="M2.5 11.5 5 4h10l2.5 7.5v4a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z" /><path d="M2.5 11.5H7l1 2h4l1-2h4.5" /></>,
+  trash: <><polyline points="3 5.5 17 5.5" /><path d="M5.5 5.5 6.5 17h7l1-11.5" /><path d="M8 5.5V3h4v2.5" /></>,
+}
+function Icon({ name, size = 18, color = 'currentColor', sw = 1.6 }: { name: string; size?: number; color?: string; sw?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">{ICON_PATHS[name]}</svg>
+}
+
+// ── Job model + workflows ─────────────────────────────────
+
+type JobKind = 'pickup' | 'delivery' | 'return'
+interface Job {
+  id: string
+  kind: JobKind
+  dest?: 'depot' | 'customer'   // delivery only
+  sku: string
+  containerId: string
+  depotId?: string              // pickup source depot OR delivery destination depot
+  originDepotId?: string        // delivery-from-depot origin
+  customer?: string
+  contact?: string
+  address?: string
+  email?: string
+  time: string
+}
+
+// Schedule entry types (shared with admin) + a minutes formatter.
+const SCHED_TYPE_META: Record<string, { label: string; color: string; bg: string }> = {
+  pickup:   { label: 'Pickup',   color: '#E65100', bg: '#FFE0CC' },
+  delivery: { label: 'Delivery', color: '#0057B8', bg: '#EEF2FF' },
+  return:   { label: 'Return',   color: '#6D28D9', bg: '#EDE9FE' },
+  transfer: { label: 'Transfer', color: '#B45309', bg: '#FEF3C7' },
+}
+const fmtMin = (m: number) => { const h = Math.floor(m / 60), mm = m % 60, ap = h < 12 ? 'AM' : 'PM', hh = ((h + 11) % 12) + 1; return `${hh}:${String(mm).padStart(2, '0')} ${ap}` }
+
+const KIND_META: Record<JobKind, { label: string; icon: string; color: string; bg: string }> = {
+  pickup:   { label: 'Pickup',   icon: 'box',   color: '#E65100', bg: '#FFE0CC' },
+  delivery: { label: 'Delivery', icon: 'truck', color: '#0057B8', bg: '#EEF2FF' },
+  return:   { label: 'Return',   icon: 'ret',   color: '#6D28D9', bg: '#EDE9FE' },
+}
+
+// A step: an action key + label. `photos1`/`photos12` gate on captures;
+// `signature`/`receipt`/`sms` run inline side effects.
+type StepKey = 'travel' | 'arrive' | 'load' | 'photos12' | 'unload' | 'drop' | 'sms' | 'signature' | 'photo1' | 'score' | 'receipt' | 'complete'
+interface FlowStep { key: StepKey; label: string; detail?: string; cta: string }
+
+function stepsFor(job: Job): FlowStep[] {
+  if (job.kind === 'pickup') return [
+    { key: 'travel',   label: 'Travel to depot',        detail: 'Check in with the lot attendant', cta: 'On my way' },
+    { key: 'arrive',   label: 'Arrived at depot',       cta: 'Arrived' },
+    { key: 'load',     label: 'Load container',         detail: 'Secure the unit on the trailer', cta: 'Loaded' },
+    { key: 'photos12', label: 'Photo documentation',    detail: `${PHOTO_TARGET} photos required`, cta: 'Open Photo Session' },
+    { key: 'score',    label: 'Score condition',        detail: 'Rate the unit 1–5', cta: 'Save Score' },
+    { key: 'complete', label: 'Pickup complete',        cta: 'Finish Pickup' },
+  ]
+  if (job.kind === 'delivery' && job.dest === 'depot') return [
+    { key: 'travel',   label: 'Depart origin depot',    cta: 'On my way' },
+    { key: 'arrive',   label: 'Arrived at destination', cta: 'Arrived' },
+    { key: 'drop',     label: 'Drop container in yard', detail: 'No customer contact', cta: 'Dropped' },
+    { key: 'complete', label: 'Transfer complete',      cta: 'Finish Transfer' },
+  ]
+  if (job.kind === 'delivery') return [
+    { key: 'sms',       label: 'Text customer ETA',      detail: 'On-the-way notification', cta: 'Send SMS' },
+    { key: 'arrive',    label: 'Arrived on site',        cta: 'Arrived' },
+    { key: 'unload',    label: 'Unload container',       cta: 'Unloaded' },
+    { key: 'photo1',    label: 'Proof-of-delivery photo', detail: '1 photo after unload', cta: 'Capture Photo' },
+    { key: 'signature', label: 'Customer signature',     detail: 'After photo', cta: 'Capture Signature' },
+    { key: 'receipt',   label: 'Email receipt',          detail: 'PDF to customer + admin', cta: 'Send Receipt' },
+    { key: 'complete',  label: 'Delivery complete',      cta: 'Finish Delivery' },
+  ]
+  // return
+  return [
+    { key: 'travel',    label: 'Travel to customer',     cta: 'On my way' },
+    { key: 'arrive',    label: 'Arrived on site',        cta: 'Arrived' },
+    { key: 'photo1',    label: 'Photograph returned unit', detail: '1 condition photo', cta: 'Capture Photo' },
+    { key: 'score',     label: 'Score condition',        detail: 'Rate the returned unit 1–5', cta: 'Save Score' },
+    { key: 'signature', label: 'Customer signature',     cta: 'Capture Signature' },
+    { key: 'receipt',   label: 'Email receipt',          detail: 'PDF to customer + admin', cta: 'Send Receipt' },
+    { key: 'complete',  label: 'Return complete',        cta: 'Finish Return' },
+  ]
+}
+
+// Human-readable labels + colors for activity types.
+const ACTIVITY_META: Record<string, { label: string; color: string; bg: string }> = {
+  arrived:          { label: 'Arrived',          color: '#E65100', bg: '#FFE0CC' },
+  photos_started:   { label: 'Photos started',   color: '#0057B8', bg: '#EEF2FF' },
+  photos_submitted: { label: 'Photos submitted', color: '#1B7A5A', bg: '#B7F0DA' },
+  pickup_complete:  { label: 'Pickup complete',  color: '#1B7A5A', bg: '#B7F0DA' },
+  delivery_complete:{ label: 'Delivery complete', color: '#0057B8', bg: '#EEF2FF' },
+  return_complete:  { label: 'Return complete',  color: '#6D28D9', bg: '#EDE9FE' },
+  sms_sent:         { label: 'SMS sent',         color: '#0057B8', bg: '#EEF2FF' },
+  signature:        { label: 'Signature',        color: '#1B7A5A', bg: '#B7F0DA' },
+  receipt_sent:     { label: 'Receipt sent',     color: '#7B4F00', bg: '#FFF8E1' },
+  event:            { label: 'Event',            color: '#44475A', bg: '#EEF2FF' },
+}
+
+const fmtTime = (iso: string) => { const d = new Date(iso); return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) }
 
 // ── Types ─────────────────────────────────────────────────
 
-type Screen = 'dashboard' | 'delivery' | 'camera' | 'review' | 'success' | 'schedule'
+type Screen = 'dashboard' | 'jobs' | 'flow' | 'camera' | 'review' | 'success' | 'schedule' | 'inbox'
 
 interface PhotoShot {
   id: number
-  group: 'exterior' | 'interior' | 'optional'
+  group: 'exterior' | 'interior'
   label: string
   required: boolean
   done: boolean
   tip: string
 }
 
-// ── Photo checklist — mirrors the 16-shot standard ────────
+// ── Photo checklist — the 12-shot standard ────────────────
+// Every container gets exactly these 12 labelled photos.
+
+const PHOTO_TARGET = 12
 
 const SHOT_LIST: PhotoShot[] = [
-  // Exterior (required)
-  { id: 1,  group: 'exterior', label: 'Front face full',       required: true,  done: false, tip: 'Stand 15–20 ft back. Frame the entire front panel.' },
-  { id: 2,  group: 'exterior', label: 'Rear doors closed',     required: true,  done: false, tip: 'Center the doors. Capture full door height.' },
-  { id: 3,  group: 'exterior', label: 'Driver side full',      required: true,  done: false, tip: 'Step back to frame the complete side panel.' },
-  { id: 4,  group: 'exterior', label: 'Passenger side full',   required: true,  done: false, tip: 'Mirror the driver side shot.' },
-  { id: 5,  group: 'exterior', label: 'Roof top',              required: true,  done: false, tip: 'Use a ladder or elevated position if available.' },
-  { id: 6,  group: 'exterior', label: 'Undercarriage / floor', required: true,  done: false, tip: 'Capture forklift pockets and base rails.' },
-  { id: 7,  group: 'exterior', label: 'Corner castings ×4',    required: true,  done: false, tip: 'Frame all four ISO corner castings.' },
-  { id: 8,  group: 'exterior', label: 'CSC / ID plate',        required: true,  done: false, tip: 'Plate must be fully legible. Use flash if needed.' },
-  { id: 9,  group: 'exterior', label: 'Rear doors open',       required: true,  done: false, tip: 'Open both doors fully. Capture inside threshold.' },
-  // Interior (required)
-  { id: 10, group: 'interior', label: 'Interior front wall',   required: true,  done: false, tip: 'Stand at rear opening. Capture full front wall.' },
-  { id: 11, group: 'interior', label: 'Interior rear wall',    required: true,  done: false, tip: 'Stand at front. Capture rear wall and door seams.' },
-  { id: 12, group: 'interior', label: 'Interior floor',        required: true,  done: false, tip: 'Show full floor surface including corners.' },
-  { id: 13, group: 'interior', label: 'Interior ceiling',      required: true,  done: false, tip: 'Point up. Capture full ceiling and roof panel.' },
-  { id: 14, group: 'interior', label: 'Door seals close-up',   required: true,  done: false, tip: 'Close-up of rubber gasket condition.' },
-  // Optional
-  { id: 15, group: 'optional', label: 'Damage notation',       required: false, done: false, tip: 'Any dents, rust, or damage not shown above.' },
-  { id: 16, group: 'optional', label: 'Extra angle',           required: false, done: false, tip: 'Any additional angle useful for listing.' },
+  // Exterior
+  { id: 1,  group: 'exterior', label: 'Front doors closed',        required: true, done: false, tip: 'Center the doors. Capture full door height.' },
+  { id: 2,  group: 'exterior', label: 'Front doors open',          required: true, done: false, tip: 'Open both doors fully. Capture the inside threshold.' },
+  { id: 3,  group: 'exterior', label: 'Right hand side',           required: true, done: false, tip: 'Step back to frame the complete right side panel.' },
+  { id: 4,  group: 'exterior', label: 'Back',                      required: true, done: false, tip: 'Frame the entire rear panel end-on.' },
+  { id: 5,  group: 'exterior', label: 'Left hand side',            required: true, done: false, tip: 'Step back to frame the complete left side panel.' },
+  { id: 6,  group: 'exterior', label: 'SKU sticker — outside door', required: true, done: false, tip: 'Close-up of the SKU sticker on the exterior door. Must be legible.' },
+  // Interior
+  { id: 7,  group: 'interior', label: 'Inside back',              required: true, done: false, tip: 'Stand at the doors. Capture the full back wall.' },
+  { id: 8,  group: 'interior', label: 'Inside right',             required: true, done: false, tip: 'Capture the full right interior wall.' },
+  { id: 9,  group: 'interior', label: 'Inside left',              required: true, done: false, tip: 'Capture the full left interior wall.' },
+  { id: 10, group: 'interior', label: 'Inside ceiling',          required: true, done: false, tip: 'Point up. Capture the full ceiling / roof panel.' },
+  { id: 11, group: 'interior', label: 'Inside floor',            required: true, done: false, tip: 'Show the full floor surface including corners.' },
+  { id: 12, group: 'interior', label: 'SKU sticker — inside door', required: true, done: false, tip: 'Close-up of the SKU sticker on the inside of the door. Must be legible.' },
 ]
 
 const CHIP_COLORS = {
@@ -65,12 +184,12 @@ function Chip({ label, color = 'grey' }: { label: string; color?: keyof typeof C
 
 // ── Bottom nav ─────────────────────────────────────────────
 
-function BottomNav({ active, onNav }: { active: Screen; onNav: (s: Screen) => void }) {
-  const items: { id: Screen; label: string; icon: React.ReactNode }[] = [
-    { id: 'dashboard', label: 'Home', icon: <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="2" y="2" width="7" height="7" rx="1.5" /><rect x="11" y="2" width="7" height="7" rx="1.5" /><rect x="2" y="11" width="7" height="7" rx="1.5" /><rect x="11" y="11" width="7" height="7" rx="1.5" /></svg> },
-    { id: 'delivery',  label: 'Delivery', icon: <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="8" width="11" height="8" rx="1.5" /><path d="M12 10h4l3 3v3h-7V10z" strokeLinejoin="round" /><circle cx="5" cy="17.5" r="1.5" fill="currentColor" stroke="none" /><circle cx="15" cy="17.5" r="1.5" fill="currentColor" stroke="none" /></svg> },
-    { id: 'camera',    label: 'Camera', icon: <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M2 7h2.5L6 5h8l1.5 2H18a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V8a1 1 0 011-1z" /><circle cx="10" cy="11" r="3" /></svg> },
-    { id: 'schedule',  label: 'Schedule', icon: <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="2" y="4" width="16" height="14" rx="2" /><line x1="2" y1="8.5" x2="18" y2="8.5" strokeWidth="1.2" /><line x1="7" y1="2" x2="7" y2="6" /><line x1="13" y1="2" x2="13" y2="6" /></svg> },
+function BottomNav({ active, onNav, unread = 0 }: { active: Screen; onNav: (s: Screen) => void; unread?: number }) {
+  const items: { id: Screen; label: string; icon: string; badge?: number }[] = [
+    { id: 'dashboard', label: 'Home', icon: 'home' },
+    { id: 'jobs',      label: 'Pickups & Returns', icon: 'truck' },
+    { id: 'schedule',  label: 'Schedule', icon: 'calendar' },
+    { id: 'inbox',     label: 'Inbox', icon: 'inbox', badge: unread },
   ]
   return (
     <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, height: '72px', background: '#fff', borderTop: '1px solid #E1E2EC', display: 'flex', alignItems: 'center', padding: '0 4px 8px', boxShadow: '0 -3px 16px rgba(26,28,46,.07)', zIndex: 20 }}>
@@ -80,8 +199,11 @@ function BottomNav({ active, onNav }: { active: Screen; onNav: (s: Screen) => vo
           onClick={() => onNav(item.id)}
           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', padding: '6px 0', borderRadius: '999px', cursor: 'pointer', flex: 1, border: 'none', background: active === item.id ? '#D6E4FF' : 'transparent', transition: 'all 0.15s', color: active === item.id ? '#0057B8' : '#44475A' }}
         >
-          <div style={{ width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.icon}</div>
-          <span style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.3px' }}>{item.label}</span>
+          <div style={{ position: 'relative', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name={item.icon} size={20} sw={1.6} />
+            {!!item.badge && item.badge > 0 && <span style={{ position: 'absolute', top: '-5px', right: '-8px', minWidth: '15px', height: '15px', padding: '0 4px', borderRadius: '999px', background: '#E65100', color: '#fff', fontSize: '9px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.badge}</span>}
+          </div>
+          <span style={{ fontSize: item.label.length > 10 ? '9px' : '10px', fontWeight: 600, letterSpacing: '0.2px', whiteSpace: 'nowrap' }}>{item.label}</span>
         </button>
       ))}
     </div>
@@ -92,10 +214,10 @@ function BottomNav({ active, onNav }: { active: Screen; onNav: (s: Screen) => vo
 
 interface StepItem { label: string; detail?: string; time?: string; status: 'done' | 'active' | 'pending' }
 
-function Stepper({ steps }: { steps: StepItem[] }) {
+function Stepper({ steps, title = 'Job Progress' }: { steps: StepItem[]; title?: string }) {
   return (
     <div style={{ margin: '0 12px 10px', background: '#fff', borderRadius: '16px', border: '1px solid #E1E2EC', padding: '16px', boxShadow: '0 1px 4px rgba(26,28,46,.08)' }}>
-      <div style={{ fontSize: '11px', fontWeight: 700, color: '#44475A', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '16px' }}>Delivery Progress</div>
+      <div style={{ fontSize: '11px', fontWeight: 700, color: '#44475A', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '16px' }}>{title}</div>
       {steps.map((step, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: i < steps.length - 1 ? '12px' : 0 }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
@@ -127,11 +249,128 @@ export default function FieldAppPage() {
   const [screen, setScreen] = useState<Screen>('dashboard')
   const [shots, setShots] = useState<PhotoShot[]>(SHOT_LIST.map(s => ({ ...s })))
   const [onDuty, setOnDuty] = useState(true)
-  const [signedDelivery, setSignedDelivery] = useState(false)
+  const [activityLog, setActivityLog] = useState<ActivityEvent[]>([])
+  // Driver Inbox/Sent/Trash messaging
+  const [messages, setMessages] = useState<Message[]>([])
+  const [inboxTab, setInboxTab] = useState<'inbox' | 'sent' | 'trash'>('inbox')
+  const [openMsgId, setOpenMsgId] = useState<string | null>(null)
+  const [msgCustomers, setMsgCustomers] = useState<Customer[]>([])
+  // Composer: reply (recipient known) or a new message to dispatch/a customer.
+  const [compose, setCompose] = useState<null | { toRole: 'admin' | 'customer'; toName: string; toEmail: string; subject: string; body: string }>(null)
+  const [depots, setDepots] = useState<Depot[]>([])
+  const [me, setMe] = useState<Driver | null>(null)          // the signed-in driver
+  const [mySchedule, setMySchedule] = useState<SchedJob[]>([]) // this driver's jobs (shared CSV)
+  const [editJob, setEditJob] = useState<{ id: string; dayOffset: number; time: string } | null>(null)
+  // Per-week working hours: schedule up to 4 weeks ahead.
+  const [weekOffset, setWeekOffset] = useState(0)                 // 0=this week … 3
+  const [availRows, setAvailRows] = useState<Availability[]>([])   // saved weeks (shared CSV)
+  const [weekEdits, setWeekEdits] = useState<Record<string, Record<number, DayHours | null>>>({}) // unsaved edits by weekStart
+  // Active workflow state
+  const [activeJob, setActiveJob] = useState<Job | null>(null)
+  const [stepIndex, setStepIndex] = useState(0)
+  const [signed, setSigned] = useState(false)
+  const [returnPhoto, setReturnPhoto] = useState(false)
+  const [condScore, setCondScore] = useState(0)  // driver's 1–5 condition score for the active job
   const { toast, message, open: snackOpen, close: snackClose } = useSnackbar()
 
   const doneCount = shots.filter(s => s.done).length
-  const progress = Math.round((doneCount / 16) * 100)
+  const progress = Math.round((doneCount / PHOTO_TARGET) * 100)
+
+  const fetchActivity = () => { activity.list().then(setActivityLog).catch(() => {}) }
+  const fetchMessages = () => { messagesApi.list(DRIVER_ID).then(setMessages).catch(() => {}) }
+  const fetchSchedule = () => { scheduleApi.list().then(all => setMySchedule(all.filter(s => s.driverId === DRIVER_ID))).catch(() => {}) }
+  const loadMe = () => driversApi.list().then(ds => setMe(ds.find(x => x.id === DRIVER_ID) ?? null)).catch(() => {})
+  const loadAvailability = () => availabilityApi.list().then(rows => setAvailRows(rows.filter(r => r.driverId === DRIVER_ID))).catch(() => {})
+  useEffect(() => {
+    fetchActivity()
+    depotsApi.list().then(setDepots).catch(() => {})
+    loadMe()
+    loadAvailability()
+    fetchSchedule()
+    fetchMessages()
+    customersApi.list().then(cs => setMsgCustomers(cs.filter(c => c.active !== false))).catch(() => {})
+  }, [])
+
+  // Pull the latest shared schedule/availability whenever the driver navigates to a data screen,
+  // or on window focus — so admin-side changes show up without a full reload.
+  const syncFromServer = () => { fetchSchedule(); loadAvailability(); loadMe(); fetchMessages() }
+  useEffect(() => {
+    if (screen === 'jobs' || screen === 'schedule') syncFromServer()
+    if (screen === 'inbox') fetchMessages()
+  }, [screen]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const onFocus = () => { if (document.visibilityState !== 'hidden') syncFromServer() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
+    return () => { window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus) }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Monday (local) of the current week + `off` weeks, as YYYY-MM-DD.
+  const mondayISO = (off: number) => {
+    const d = new Date(); d.setHours(0, 0, 0, 0)
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + off * 7)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+  const weekStart = mondayISO(weekOffset)
+  // Hours for the selected week: unsaved edits → saved availability → driver's base template.
+  const savedForWeek = availRows.find(r => r.weekStart === weekStart)
+  const weekDays: Record<number, DayHours | null> = weekEdits[weekStart]
+    ?? parseWorkHours(savedForWeek ? savedForWeek.workHours : (me?.workHours || ''))
+  const setDayHours = (d: number, h: DayHours | null) => setWeekEdits(prev => ({ ...prev, [weekStart]: { ...weekDays, [d]: h } }))
+  const saveWorkHours = () => {
+    availabilityApi.save({ driverId: DRIVER_ID, weekStart, workHours: encodeWorkHours(weekDays) }).then(() => { loadAvailability(); setWeekEdits(p => { const n = { ...p }; delete n[weekStart]; return n }) }).catch(() => {})
+    toast('Working hours saved for this week')
+  }
+
+  const depotById = (id?: string) => depots.find(d => d.id === id)
+  const depotByName = (name?: string) => depots.find(d => d.name === name)
+
+  // Map a shared schedule entry → a field workflow Job (single source of truth).
+  const schedToJob = (s: SchedJob): Job => {
+    const isDepotDest = s.type === 'transfer' || /depot/i.test(s.destination)
+    const kind: JobKind = s.type === 'pickup' ? 'pickup' : s.type === 'return' ? 'return' : 'delivery'
+    const cust = s.customer && s.customer !== '-' ? s.customer : ''
+    return {
+      id: s.id, kind,
+      dest: kind === 'delivery' ? (isDepotDest ? 'depot' : 'customer') : undefined,
+      sku: s.sku, containerId: '',
+      depotId: (kind === 'pickup' ? depotByName(s.origin) : isDepotDest ? depotByName(s.destination) : undefined)?.id,
+      originDepotId: kind === 'delivery' && isDepotDest ? depotByName(s.origin)?.id : undefined,
+      customer: cust, contact: s.contact || '', email: '',
+      address: kind === 'return' ? s.origin : s.destination,
+      time: fmtMin(s.startMin),
+    }
+  }
+  // Group a driver's schedule into Today + subsequent days for the field lists.
+  const groupByDay = (jobs: SchedJob[]) => {
+    const byDay: Record<number, SchedJob[]> = {}
+    jobs.forEach(j => { (byDay[j.dayOffset] ||= []).push(j) })
+    return Object.keys(byDay).map(Number).sort((a, b) => a - b).map(off => ({
+      offset: off,
+      label: off === 0 ? "Today's Jobs" : dayName(off),
+      jobs: byDay[off].sort((a, b) => a.startMin - b.startMin),
+    }))
+  }
+
+  // Depot + lot attendant summary for a pickup row.
+  const pickupSub = (job: Job) => {
+    const d = depotById(job.depotId)
+    if (!d) return 'Depot'
+    return `${d.name}${d.attendantName ? ` · ${d.attendantName}` : ''}${d.attendantCell ? ` · ${d.attendantCell}` : ''}`
+  }
+  // A short human location string for a job (depot name or customer city).
+  const jobLocation = (j: Job) => j.dest === 'customer' || j.kind === 'return'
+    ? `${j.customer ?? ''}${j.address ? ` · ${j.address}` : ''}`
+    : (depotById(j.depotId)?.name ?? j.customer ?? '')
+
+  // Record a timestamped activity to the CSV log, then refresh the history.
+  const logActivity = async (job: Job | null, type: ActivityEvent['type'], note: string) => {
+    if (!job) return
+    try {
+      await activity.log({ type, jobType: job.kind, sku: job.sku, containerId: job.containerId, actor: ACTOR, location: jobLocation(job), note })
+    } catch { /* offline — non-blocking */ }
+    fetchActivity()
+  }
 
   const toggleShot = (id: number) => {
     setShots(prev => prev.map(s => s.id === id ? { ...s, done: !s.done } : s))
@@ -139,6 +378,54 @@ export default function FieldAppPage() {
 
   const scrollTop = () => window.scrollTo({ top: 0 })
   const goTo = (s: Screen) => { setScreen(s); scrollTop() }
+
+  // Open a workflow for a job (fresh state).
+  const startJob = (job: Job) => {
+    setActiveJob(job)
+    setStepIndex(0)
+    setSigned(false)
+    setReturnPhoto(false)
+    setCondScore(0)
+    if (job.kind === 'pickup') setShots(SHOT_LIST.map(s => ({ ...s })))
+    goTo('flow')
+  }
+
+  // Simulated PDF receipt — opens a printable window (save as PDF) + logs the send.
+  const sendReceipt = (job: Job) => {
+    logActivity(job, 'receipt_sent', `Receipt emailed to ${job.email || 'customer'} + admin`)
+    const w = window.open('', '_blank', 'width=420,height=640')
+    if (w) {
+      const now = new Date().toLocaleString('en-US')
+      w.document.write(`<html><head><title>SteelBox Receipt ${job.sku}</title><style>body{font:14px -apple-system,sans-serif;padding:28px;color:#0D0E12}h1{font-size:20px;margin:0 0 2px}.sub{color:#6B7280;font-size:12px}.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}.k{color:#6B7280}b{font-family:monospace}</style></head><body><h1><span style="color:#2B7FD4">Steel</span><span style="color:#E65100">Box</span></h1><div class="sub">${KIND_META[job.kind].label} receipt · ${now}</div><div style="margin-top:20px"><div class="row"><span class="k">Container</span><b>${job.sku}</b></div><div class="row"><span class="k">Customer</span><span>${job.customer || '—'}</span></div><div class="row"><span class="k">Location</span><span>${job.address || '—'}</span></div><div class="row"><span class="k">Field rep</span><span>${ACTOR}</span></div><div class="row"><span class="k">Status</span><span>Completed</span></div></div><p class="sub" style="margin-top:24px">A copy has been emailed to ${job.email || 'the customer'} and the SteelBox admin portal.</p><button onclick="window.print()" style="margin-top:14px;padding:10px 18px;border:none;border-radius:999px;background:#0057B8;color:#fff;font-weight:700;cursor:pointer">Save as PDF</button></body></html>`)
+      w.document.close()
+    }
+    toast(`Receipt PDF emailed to ${job.customer || 'customer'} + admin`)
+  }
+
+  // Advance the active workflow one step, running the step's side effect.
+  const advanceStep = () => {
+    const job = activeJob
+    if (!job) return
+    const steps = stepsFor(job)
+    const step = steps[stepIndex]
+    if (!step) return
+    const nowT = fmtTime(new Date().toISOString())
+    switch (step.key) {
+      case 'arrive':    logActivity(job, 'arrived', 'Arrived on site'); toast(`Arrival recorded · ${nowT}`); break
+      case 'sms':       logActivity(job, 'sms_sent', `ETA text sent to ${job.customer}`); toast('ETA text sent to customer'); break
+      case 'photos12':  if (doneCount < PHOTO_TARGET) { goTo('camera'); return } break // photos_submitted logged on submit
+      case 'photo1':    setReturnPhoto(true); logActivity(job, 'photos_submitted', job.kind === 'return' ? 'Return condition photo captured' : 'Proof-of-delivery photo captured'); toast(job.kind === 'return' ? 'Return photo captured' : 'Delivery photo captured'); break
+      case 'score':     containersApi.update(job.sku, { conditionScore: condScore }).catch(() => {}); logActivity(job, 'event', `Condition scored ${condScore}/5`); toast(`Condition ${condScore}/5 saved`); break
+      case 'signature': setSigned(true); logActivity(job, 'signature', 'Customer signature captured'); break
+      case 'receipt':   sendReceipt(job); break
+      case 'complete':
+        logActivity(job, (job.kind + '_complete') as ActivityEvent['type'], `${KIND_META[job.kind].label} complete`)
+        toast(`${KIND_META[job.kind].label} complete`)
+        setActiveJob(null); goTo('dashboard'); return
+      default: break
+    }
+    setStepIndex(i => i + 1)
+  }
 
   // Fonts for field app
   useEffect(() => {
@@ -149,15 +436,19 @@ export default function FieldAppPage() {
     return () => { document.head.removeChild(link) }
   }, [])
 
+  // Responsive column — full width on phones, capped/centered on tablet.
   const base: React.CSSProperties = {
     fontFamily: "'Roboto', system-ui, sans-serif",
     background: '#F8F9FF',
     minHeight: '100vh',
     color: '#1A1C2E',
     paddingBottom: '88px',
-    maxWidth: '430px',
+    width: '100%',
+    maxWidth: '600px',
     margin: '0 auto',
   }
+  // The driver's primary vehicle string, from their record.
+  const myVehicle = me ? (parseTrucks(me.trucks || '')[0]?.name || me.vehicle || '—') : '—'
 
   const secLabel = (text: string) => (
     <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '11px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase' as const, color: '#44475A', padding: '14px 16px 6px' }}>{text}</div>
@@ -167,200 +458,291 @@ export default function FieldAppPage() {
     <div style={{ background: '#fff', border: '1px solid #E1E2EC', borderRadius: '16px', boxShadow: '0 1px 4px rgba(26,28,46,.08)', margin: '0 12px 10px', overflow: 'hidden', ...style }}>{children}</div>
   )
 
+  // A schedule row: tap to start the workflow, or use the Reschedule chip to move it.
+  // `tight` = this job starts within 10 min of the previous job's est. end (same day).
+  const jobRow = (s: SchedJob, last: boolean, tight = false) => {
+    const job = schedToJob(s)
+    const m = KIND_META[job.kind]
+    const editing = editJob?.id === s.id
+    // Est. end = 30 min load + drive (miles @ 60 mph = miles min) + 30 min unload.
+    const endMin = s.startMin + 60 + s.miles
+    const sub = job.dest === 'depot'
+      ? `${depotByName(s.origin)?.name ?? s.origin} → ${depotByName(s.destination)?.name ?? s.destination} · storage`
+      : job.kind === 'pickup' ? pickupSub(job)
+        : `${job.customer || '—'}${job.address ? ` · ${job.address}` : ''}`
+    return (
+      <div key={s.id} style={{ borderBottom: last && !editing ? 'none' : '1px solid #E1E2EC', background: tight ? 'rgba(230,81,0,.04)' : 'transparent' }}>
+        <div onClick={() => startJob(job)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '13px 16px', cursor: 'pointer' }}>
+          <div style={{ width: '38px', height: '38px', borderRadius: '12px', background: m.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon name={m.icon} size={19} color={m.color} /></div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>{m.label} · <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{s.sku}</span>{tight && <span title="Tight turnaround — previous job may run into this one" style={{ display: 'inline-flex', color: '#E65100' }}><Icon name="alert" size={15} color="#E65100" sw={1.8} /></span>}</div>
+            <div style={{ fontSize: '11px', color: '#44475A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</div>
+          </div>
+          <div style={{ flexShrink: 0, textAlign: 'right' }}>
+            <div style={{ fontFamily: 'monospace', fontSize: '11px', fontWeight: 700 }}>{fmtMin(s.startMin)}</div>
+            <div style={{ fontSize: '8px', color: '#44475A', letterSpacing: '0.4px', textTransform: 'uppercase' }}>Start</div>
+            <div style={{ fontFamily: 'monospace', fontSize: '11px', color: '#0057B8', marginTop: '3px' }}>{fmtMin(endMin)}</div>
+            <div style={{ fontSize: '8px', color: '#44475A', letterSpacing: '0.4px', textTransform: 'uppercase' }}>Est. end</div>
+          </div>
+          <div style={{ color: '#C4C6D0', flexShrink: 0 }}><Icon name="arrow" size={16} /></div>
+        </div>
+        <div style={{ padding: '0 16px 12px 66px' }}>
+          {editing ? (
+            <div style={{ background: '#F8F9FF', border: '1px solid #E1E2EC', borderRadius: '10px', padding: '10px' }}>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                <select value={editJob.dayOffset} onChange={e => setEditJob({ ...editJob, dayOffset: Number(e.target.value) })} style={{ flex: 1, padding: '8px', border: '1.5px solid #C4C6D0', borderRadius: '8px', fontSize: '12px', fontFamily: "'Roboto', sans-serif" }}>
+                  {Array.from({ length: 7 }, (_, o) => <option key={o} value={o}>{dayName(o)}</option>)}
+                </select>
+                <input type="time" value={editJob.time} onChange={e => setEditJob({ ...editJob, time: e.target.value })} style={{ padding: '8px', border: '1.5px solid #C4C6D0', borderRadius: '8px', fontSize: '12px', fontFamily: "'Roboto', sans-serif" }} />
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => setEditJob(null)} style={{ flex: 1, padding: '9px', borderRadius: '999px', border: '1.5px solid #E1E2EC', background: 'transparent', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={saveReschedule} style={{ flex: 1, padding: '9px', borderRadius: '999px', border: 'none', background: '#0057B8', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>Save</button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <button onClick={() => setEditJob({ id: s.id, dayOffset: s.dayOffset, time: `${String(Math.floor(s.startMin / 60)).padStart(2, '0')}:${String(s.startMin % 60).padStart(2, '0')}` })} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '5px 12px', borderRadius: '999px', border: `1.5px solid ${tight ? '#E65100' : '#E1E2EC'}`, background: 'transparent', fontSize: '11px', fontWeight: 700, cursor: 'pointer', color: tight ? '#E65100' : '#0057B8' }}>
+                <Icon name="calendar" size={13} color={tight ? '#E65100' : '#0057B8'} /> Reschedule
+              </button>
+              {tight && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontWeight: 600, color: '#E65100' }}><Icon name="alert" size={13} color="#E65100" sw={1.8} /> Tight turnaround — likely need to reschedule</span>}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   // ── Dashboard ──────────────────────────────────────────
 
   const renderDashboard = () => (
     <div>
-      {/* Hero */}
-      <div style={{ background: onDuty ? 'linear-gradient(135deg,#0057B8,#003882)' : 'linear-gradient(135deg,#374151,#1F2937)', padding: '44px 20px 20px', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '160px', height: '160px', borderRadius: '50%', background: 'rgba(255,255,255,.06)' }} />
-        <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '7px' }}>
-          <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: 'rgba(255,255,255,.15)', display: 'grid', placeItems: 'center' }}>
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="5" width="18" height="12" rx="1.5" /><line x1="5" y1="5" x2="5" y2="17" strokeWidth="1" /><line x1="9" y1="5" x2="9" y2="17" strokeWidth="1" /><line x1="13" y1="5" x2="13" y2="17" strokeWidth="1" /></svg>
-          </div>
-          <span style={{ fontSize: '15px', fontWeight: 700 }}><span style={{ color: '#90C4FF' }}>Steel</span><span style={{ color: '#E65100' }}>Box</span></span>
-        </div>
-        <div style={{ fontSize: '13px', color: 'rgba(255,255,255,.7)', marginBottom: '3px' }}>{new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'},</div>
-        <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '26px', fontWeight: 700, color: '#fff', marginBottom: '16px' }}>Mike Torres</div>
+      {/* Hero — compact (≈half height) */}
+      <div style={{ background: onDuty ? 'linear-gradient(135deg,#0057B8,#003882)' : 'linear-gradient(135deg,#374151,#1F2937)', padding: '22px 20px 14px', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '130px', height: '130px', borderRadius: '50%', background: 'rgba(255,255,255,.06)' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ width: '20px', height: '20px', borderRadius: '5px', background: 'rgba(255,255,255,.15)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+            <Icon name="box" size={12} color="#fff" />
+          </div>
+          <span style={{ fontSize: '14px', fontWeight: 700 }}><span style={{ color: '#90C4FF' }}>Steel</span><span style={{ color: '#E65100' }}>Box</span></span>
           <button
             onClick={() => setOnDuty(d => !d)}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', background: onDuty ? 'rgba(61,255,160,.15)' : 'rgba(255,255,255,.15)', border: `1.5px solid ${onDuty ? 'rgba(61,255,160,.4)' : 'rgba(255,255,255,.3)'}`, borderRadius: '999px', padding: '8px 16px', cursor: 'pointer' }}
+            style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '7px', background: onDuty ? 'rgba(61,255,160,.15)' : 'rgba(255,255,255,.15)', border: `1.5px solid ${onDuty ? 'rgba(61,255,160,.4)' : 'rgba(255,255,255,.3)'}`, borderRadius: '999px', padding: '5px 12px', cursor: 'pointer' }}
           >
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: onDuty ? '#4DFFB4' : 'rgba(255,255,255,.5)', flexShrink: 0 }} />
-            <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>{onDuty ? 'On Duty' : 'Off Duty'}</span>
+            <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: onDuty ? '#4DFFB4' : 'rgba(255,255,255,.5)', flexShrink: 0 }} />
+            <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>{onDuty ? 'On Duty' : 'Off Duty'}</span>
           </button>
-          <span style={{ fontFamily: 'monospace', fontSize: '10px', color: 'rgba(255,255,255,.6)', background: 'rgba(255,255,255,.1)', padding: '4px 10px', borderRadius: '8px', marginLeft: 'auto' }}>Kenworth T880</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '10px', marginTop: '10px' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,.7)' }}>{new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'},</div>
+            <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '20px', fontWeight: 700, color: '#fff' }}>{me?.name ?? ACTOR}</div>
+          </div>
+          {/* Vehicle info from the driver record */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'rgba(255,255,255,.85)', background: 'rgba(255,255,255,.1)', padding: '5px 10px', borderRadius: '8px', maxWidth: '55%' }}>
+            <Icon name="truck" size={14} color="rgba(255,255,255,.85)" />
+            <span style={{ fontSize: '11px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{myVehicle}</span>
+          </div>
         </div>
       </div>
 
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', padding: '14px 12px 0' }}>
         {[
-          { icon: '🚚', num: 2, label: 'Deliveries', color: '#0057B8', bg: '#EEF2FF' },
-          { icon: '📷', num: 3, label: 'Photo Jobs', color: '#E65100', bg: '#FFE0CC' },
-          { icon: '⭐', num: '4.9', label: 'Rating', color: '#F9A825', bg: '#FFF8E1' },
+          { icon: 'box',   num: mySchedule.filter(s => s.type === 'pickup').length, label: 'Pickups', color: '#E65100', bg: '#FFE0CC' },
+          { icon: 'truck', num: mySchedule.filter(s => s.type === 'delivery' || s.type === 'transfer').length, label: 'Deliveries', color: '#0057B8', bg: '#EEF2FF' },
+          { icon: 'ret',   num: mySchedule.filter(s => s.type === 'return').length, label: 'Returns', color: '#6D28D9', bg: '#EDE9FE' },
         ].map(k => (
           <div key={k.label} style={{ background: '#fff', borderRadius: '16px', border: '1px solid #E1E2EC', padding: '12px', boxShadow: '0 1px 4px rgba(26,28,46,.08)', textAlign: 'center' }}>
-            <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: k.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: '14px' }}>{k.icon}</div>
+            <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: k.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px' }}><Icon name={k.icon} size={16} color={k.color} /></div>
             <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '24px', fontWeight: 700, lineHeight: 1, color: k.color }}>{k.num}</div>
             <div style={{ fontSize: '10px', color: '#44475A', marginTop: '2px', letterSpacing: '0.3px' }}>{k.label}</div>
           </div>
         ))}
       </div>
 
-      {/* Active delivery */}
-      {secLabel('Active Delivery')}
-      <div
-        onClick={() => goTo('delivery')}
-        style={{ margin: '0 12px 10px', background: 'linear-gradient(135deg,#D6E4FF,#C8DBFF)', borderRadius: '16px', border: '1px solid rgba(0,87,184,.2)', padding: '18px', cursor: 'pointer', position: 'relative', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,87,184,.12)' }}
-      >
-        <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: '#0057B8', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#0057B8', flexShrink: 0 }} />
-          In Progress
-        </div>
-        <div style={{ fontFamily: 'monospace', fontSize: '11px', color: '#44475A', marginBottom: '4px' }}>#ORD-0085 · SBX-20-0038</div>
-        <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '16px', fontWeight: 700, marginBottom: '6px' }}>Westfield Storage Co.</div>
-        <div style={{ fontSize: '12px', color: '#44475A', lineHeight: 1.5, marginBottom: '12px' }}>5500 Industrial Pkwy, Katy TX 77493<br />Window: 10:00 AM – 2:00 PM</div>
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-          <Chip label="In Transit" color="blue" />
-          <Chip label="Est. 14 min" color="warn" />
-          <Chip label="18/18 photos ✓" color="green" />
-        </div>
-        <div style={{ position: 'absolute', top: '50%', right: '16px', transform: 'translateY(-50%)', opacity: 0.45 }}>›</div>
-      </div>
-
-      {/* Nearby photos */}
-      {secLabel('Photos Needed Nearby')}
-      <div style={{ margin: '0 12px 10px', background: 'linear-gradient(135deg,#FFF3E0,#FFE8CC)', borderRadius: '16px', border: '1.5px solid rgba(230,81,0,.2)', padding: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#E65100', flexShrink: 0 }} />
-          <span style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '11px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: '#E65100' }}>NOLA DEPOT</span>
-          <span style={{ marginLeft: 'auto', fontFamily: 'monospace', fontSize: '10px', color: '#E65100', background: 'rgba(230,81,0,.1)', padding: '2px 8px', borderRadius: '999px' }}>0.3 mi away</span>
-        </div>
-        <div style={{ fontSize: '12px', color: '#44475A', marginBottom: '12px' }}>3 containers need listing photos after your current delivery</div>
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
-          {[{ sku: 'SBX-20-0067', bay: 'Bay 4', count: 9 }, { sku: 'SBX-20-0068', bay: 'Bay 7', count: 0 }, { sku: 'SBX-20-0041', bay: 'Bay 2', count: 14 }].map(nc => (
-            <div key={nc.sku} style={{ flex: 1, background: 'rgba(255,255,255,.75)', borderRadius: '12px', padding: '10px', border: '1px solid rgba(230,81,0,.1)' }}>
-              <div style={{ fontFamily: 'monospace', fontSize: '9px', color: '#44475A', marginBottom: '2px' }}>{nc.sku}</div>
-              <div style={{ fontSize: '11px', color: '#44475A', marginBottom: '4px' }}>{nc.bay}</div>
-              <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>{nc.count}/16</div>
-              <div style={{ height: '4px', background: 'rgba(0,0,0,.08)', borderRadius: '2px' }}>
-                <div style={{ height: '100%', borderRadius: '2px', background: '#E65100', width: `${Math.round(nc.count / 16 * 100)}%` }} />
-              </div>
-            </div>
-          ))}
-        </div>
-        <button onClick={() => goTo('camera')} style={{ width: '100%', padding: '12px', background: '#E65100', color: '#fff', border: 'none', borderRadius: '999px', fontFamily: "'Google Sans', sans-serif", fontSize: '14px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(230,81,0,.3)' }}>
-          📷 Start Photo Session
-        </button>
-      </div>
-
-      {/* Upcoming */}
-      {secLabel('Upcoming Today')}
+      {/* Recent Activity — timestamped history from the log */}
+      {secLabel('Recent Activity')}
       {card(
-        <>
-          {[
-            { icon: '🚚', label: 'Ray Donovan — Delivery', detail: '#ORD-0089 · SBX-20-0041 · Austin TX', time: '2:00 PM', screen: 'schedule' as Screen },
-            { icon: '📷', label: 'Photo Session — NOLA Depot', detail: 'SBX-20-0068 · Bay 7 · 0/16 shots', time: 'After', screen: 'camera' as Screen },
-          ].map((item, i) => (
-            <div key={i} onClick={() => goTo(item.screen)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '13px 16px', borderBottom: i === 0 ? '1px solid #E1E2EC' : 'none', cursor: 'pointer' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '12px', background: i === 0 ? '#EEF2FF' : '#FFE0CC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', flexShrink: 0 }}>{item.icon}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '2px' }}>{item.label}</div>
-                <div style={{ fontSize: '11px', color: '#44475A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.detail}</div>
-              </div>
-              <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#44475A', flexShrink: 0 }}>{item.time}</div>
-            </div>
-          ))}
-        </>
+        activityLog.length === 0 ? (
+          <div style={{ padding: '16px', fontSize: '12px', color: '#44475A', textAlign: 'center' }}>No activity recorded yet.</div>
+        ) : (
+          <>
+            {activityLog.slice(0, 6).map((e, i) => {
+              const m = ACTIVITY_META[e.type] || ACTIVITY_META.event
+              return (
+                <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 16px', borderBottom: i < Math.min(activityLog.length, 6) - 1 ? '1px solid #E1E2EC' : 'none' }}>
+                  <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.3px', textTransform: 'uppercase', color: m.color, background: m.bg, padding: '3px 8px', borderRadius: '8px', flexShrink: 0, whiteSpace: 'nowrap' }}>{m.label}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '12px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.sku}{e.actor ? ` · ${e.actor}` : ''}</div>
+                    <div style={{ fontSize: '10px', color: '#44475A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.note || e.location}</div>
+                  </div>
+                  <div style={{ fontFamily: 'monospace', fontSize: '9px', color: '#44475A', flexShrink: 0, textAlign: 'right' }}>{fmtTime(e.timestamp)}</div>
+                </div>
+              )
+            })}
+          </>
+        )
       )}
     </div>
   )
 
-  // ── Delivery ───────────────────────────────────────────
+  // ── Job flow (pickup / delivery / return step process) ──
 
-  const renderDelivery = () => (
+  const renderFlow = () => (
     <div>
-      <div style={{ background: '#fff', borderBottom: '1px solid #E1E2EC', padding: '44px 16px 14px', flexShrink: 0 }}>
-        <button onClick={() => goTo('dashboard')} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: '#0057B8', cursor: 'pointer', background: 'none', border: 'none', marginBottom: '10px' }}>
-          ← Dashboard
-        </button>
-        <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#44475A', marginBottom: '3px' }}>#ORD-0085 · SBX-20-0038 · 20ft Standard</div>
-        <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '20px', fontWeight: 700 }}>Westfield Storage Co.</div>
-      </div>
+      {(() => {
+        const job = activeJob
+        if (!job) return <div style={{ padding: '40px', textAlign: 'center', color: '#44475A' }}>No active job. <button onClick={() => goTo('jobs')} style={{ color: '#0057B8', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>View jobs</button></div>
+        const m = KIND_META[job.kind]
+        const steps = stepsFor(job)
+        const step = steps[stepIndex]
+        const depot = depotById(job.depotId)
+        const isCustomer = job.dest === 'customer' || job.kind === 'return'
+        // Whether the current step's action is satisfied and can advance.
+        const stepReady = step?.key === 'signature' ? signed : step?.key === 'photo1' ? returnPhoto : step?.key === 'photos12' ? doneCount >= PHOTO_TARGET : step?.key === 'score' ? condScore > 0 : true
+        const photoCta = step?.key === 'photos12' && doneCount >= PHOTO_TARGET ? 'Continue' : step?.cta
 
-      <Stepper steps={[
-        { label: 'Job Assigned', status: 'done', time: '8:00 AM' },
-        { label: 'Container Picked Up + Photographed', status: 'done', detail: '18/18 photos ✓', time: '9:15 AM' },
-        { label: 'En Route to Customer', status: 'active', detail: 'Currently driving · Est. 14 min' },
-        { label: 'Arrived at Destination', status: 'pending', detail: 'Confirm on-site arrival' },
-        { label: 'Delivery Complete', status: 'pending', detail: 'Signature + delivery photo' },
-      ]} />
-
-      {/* Map placeholder */}
-      <div onClick={() => toast('Opening navigation…')} style={{ margin: '0 12px 10px', borderRadius: '16px', overflow: 'hidden', border: '1px solid #E1E2EC', height: '150px', background: 'linear-gradient(135deg,#E3F0FF,#D6E9FF)', position: 'relative', cursor: 'pointer' }}>
-        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(0,87,184,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,87,184,.05) 1px,transparent 1px)', backgroundSize: '28px 28px' }} />
-        <div style={{ position: 'absolute', top: '55%', left: 0, right: 0, height: '6px', background: 'rgba(255,255,255,.88)', borderRadius: '3px' }} />
-        <div style={{ position: 'absolute', left: '35%', top: 0, bottom: 0, width: '6px', background: 'rgba(255,255,255,.88)', borderRadius: '3px' }} />
-        <div style={{ position: 'absolute', top: 'calc(55% - 16px)', left: '30%', width: '32px', height: '32px', borderRadius: '50%', background: '#E65100', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(230,81,0,.4)' }}>🚚</div>
-        <div style={{ position: 'absolute', bottom: '10px', right: '10px', background: '#fff', borderRadius: '8px', padding: '5px 10px', fontSize: '12px', fontWeight: 700, border: '1px solid #E1E2EC' }}>ETA <span style={{ color: '#1B7A5A' }}>14 min</span></div>
-        <div style={{ position: 'absolute', top: '10px', right: '10px', background: '#fff', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', fontWeight: 600, color: '#0057B8', border: '1px solid #E1E2EC', cursor: 'pointer' }}>🗺 Maps</div>
-      </div>
-
-      {/* Customer info */}
-      {card(
-        <>
-          <div style={{ background: '#EEF2FF', padding: '10px 16px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', color: '#44475A', borderBottom: '1px solid #E1E2EC' }}>Customer</div>
-          {[
-            { icon: '🏢', label: 'Customer', val: 'Westfield Storage Co.' },
-            { icon: '📍', label: 'Address', val: '5500 Industrial Pkwy, Katy TX 77493' },
-            { icon: '📞', label: 'Site Contact', val: '(281) 555-0993', blue: true, onClick: () => toast('Calling (281) 555-0993…') },
-            { icon: '🕐', label: 'Window', val: '10:00 AM – 2:00 PM', green: true },
-            { icon: '📝', label: 'Instructions', val: 'Enter via south gate. Ask for Greg.' },
-          ].map((row, i) => (
-            <div key={i} onClick={row.onClick} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '11px 16px', borderBottom: '1px solid #E1E2EC', fontSize: '13px', cursor: row.onClick ? 'pointer' : 'default' }}>
-              <span style={{ width: '20px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '1px' }}>{row.icon}</span>
-              <div>
-                <div style={{ fontSize: '11px', color: '#44475A', marginBottom: '1px' }}>{row.label}</div>
-                <div style={{ fontWeight: 600, color: row.blue ? '#0057B8' : row.green ? '#1B7A5A' : '#1A1C2E', textDecoration: row.blue ? 'underline' : 'none' }}>{row.val}</div>
+        return (
+          <>
+            <div style={{ background: '#fff', borderBottom: '1px solid #E1E2EC', padding: '44px 16px 14px' }}>
+              <button onClick={() => goTo('jobs')} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: '#0057B8', cursor: 'pointer', background: 'none', border: 'none', marginBottom: '10px' }}>← Jobs</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+                <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: m.bg, display: 'grid', placeItems: 'center', flexShrink: 0 }}><Icon name={m.icon} size={18} color={m.color} /></div>
+                <div>
+                  <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '18px', fontWeight: 700 }}>{m.label}{job.dest === 'depot' ? ' · Storage transfer' : ''}</div>
+                  <div style={{ fontFamily: 'monospace', fontSize: '11px', color: '#44475A' }}>{job.sku} · {job.time}</div>
+                </div>
               </div>
             </div>
-          ))}
-        </>,
-        { marginBottom: '10px' }
-      )}
 
-      {/* Actions */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', padding: '0 12px', marginBottom: '10px' }}>
-        <button onClick={() => toast('Texting customer ETA…')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: '999px', background: '#EEF2FF', color: '#0057B8', border: 'none', fontFamily: "'Google Sans', sans-serif", fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>💬 SMS Customer</button>
-        <button onClick={() => toast('Calling dispatch…')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: '999px', background: '#EEF2FF', color: '#0057B8', border: 'none', fontFamily: "'Google Sans', sans-serif", fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>📡 Dispatch</button>
-      </div>
+            {/* Location / contact card */}
+            {card(
+              <>
+                <div style={{ background: m.bg, padding: '10px 16px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', color: m.color, borderBottom: '1px solid #E1E2EC' }}>
+                  {job.kind === 'pickup' ? 'Pickup Depot' : job.dest === 'depot' ? 'Drop-off Depot' : 'Customer'}
+                </div>
+                {(job.kind === 'pickup'
+                  ? [
+                    { icon: 'box', label: 'Depot', val: depot?.name ?? '—' },
+                    { icon: 'pin', label: 'Address', val: depot?.address ?? '—' },
+                    { icon: 'user', label: 'Lot Attendant', val: depot?.attendantName ?? '—' },
+                    { icon: 'phone', label: 'Attendant Cell', val: depot?.attendantCell ?? '—', blue: true, onClick: () => toast(`Calling ${depot?.attendantName ?? 'attendant'}…`) },
+                  ]
+                  : job.dest === 'depot'
+                    ? [
+                      { icon: 'truck', label: 'Origin', val: depotById(job.originDepotId)?.name ?? '—' },
+                      { icon: 'box', label: 'Destination', val: depot?.name ?? '—' },
+                      { icon: 'pin', label: 'Address', val: depot?.address ?? '—' },
+                    ]
+                    : [
+                      { icon: 'user', label: 'Customer', val: job.customer ?? '—' },
+                      { icon: 'pin', label: 'Address', val: job.address ?? '—' },
+                      { icon: 'phone', label: 'Site Contact', val: job.contact ?? '—', blue: true, onClick: () => toast(`Calling ${job.contact}…`) },
+                    ]
+                ).map((row: any, i: number) => (
+                  <div key={i} onClick={row.onClick} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '11px 16px', borderBottom: '1px solid #E1E2EC', fontSize: '13px', cursor: row.onClick ? 'pointer' : 'default' }}>
+                    <span style={{ width: '20px', flexShrink: 0, marginTop: '1px', color: '#44475A' }}><Icon name={row.icon} size={16} color="#44475A" /></span>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#44475A', marginBottom: '1px' }}>{row.label}</div>
+                      <div style={{ fontWeight: 600, color: row.blue ? '#0057B8' : '#1A1C2E', textDecoration: row.blue ? 'underline' : 'none' }}>{row.val}</div>
+                    </div>
+                  </div>
+                ))}
+              </>,
+              { marginBottom: '10px' }
+            )}
 
-      <div style={{ padding: '0 12px', marginBottom: '10px' }}>
-        <button onClick={() => { setSignedDelivery(false); toast('Arrival marked. Customer notified.') }} style={{ width: '100%', padding: '15px', background: '#E65100', color: '#fff', border: 'none', borderRadius: '999px', fontFamily: "'Google Sans', sans-serif", fontSize: '15px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(230,81,0,.3)' }}>📍 Mark Arrived</button>
-      </div>
+            {/* Step process */}
+            <Stepper title={`${m.label} Steps`} steps={steps.map((s, i) => ({
+              label: s.label,
+              detail: s.detail,
+              status: i < stepIndex ? 'done' : i === stepIndex ? 'active' : 'pending',
+            }))} />
 
-      {/* Signature pad */}
-      <div
-        onClick={() => { setSignedDelivery(true); toast('Signature captured') }}
-        style={{ margin: '0 12px 10px', background: signedDelivery ? '#B7F0DA' : 'transparent', border: `2px ${signedDelivery ? 'solid #1B7A5A' : 'dashed #C4C6D0'}`, borderRadius: '16px', padding: '20px 16px', textAlign: 'center', cursor: 'pointer' }}
-      >
-        <div style={{ fontSize: '28px', marginBottom: '8px' }}>{signedDelivery ? '✅' : '✍️'}</div>
-        <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '3px' }}>{signedDelivery ? 'Signature Captured' : 'Customer Signature Required'}</div>
-        <div style={{ fontSize: '11px', color: '#44475A' }}>{signedDelivery ? 'Tap to re-capture' : 'Tap to capture on-site'}</div>
-      </div>
+            {/* Condition scorer — 1–5 stars, shown when the active step needs it */}
+            {step?.key === 'score' && (
+              <div style={{ margin: '0 12px 10px', background: '#fff', border: '1px solid #E1E2EC', borderRadius: '16px', padding: '18px 16px', textAlign: 'center', boxShadow: '0 1px 4px rgba(26,28,46,.08)' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '10px' }}>Rate container condition</div>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <button key={n} onClick={() => setCondScore(n)} aria-label={`${n} of 5`} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 0 }}>
+                      <Icon name="star" size={34} color={n <= condScore ? '#F5A623' : '#D6D9E4'} sw={1.4} />
+                    </button>
+                  ))}
+                </div>
+                <div style={{ fontSize: '11px', color: '#44475A', marginTop: '8px' }}>{condScore ? `${condScore} / 5 — ${['', 'Poor', 'Fair', 'Good', 'Very good', 'Excellent'][condScore]}` : 'Tap a star (1 = poor, 5 = excellent)'}</div>
+              </div>
+            )}
 
-      <div style={{ padding: '0 12px 4px' }}>
-        <button
-          onClick={() => { if (signedDelivery) { goTo('success') } else { toast('Capture customer signature first') } }}
-          style={{ width: '100%', padding: '15px', background: signedDelivery ? '#1B7A5A' : '#C4C6D0', color: '#fff', border: 'none', borderRadius: '999px', fontFamily: "'Google Sans', sans-serif", fontSize: '15px', fontWeight: 700, cursor: signedDelivery ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-        >
-          ✓ Mark as Delivered
-        </button>
-      </div>
+            {/* Signature pad — shown when the active step needs it */}
+            {step?.key === 'signature' && (
+              <div onClick={() => { if (!signed) advanceStep() }} style={{ margin: '0 12px 10px', background: signed ? '#B7F0DA' : 'transparent', border: `2px ${signed ? 'solid #1B7A5A' : 'dashed #C4C6D0'}`, borderRadius: '16px', padding: '22px 16px', textAlign: 'center', cursor: signed ? 'default' : 'pointer' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}><Icon name={signed ? 'check' : 'pen'} size={26} color={signed ? '#1B7A5A' : '#44475A'} sw={2} /></div>
+                <div style={{ fontSize: '13px', fontWeight: 600 }}>{signed ? 'Signature Captured' : 'Customer Signature'}</div>
+                <div style={{ fontSize: '11px', color: '#44475A', marginTop: '2px' }}>{signed ? `${job.customer} signed` : 'Tap to capture on-screen'}</div>
+              </div>
+            )}
+
+            {/* Primary step action */}
+            {step && (
+              <div style={{ padding: '2px 12px 6px' }}>
+                {isCustomer && step.key === 'sms' && (
+                  <div style={{ fontSize: '11px', color: '#44475A', textAlign: 'center', marginBottom: '8px' }}>Customer delivery — notify, arrive, unload, sign, receipt.</div>
+                )}
+                {job.dest === 'depot' && stepIndex === 0 && (
+                  <div style={{ fontSize: '11px', color: '#44475A', textAlign: 'center', marginBottom: '8px' }}>Depot-to-depot storage transfer — no customer contact.</div>
+                )}
+                <button
+                  onClick={advanceStep}
+                  disabled={!stepReady}
+                  style={{ width: '100%', padding: '15px', background: !stepReady ? '#C4C6D0' : step.key === 'complete' ? '#1B7A5A' : '#0057B8', color: '#fff', border: 'none', borderRadius: '999px', fontFamily: "'Google Sans', sans-serif", fontSize: '15px', fontWeight: 700, cursor: stepReady ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: stepReady ? '0 4px 14px rgba(0,87,184,.25)' : 'none' }}
+                >
+                  {step.key === 'photos12' && <Icon name="camera" size={17} color="#fff" />}
+                  {step.key === 'complete' && <Icon name="check" size={17} color="#fff" sw={2.2} />}
+                  {step.key === 'receipt' && <Icon name="receipt" size={17} color="#fff" />}
+                  {step.key === 'sms' && <Icon name="sms" size={17} color="#fff" />}
+                  {photoCta}
+                </button>
+                {step.key === 'signature' && !signed && <div style={{ textAlign: 'center', fontSize: '11px', color: '#44475A', marginTop: '8px' }}>Capture the signature above to continue</div>}
+              </div>
+            )}
+          </>
+        )
+      })()}
     </div>
   )
+
+  // ── Jobs list (bottom-nav tab) ─────────────────────────
+
+  const renderJobs = () => {
+    const groups = groupByDay(mySchedule)
+    return (
+      <div>
+        <div style={{ background: '#fff', borderBottom: '1px solid #E1E2EC', padding: '18px 16px 14px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
+          <div>
+            <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '20px', fontWeight: 700, marginBottom: '2px' }}>Pickups, Deliveries &amp; Returns</div>
+            <div style={{ fontSize: '12px', color: '#44475A' }}>{mySchedule.length} jobs this week · tap to start the workflow</div>
+          </div>
+          <button onClick={() => { fetchSchedule(); toast('Schedule refreshed') }} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 12px', borderRadius: '999px', border: '1.5px solid #E1E2EC', background: 'transparent', fontSize: '12px', fontWeight: 700, color: '#0057B8', cursor: 'pointer' }}>
+            <Icon name="refresh" size={14} color="#0057B8" sw={1.8} /> Refresh
+          </button>
+        </div>
+        {groups.length === 0 && <div style={{ textAlign: 'center', padding: '40px', color: '#44475A', fontSize: '13px' }}>No jobs scheduled.</div>}
+        {groups.map(g => (
+          <div key={g.offset}>
+            {secLabel(g.label)}
+            {card(<>{g.jobs.map((s, i) => {
+              const prev = g.jobs[i - 1]
+              // Tight if this job starts within a 10-min buffer of the previous job's est. end.
+              const tight = !!prev && (prev.startMin + 60 + prev.miles + 10) > s.startMin
+              return jobRow(s, i === g.jobs.length - 1, tight)
+            })}</>)}
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   // ── Camera / Photo Checklist ───────────────────────────
 
@@ -369,14 +751,14 @@ export default function FieldAppPage() {
       <div style={{ background: '#fff', borderBottom: '1px solid #E1E2EC', padding: '44px 16px 14px' }}>
         <button onClick={() => goTo('dashboard')} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: '#0057B8', cursor: 'pointer', background: 'none', border: 'none', marginBottom: '10px' }}>← Dashboard</button>
         <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#44475A', marginBottom: '2px' }}>Bay 4 · NOLA Depot</div>
-        <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '19px', fontWeight: 700 }}>SBX-20-0067</div>
+        <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '19px', fontWeight: 700 }}>NOLA-20-0004</div>
       </div>
 
       {/* Progress */}
       <div style={{ margin: '10px 12px 0', background: '#fff', borderRadius: '12px', border: '1px solid #E1E2EC', padding: '14px', boxShadow: '0 1px 4px rgba(26,28,46,.08)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <span style={{ fontSize: '12px', fontWeight: 600, color: '#44475A' }}>Progress</span>
-          <span style={{ fontFamily: 'monospace', fontSize: '12px', fontWeight: 700, color: '#0057B8' }}>{doneCount} / 16 shots</span>
+          <span style={{ fontFamily: 'monospace', fontSize: '12px', fontWeight: 700, color: '#0057B8' }}>{doneCount} / {PHOTO_TARGET} shots</span>
         </div>
         <div style={{ height: '6px', background: '#E1E2EC', borderRadius: '3px', overflow: 'hidden' }}>
           <div style={{ height: '100%', background: 'linear-gradient(90deg,#0057B8,#1B7A5A)', borderRadius: '3px', width: `${progress}%`, transition: 'width 0.4s ease' }} />
@@ -384,10 +766,10 @@ export default function FieldAppPage() {
       </div>
 
       {/* Shot list */}
-      {(['exterior', 'interior', 'optional'] as const).map(group => (
+      {(['exterior', 'interior'] as const).map(group => (
         <div key={group}>
           <div style={{ padding: '12px 16px 6px', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: '#44475A' }}>
-            {group === 'exterior' ? 'Exterior — Required' : group === 'interior' ? 'Interior — Required' : 'Optional'}
+            {group === 'exterior' ? 'Exterior — Required' : 'Interior — Required'}
           </div>
           {shots.filter(s => s.group === group).map(shot => (
             <div
@@ -412,7 +794,7 @@ export default function FieldAppPage() {
       ))}
 
       <button onClick={() => goTo('review')} style={{ margin: '12px', width: 'calc(100% - 24px)', background: '#0057B8', color: '#fff', border: 'none', borderRadius: '16px', padding: '16px', fontFamily: "'Google Sans', sans-serif", fontSize: '15px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(0,87,184,.3)' }}>
-        📷 Open Camera
+        <Icon name="camera" size={17} color="#fff" /> Open Camera
       </button>
       <div style={{ textAlign: 'center', padding: '4px 12px 10px', fontSize: '11px', color: '#44475A' }}>Tap any row to toggle done · Open Camera captures next required shot</div>
     </div>
@@ -424,13 +806,13 @@ export default function FieldAppPage() {
     <div>
       <div style={{ background: '#fff', borderBottom: '1px solid #E1E2EC', padding: '44px 16px 14px' }}>
         <button onClick={() => goTo('camera')} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: '#0057B8', cursor: 'pointer', background: 'none', border: 'none', marginBottom: '10px' }}>← Checklist</button>
-        <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#44475A', marginBottom: '2px' }}>SBX-20-0067 · {doneCount} photos captured</div>
+        <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#44475A', marginBottom: '2px' }}>NOLA-20-0004 · {doneCount} photos captured</div>
         <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '19px', fontWeight: 700 }}>Review & Submit</div>
       </div>
 
       <div style={{ margin: '12px', background: '#B7F0DA', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#1B7A5A', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid rgba(27,122,90,.2)' }}>
         <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="#1B7A5A" strokeWidth="2.2" strokeLinecap="round"><polyline points="3,10.5 8,16 17,5" /></svg>
-        All 14 required shots {doneCount >= 14 ? 'complete' : `— ${14 - Math.min(doneCount, 14)} remaining`}
+        All {PHOTO_TARGET} required shots {doneCount >= PHOTO_TARGET ? 'complete' : `— ${PHOTO_TARGET - Math.min(doneCount, PHOTO_TARGET)} remaining`}
       </div>
 
       {/* Photo grid */}
@@ -447,10 +829,10 @@ export default function FieldAppPage() {
       {card(
         <>
           {[
-            { label: 'SKU', val: 'SBX-20-0067', blue: true },
+            { label: 'SKU', val: 'NOLA-20-0004', blue: true },
             { label: 'GUID', val: 'a3f9-b22e-4d1c-9f83', small: true },
             { label: 'Condition', val: 'One Trip', orange: true },
-            { label: 'Photos', val: `${doneCount} / 16 ready`, green: doneCount >= 14 },
+            { label: 'Photos', val: `${doneCount} / ${PHOTO_TARGET} ready`, green: doneCount >= PHOTO_TARGET },
             { label: 'Upload size', val: '~48 MB' },
             { label: 'Captured by', val: 'Mike Torres · DRV-001' },
             { label: 'GPS stamp', val: '29.7604° N · 95.3698° W', green: true, small: true },
@@ -469,7 +851,7 @@ export default function FieldAppPage() {
         <textarea placeholder="Condition observations, location notes, damage details…" rows={3} style={{ width: '100%', background: '#fff', border: '1.5px solid #C4C6D0', borderRadius: '12px', padding: '12px', color: '#1A1C2E', fontFamily: "'Roboto', sans-serif", fontSize: '13px', resize: 'none', height: '64px', outline: 'none' }} />
       </div>
 
-      <button onClick={() => goTo('success')} style={{ margin: '0 12px 12px', width: 'calc(100% - 24px)', background: '#0057B8', color: '#fff', border: 'none', borderRadius: '16px', padding: '16px', fontFamily: "'Google Sans', sans-serif", fontSize: '15px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 14px rgba(0,87,184,.3)' }}>
+      <button onClick={() => { logActivity(activeJob, 'photos_submitted', `${doneCount}/${PHOTO_TARGET} photos uploaded`); goTo('success') }} style={{ margin: '0 12px 12px', width: 'calc(100% - 24px)', background: '#0057B8', color: '#fff', border: 'none', borderRadius: '16px', padding: '16px', fontFamily: "'Google Sans', sans-serif", fontSize: '15px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 14px rgba(0,87,184,.3)' }}>
         Submit to Admin Portal →
       </button>
       <div style={{ textAlign: 'center', padding: '0 12px 12px', fontSize: '11px', color: '#44475A' }}>Uploads via WiFi or LTE · Admin notified instantly</div>
@@ -484,11 +866,13 @@ export default function FieldAppPage() {
         <svg width="36" height="36" viewBox="0 0 20 20" fill="none" stroke="#1B7A5A" strokeWidth="2.2" strokeLinecap="round"><polyline points="3,10.5 8,16 17,5" /></svg>
       </div>
       <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '22px', fontWeight: 700, marginBottom: '8px' }}>Photos Submitted!</div>
-      <p style={{ fontSize: '13px', color: '#44475A', lineHeight: 1.65, marginBottom: '24px', maxWidth: '260px' }}>All {doneCount} photos for SBX-20-0067 uploaded. Admin has been notified and will review for listing approval.</p>
-      <div style={{ background: '#EEF2FF', color: '#0057B8', borderRadius: '16px', padding: '7px 18px', fontFamily: 'monospace', fontSize: '11px', fontWeight: 600, marginBottom: '28px', border: '1px solid rgba(0,87,184,.2)' }}>SBX-20-0067 · a3f9-b22e</div>
-      <button onClick={() => { setShots(SHOT_LIST.map(s => ({ ...s }))); goTo('camera') }} style={{ width: '100%', padding: '13px', borderRadius: '16px', background: '#0057B8', color: '#fff', border: 'none', fontFamily: "'Google Sans', sans-serif", fontSize: '14px', fontWeight: 700, cursor: 'pointer', marginBottom: '10px', boxShadow: '0 4px 14px rgba(0,87,184,.3)' }}>
-        📷 Next: SBX-20-0068 (0/16)
-      </button>
+      <p style={{ fontSize: '13px', color: '#44475A', lineHeight: 1.65, marginBottom: '24px', maxWidth: '260px' }}>All {doneCount} photos for {activeJob?.sku ?? 'this container'} uploaded. Admin has been notified and will review for listing approval.</p>
+      <div style={{ background: '#EEF2FF', color: '#0057B8', borderRadius: '16px', padding: '7px 18px', fontFamily: 'monospace', fontSize: '11px', fontWeight: 600, marginBottom: '28px', border: '1px solid rgba(0,87,184,.2)' }}>{activeJob?.sku ?? 'SBX'} · uploaded</div>
+      {activeJob && (
+        <button onClick={() => goTo('flow')} style={{ width: '100%', padding: '13px', borderRadius: '16px', background: '#0057B8', color: '#fff', border: 'none', fontFamily: "'Google Sans', sans-serif", fontSize: '14px', fontWeight: 700, cursor: 'pointer', marginBottom: '10px', boxShadow: '0 4px 14px rgba(0,87,184,.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+          <Icon name="arrow" size={16} color="#fff" /> Continue {KIND_META[activeJob.kind].label}
+        </button>
+      )}
       <button onClick={() => goTo('dashboard')} style={{ width: '100%', padding: '13px', borderRadius: '16px', background: '#EEF2FF', color: '#1A1C2E', border: '1.5px solid #E1E2EC', fontFamily: "'Google Sans', sans-serif", fontSize: '14px', fontWeight: 700, cursor: 'pointer' }}>Back to Dashboard</button>
       <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#44475A', marginTop: '14px', letterSpacing: '0.5px' }}>UPLOADED IN 41s · 48.2 MB · WiFi</div>
     </div>
@@ -496,71 +880,244 @@ export default function FieldAppPage() {
 
   // ── Schedule ───────────────────────────────────────────
 
-  const renderSchedule = () => (
-    <div>
-      <div style={{ background: '#fff', borderBottom: '1px solid #E1E2EC', padding: '44px 16px 14px' }}>
-        <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '20px', fontWeight: 700, marginBottom: '2px' }}>My Schedule</div>
-        <div style={{ fontSize: '12px', color: '#44475A' }}>Today · 2 deliveries · 3 photo jobs</div>
-      </div>
+  // Save a reschedule edit back to the shared schedule CSV (admin sees it too).
+  const saveReschedule = () => {
+    if (!editJob) return
+    const [h, m] = editJob.time.split(':').map(Number)
+    const startMin = h * 60 + (m || 0)
+    setMySchedule(prev => prev.map(j => j.id === editJob.id ? { ...j, dayOffset: editJob.dayOffset, startMin } : j)) // optimistic
+    scheduleApi.update(editJob.id, { dayOffset: editJob.dayOffset, startMin }).then(fetchSchedule).catch(() => {})
+    toast('Rescheduled · dispatch notified')
+    setEditJob(null)
+  }
+  const dayName = (off: number) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + off); return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) }
 
-      {/* Week strip */}
-      <div style={{ display: 'flex', gap: '6px', padding: '12px 12px 0', overflowX: 'auto' }}>
-        {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((day, i) => {
-          const num = i + 6
-          const isToday = i === 3
-          const hasJob = [2, 3, 5].includes(i)
+  // Schedule tab = the driver sets their own weekly working hours (6 AM–10 PM).
+  const renderSchedule = () => {
+    const DAYS: [number, string][] = [[1, 'Monday'], [2, 'Tuesday'], [3, 'Wednesday'], [4, 'Thursday'], [5, 'Friday'], [6, 'Saturday'], [0, 'Sunday']]
+    const HOURS = Array.from({ length: 17 }, (_, i) => i + 6) // 6 (6 AM) .. 22 (10 PM)
+    const hourLabel = (h: number) => { const ap = h < 12 ? 'AM' : 'PM', hh = ((h + 11) % 12) + 1; return `${hh} ${ap}` }
+    const weekRange = (off: number) => {
+      const [y, m, d] = mondayISO(off).split('-').map(Number)
+      const mon = new Date(y, m - 1, d), sun = new Date(y, m - 1, d + 6)
+      const f = (x: Date) => x.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      return `${f(mon)} – ${f(sun)}`
+    }
+    const weekTab = (off: number) => off === 0 ? 'This Week' : off === 1 ? 'Next Week' : `Week of ${mondayISO(off).slice(5).replace('-', '/')}`
+    const dirty = !!weekEdits[weekStart]
+    return (
+      <div>
+        <div style={{ background: '#fff', borderBottom: '1px solid #E1E2EC', padding: '18px 16px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
+          <div>
+            <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '20px', fontWeight: 700, marginBottom: '2px' }}>My Working Hours</div>
+            <div style={{ fontSize: '12px', color: '#44475A' }}>Set your Mon–Sun availability (6 AM–10 PM) up to 4 weeks ahead.</div>
+          </div>
+          <button onClick={() => { loadAvailability(); loadMe(); toast('Hours refreshed') }} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 12px', borderRadius: '999px', border: '1.5px solid #E1E2EC', background: 'transparent', fontSize: '12px', fontWeight: 700, color: '#0057B8', cursor: 'pointer' }}>
+            <Icon name="refresh" size={14} color="#0057B8" sw={1.8} /> Refresh
+          </button>
+        </div>
+        {/* Week selector */}
+        <div style={{ display: 'flex', gap: '6px', padding: '10px 12px 4px', overflowX: 'auto' }}>
+          {[0, 1, 2, 3].map(off => {
+            const active = weekOffset === off
+            const saved = availRows.some(r => r.weekStart === mondayISO(off))
+            return (
+              <button key={off} onClick={() => setWeekOffset(off)} style={{ flexShrink: 0, padding: '8px 12px', borderRadius: '14px', border: `1.5px solid ${active ? '#0057B8' : '#E1E2EC'}`, background: active ? '#0057B8' : '#fff', color: active ? '#fff' : '#1A1C2E', cursor: 'pointer', textAlign: 'left' }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '5px' }}>{weekTab(off)}{saved && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: active ? '#4DFFB4' : '#1B7A5A' }} />}</div>
+                <div style={{ fontSize: '10px', color: active ? 'rgba(255,255,255,.8)' : '#44475A', fontFamily: 'monospace' }}>{weekRange(off)}</div>
+              </button>
+            )
+          })}
+        </div>
+        <div style={{ padding: '6px 12px 12px' }}>
+          <div style={{ background: '#fff', border: '1px solid #E1E2EC', borderRadius: '14px', boxShadow: '0 1px 4px rgba(26,28,46,.08)', overflow: 'hidden' }}>
+            {DAYS.map(([d, name], i) => {
+              const dh = weekDays[d] || null
+              const on = !!dh
+              const sel = { padding: '5px 6px', border: '1.5px solid #C4C6D0', borderRadius: '7px', fontSize: '12px', fontFamily: "'Roboto', sans-serif", background: '#fff' } as const
+              return (
+                <div key={d} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '8px 12px', borderBottom: i < DAYS.length - 1 ? '1px solid #EEF0F4' : 'none' }}>
+                  <button onClick={() => setDayHours(d, on ? null : { start: 6, end: 18 })} style={{ width: '38px', height: '22px', borderRadius: '999px', border: 'none', background: on ? '#1B7A5A' : '#C4C6D0', position: 'relative', cursor: 'pointer', flexShrink: 0, transition: 'background .15s' }}>
+                    <span style={{ position: 'absolute', top: '2px', left: on ? '18px' : '2px', width: '18px', height: '18px', borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
+                  </button>
+                  <div style={{ fontSize: '13px', fontWeight: 700, width: '76px', flexShrink: 0 }}>{name}</div>
+                  {on && dh ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, justifyContent: 'flex-end' }}>
+                      <select value={dh.start} onChange={e => { const v = Number(e.target.value); setDayHours(d, { start: v, end: Math.max(v + 1, dh.end) }) }} style={sel}>
+                        {HOURS.filter(h => h < 22).map(h => <option key={h} value={h}>{hourLabel(h)}</option>)}
+                      </select>
+                      <span style={{ fontSize: '11px', color: '#44475A' }}>to</span>
+                      <select value={dh.end} onChange={e => setDayHours(d, { ...dh, end: Number(e.target.value) })} style={sel}>
+                        {HOURS.filter(h => h > dh.start).map(h => <option key={h} value={h}>{hourLabel(h)}</option>)}
+                      </select>
+                    </div>
+                  ) : (
+                    <div style={{ flex: 1, textAlign: 'right', fontSize: '12px', fontWeight: 600, color: '#9498A6' }}>Off</div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <button onClick={saveWorkHours} style={{ width: '100%', padding: '13px', borderRadius: '999px', border: 'none', background: dirty ? '#0057B8' : '#1B7A5A', color: '#fff', fontFamily: "'Google Sans', sans-serif", fontSize: '14px', fontWeight: 700, cursor: 'pointer', marginTop: '12px', boxShadow: '0 4px 14px rgba(0,87,184,.3)' }}>{dirty ? `Save ${weekTab(weekOffset)}` : `✓ ${weekTab(weekOffset)} saved · update`}</button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Inbox / Sent / Trash ───────────────────────────────
+  // Inbox = messages addressed to this driver; Sent = messages this driver sent.
+  const isReceived = (m: Message) => m.toRole === 'driver'
+  const unreadCount = messages.filter(m => isReceived(m) && !m.trashed && !m.read).length
+  const patchMsg = (id: string, patch: Partial<Message>) => {
+    setMessages(prev => prev.map(x => x.id === id ? { ...x, ...patch } : x))
+    messagesApi.update(id, patch).catch(() => {})
+  }
+  const openMessage = (m: Message) => { setOpenMsgId(m.id); if (isReceived(m) && !m.read) patchMsg(m.id, { read: true }) }
+  const trashMsg = (m: Message) => { patchMsg(m.id, { trashed: true }); setOpenMsgId(null); toast('Moved to Trash') }
+  const restoreMsg = (m: Message) => { patchMsg(m.id, { trashed: false }); toast('Restored') }
+  const deleteMsg = (m: Message) => { setMessages(prev => prev.filter(x => x.id !== m.id)); messagesApi.remove(m.id).catch(() => {}); setOpenMsgId(null) }
+  const emptyTrash = () => { setMessages(prev => prev.filter(x => !x.trashed)); messagesApi.emptyTrash(DRIVER_ID).catch(() => {}); toast('Trash emptied') }
+  const fmtMsgTime = (iso: string) => { try { return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) } catch { return iso } }
+  const sendCompose = () => {
+    if (!compose || !compose.body.trim()) return
+    const payload = { fromRole: 'driver' as const, fromName: me?.name || 'Driver', fromEmail: '', toDriverId: DRIVER_ID, toRole: compose.toRole, toName: compose.toName, toEmail: compose.toEmail, subject: compose.subject.trim() || '(no subject)', body: compose.body.trim() }
+    messagesApi.create(payload).then(fetchMessages).catch(() => {})
+    setCompose(null); setOpenMsgId(null); setInboxTab('sent')
+    toast(compose.toRole === 'admin' ? 'Sent to Dispatch' : `Sent to ${compose.toName}`)
+  }
+  const replyTo = (m: Message) => setCompose({ toRole: m.fromRole === 'customer' ? 'customer' : 'admin', toName: m.fromName, toEmail: m.fromEmail, subject: m.subject.startsWith('Re:') ? m.subject : `Re: ${m.subject}`, body: '' })
+
+  const renderInbox = () => {
+    const open = openMsgId ? messages.find(m => m.id === openMsgId) : null
+    const list = messages.filter(m => inboxTab === 'trash' ? m.trashed : inboxTab === 'sent' ? (m.fromRole === 'driver' && !m.trashed) : (isReceived(m) && !m.trashed))
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    const trashCount = messages.filter(m => m.trashed).length
+    const chip = (role: Message['fromRole'], label?: string) => (
+      <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.4px', padding: '2px 7px', borderRadius: '999px', background: role === 'admin' ? '#D6E4FF' : role === 'customer' ? '#FFE0CC' : '#E7F5EF', color: role === 'admin' ? '#0057B8' : role === 'customer' ? '#E65100' : '#1B7A5A' }}>{label || (role === 'admin' ? 'Dispatch' : role === 'customer' ? 'Customer' : 'You')}</span>
+    )
+    const tabs: ('inbox' | 'sent' | 'trash')[] = ['inbox', 'sent', 'trash']
+    return (
+      <div style={{ paddingBottom: '84px' }}>
+        <div style={{ background: '#fff', borderBottom: '1px solid #E1E2EC', padding: '18px 16px 0', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
+            <div>
+              <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '20px', fontWeight: 700 }}>Messages</div>
+              <div style={{ fontSize: '12px', color: '#44475A' }}>{unreadCount} unread · dispatch &amp; customers</div>
+            </div>
+            <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+              <button onClick={() => { setCompose({ toRole: 'admin', toName: 'Dispatch (James R.)', toEmail: 'ops@steelbox.co', subject: '', body: '' }) }} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '7px 12px', borderRadius: '999px', border: 'none', background: '#0057B8', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>+ New</button>
+              <button onClick={() => { fetchMessages(); toast('Refreshed') }} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '7px 10px', borderRadius: '999px', border: '1.5px solid #E1E2EC', background: 'transparent', fontSize: '12px', fontWeight: 700, color: '#0057B8', cursor: 'pointer' }}><Icon name="refresh" size={14} color="#0057B8" sw={1.8} /></button>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '18px' }}>
+            {tabs.map(t => (
+              <button key={t} onClick={() => { setInboxTab(t); setOpenMsgId(null) }} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 0', border: 'none', background: 'transparent', borderBottom: `2.5px solid ${inboxTab === t ? '#0057B8' : 'transparent'}`, color: inboxTab === t ? '#0057B8' : '#44475A', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+                <Icon name={t === 'trash' ? 'trash' : t === 'sent' ? 'arrow' : 'inbox'} size={15} sw={1.7} /> {t === 'inbox' ? 'Inbox' : t === 'sent' ? 'Sent' : 'Trash'}{t === 'inbox' && unreadCount > 0 ? ` (${unreadCount})` : t === 'trash' && trashCount > 0 ? ` (${trashCount})` : ''}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {open ? (() => {
+          const received = isReceived(open)
           return (
-            <div key={day} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', padding: '8px 10px', borderRadius: '16px', cursor: 'pointer', flexShrink: 0, border: `1.5px solid ${isToday ? 'transparent' : hasJob ? '#E1E2EC' : 'transparent'}`, background: isToday ? '#0057B8' : 'transparent' }}>
-              <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: isToday ? 'rgba(255,255,255,.8)' : '#44475A' }}>{day}</div>
-              <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '19px', fontWeight: 700, lineHeight: 1, color: isToday ? '#fff' : '#1A1C2E' }}>{num}</div>
-              {hasJob && <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: isToday ? '#FFD54F' : '#E65100' }} />}
+            <div style={{ padding: '14px 16px' }}>
+              <button onClick={() => setOpenMsgId(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'none', border: 'none', color: '#0057B8', fontSize: '13px', fontWeight: 700, cursor: 'pointer', padding: '0 0 12px' }}>‹ Back</button>
+              <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #E1E2EC', padding: '16px', boxShadow: '0 1px 4px rgba(26,28,46,.08)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>{received ? chip(open.fromRole) : chip('driver', 'Sent')}<span style={{ fontSize: '11px', color: '#44475A', marginLeft: 'auto' }}>{fmtMsgTime(open.createdAt)}</span></div>
+                <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '2px' }}>{open.subject}</div>
+                <div style={{ fontSize: '12px', color: '#44475A', marginBottom: '14px' }}>{received ? `From ${open.fromName}${open.fromEmail ? ` · ${open.fromEmail}` : ''}` : `To ${open.toName || (open.toRole === 'admin' ? 'Dispatch' : 'Customer')}${open.toEmail ? ` · ${open.toEmail}` : ''}`}</div>
+                <div style={{ fontSize: '14px', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{open.body}</div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
+                {open.trashed ? (
+                  <>
+                    <button onClick={() => restoreMsg(open)} style={{ flex: 1, padding: '11px', borderRadius: '999px', border: '1.5px solid #E1E2EC', background: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>Restore</button>
+                    <button onClick={() => deleteMsg(open)} style={{ flex: 1, padding: '11px', borderRadius: '999px', border: 'none', background: '#E65100', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>Delete forever</button>
+                  </>
+                ) : (
+                  <>
+                    {received && <button onClick={() => replyTo(open)} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '11px', borderRadius: '999px', border: 'none', background: '#0057B8', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}><Icon name="ret" size={15} color="#fff" sw={1.9} /> Reply</button>}
+                    {received && <button onClick={() => patchMsg(open.id, { read: !open.read })} style={{ flex: 1, padding: '11px', borderRadius: '999px', border: '1.5px solid #E1E2EC', background: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>Mark {open.read ? 'unread' : 'read'}</button>}
+                    <button onClick={() => trashMsg(open)} style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '11px', borderRadius: '999px', border: '1.5px solid #E65100', background: '#fff', color: '#E65100', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}><Icon name="trash" size={15} color="#E65100" sw={1.8} /> Trash</button>
+                  </>
+                )}
+              </div>
             </div>
           )
-        })}
-      </div>
-
-      {card(
-        <>
-          <div style={{ padding: '12px 16px', background: '#EEF2FF', borderBottom: '1px solid #E1E2EC', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '13px', fontWeight: 700 }}>Thursday — Today</div>
-            <Chip label="5 tasks" color="orange" />
-          </div>
-          {[
-            { time: '9:00 AM', dot: 'blue', name: 'Delivery — Westfield Storage Co.', addr: '#ORD-0085 · Katy TX · In Progress', chip: <Chip label="Active" color="blue" />, onClick: () => goTo('delivery') },
-            { time: 'After',   dot: 'orange', name: 'Photos — SBX-20-0067', addr: 'NOLA Depot · Bay 4 · 9/16 shots', chip: <Chip label="9 left" color="orange" />, onClick: () => goTo('camera') },
-            { time: 'After',   dot: 'orange', name: 'Photos — SBX-20-0068', addr: 'NOLA Depot · Bay 7 · 0/16 shots', chip: <Chip label="New" color="orange" />, onClick: () => goTo('camera') },
-            { time: 'After',   dot: 'orange', name: 'Photos — SBX-20-0041', addr: 'NOLA Depot · Bay 2 · 14/16 shots', chip: <Chip label="2 left" color="warn" />, onClick: () => goTo('camera') },
-            { time: '2:00 PM', dot: 'blue', name: 'Delivery — Ray Donovan', addr: '#ORD-0089 · Austin TX', chip: <Chip label="Scheduled" color="grey" />, onClick: () => goTo('delivery') },
-          ].map((job, i) => (
-            <div key={i} onClick={job.onClick} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '13px 16px', borderBottom: i < 4 ? '1px solid #E1E2EC' : 'none', cursor: 'pointer' }}>
-              <div style={{ fontFamily: 'monospace', fontSize: '11px', fontWeight: 600, color: '#0057B8', minWidth: '52px', textAlign: 'right', flexShrink: 0 }}>{job.time}</div>
-              <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: job.dot === 'blue' ? '#0057B8' : '#E65100', flexShrink: 0 }} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '2px' }}>{job.name}</div>
-                <div style={{ fontSize: '11px', color: '#44475A' }}>{job.addr}</div>
-              </div>
-              {job.chip}
+        })() : (
+          <div style={{ padding: '10px 12px' }}>
+            {inboxTab === 'trash' && trashCount > 0 && (
+              <button onClick={emptyTrash} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1.5px solid #E65100', background: '#fff', color: '#E65100', fontSize: '12px', fontWeight: 700, cursor: 'pointer', marginBottom: '10px' }}>Empty Trash ({trashCount})</button>
+            )}
+            {list.length === 0 && <div style={{ textAlign: 'center', padding: '48px 20px', color: '#44475A', fontSize: '13px' }}>{inboxTab === 'trash' ? 'Trash is empty.' : inboxTab === 'sent' ? 'No sent messages.' : 'No messages.'}</div>}
+            <div style={{ background: '#fff', borderRadius: '14px', border: '1px solid #E1E2EC', boxShadow: '0 1px 4px rgba(26,28,46,.08)', overflow: 'hidden' }}>
+              {list.map((m, i) => {
+                const received = isReceived(m)
+                const unread = received && !m.read && !m.trashed
+                return (
+                  <div key={m.id} onClick={() => openMessage(m)} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '13px 14px', borderBottom: i < list.length - 1 ? '1px solid #EEF0F4' : 'none', cursor: 'pointer', background: unread ? '#F5F8FF' : '#fff' }}>
+                    {unread && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#0057B8', flexShrink: 0, marginTop: '5px' }} />}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                        {received ? chip(m.fromRole) : chip('driver', 'Sent')}
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#1A1C2E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{received ? m.fromName : `To ${m.toName || (m.toRole === 'admin' ? 'Dispatch' : 'Customer')}`}</span>
+                        <span style={{ fontSize: '10px', color: '#9498A6', marginLeft: 'auto', flexShrink: 0 }}>{fmtMsgTime(m.createdAt)}</span>
+                      </div>
+                      <div style={{ fontSize: '13px', fontWeight: unread ? 700 : 500, color: '#1A1C2E' }}>{m.subject}</div>
+                      <div style={{ fontSize: '12px', color: '#44475A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.body}</div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-          ))}
-        </>,
-        { marginTop: '10px' }
-      )}
-    </div>
-  )
+          </div>
+        )}
+
+        {compose && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 40, background: 'rgba(11,22,41,.45)', display: 'flex', alignItems: 'flex-end' }} onClick={() => setCompose(null)}>
+            <div onClick={e => e.stopPropagation()} style={{ width: '100%', background: '#fff', borderRadius: '18px 18px 0 0', padding: '18px 16px calc(18px + env(safe-area-inset-bottom))', maxHeight: '88vh', overflowY: 'auto' }}>
+              <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '18px', fontWeight: 700, marginBottom: '12px' }}>New message</div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.5px', color: '#44475A', marginBottom: '5px' }}>To</label>
+              <select
+                value={compose.toRole === 'admin' ? 'admin' : `c:${compose.toEmail}`}
+                onChange={e => { const v = e.target.value; if (v === 'admin') setCompose(c => c && { ...c, toRole: 'admin', toName: 'Dispatch (James R.)', toEmail: 'ops@steelbox.co' }); else { const cust = msgCustomers.find(x => `c:${x.email}` === v); if (cust) setCompose(c => c && { ...c, toRole: 'customer', toName: cust.company || cust.name, toEmail: cust.email }) } }}
+                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #C4C6D0', borderRadius: '10px', fontSize: '13px', fontFamily: "'Roboto', sans-serif", marginBottom: '10px' }}
+              >
+                <option value="admin">Dispatch (James R.)</option>
+                <optgroup label="Customers">{msgCustomers.map(c => <option key={c.id} value={`c:${c.email}`}>{c.company || c.name}</option>)}</optgroup>
+              </select>
+              <input value={compose.subject} placeholder="Subject" onChange={e => setCompose(c => c && { ...c, subject: e.target.value })} style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #C4C6D0', borderRadius: '10px', fontSize: '13px', fontFamily: "'Roboto', sans-serif", marginBottom: '10px' }} />
+              <textarea value={compose.body} placeholder="Write your message…" rows={5} onChange={e => setCompose(c => c && { ...c, body: e.target.value })} style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #C4C6D0', borderRadius: '10px', fontSize: '14px', fontFamily: "'Roboto', sans-serif", resize: 'vertical', marginBottom: '12px' }} />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => setCompose(null)} style={{ flex: 1, padding: '12px', borderRadius: '999px', border: '1.5px solid #E1E2EC', background: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={sendCompose} disabled={!compose.body.trim()} style={{ flex: 2, padding: '12px', borderRadius: '999px', border: 'none', background: compose.body.trim() ? '#0057B8' : '#C4C6D0', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: compose.body.trim() ? 'pointer' : 'not-allowed' }}>Send</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   const screens: Record<Screen, React.ReactNode> = {
     dashboard: renderDashboard(),
-    delivery:  renderDelivery(),
+    jobs:      renderJobs(),
+    flow:      renderFlow(),
     camera:    renderCamera(),
     review:    renderReview(),
     success:   renderSuccess(),
     schedule:  renderSchedule(),
+    inbox:     renderInbox(),
   }
+
+  // Camera/review/success and the job flow all belong to the Pickups & Returns tab.
+  const navActive: Screen = ['review', 'success', 'flow', 'camera'].includes(screen) ? 'jobs' : screen
 
   return (
     <div style={base}>
       {screens[screen]}
-      <BottomNav active={screen === 'review' ? 'camera' : screen === 'success' ? 'camera' : screen} onNav={goTo} />
+      <BottomNav active={navActive} onNav={goTo} unread={unreadCount} />
       <Snackbar message={message} open={snackOpen} onClose={snackClose} />
     </div>
   )

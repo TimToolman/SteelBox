@@ -1,0 +1,11 @@
+{
+  "name": "steelbox-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CSV-backed dev API for SteelBox. Zero dependencies.",
+  "scripts": {
+    "dev": "node server.mjs",
+    "start": "node server.mjs"
+  }
+}

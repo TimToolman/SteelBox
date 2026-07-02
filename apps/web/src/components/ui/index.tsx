@@ -174,9 +174,13 @@ interface ModalProps {
   children: React.ReactNode
   maxWidth?: number
   noPadding?: boolean
+  // 'dark' renders a frosted white-on-dark close button for modals whose top area is dark (e.g. a photo gallery).
+  closeVariant?: 'light' | 'dark'
+  // Override for stacking a modal on top of another (e.g. edit-customer over the schedule modal).
+  zIndex?: number
 }
 
-export function Modal({ open, onClose, children, maxWidth = 500, noPadding = false }: ModalProps) {
+export function Modal({ open, onClose, children, maxWidth = 500, noPadding = false, closeVariant = 'light', zIndex = 600 }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -201,7 +205,7 @@ export function Modal({ open, onClose, children, maxWidth = 500, noPadding = fal
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 600,
+        zIndex,
         background: 'rgba(0,0,0,0.52)',
         backdropFilter: 'blur(5px)',
         display: 'flex',
@@ -236,8 +240,10 @@ export function Modal({ open, onClose, children, maxWidth = 500, noPadding = fal
             width: '34px',
             height: '34px',
             borderRadius: '50%',
-            background: 'rgba(0,0,0,0.07)',
-            border: 'none',
+            background: closeVariant === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.07)',
+            backdropFilter: closeVariant === 'dark' ? 'blur(6px)' : undefined,
+            border: closeVariant === 'dark' ? '1px solid rgba(255,255,255,0.28)' : 'none',
+            color: closeVariant === 'dark' ? '#fff' : 'var(--ink)',
             cursor: 'pointer',
             display: 'grid',
             placeItems: 'center',

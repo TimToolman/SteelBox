@@ -1,0 +1,14 @@
+{
+  "name": "steelbox",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SteelBox monorepo — web marketplace/admin/field app + CSV-backed dev API.",
+  "scripts": {
+    "dev": "node dev.mjs",
+    "dev:api": "node apps/api/server.mjs",
+    "dev:web": "npm --prefix apps/web run dev",
+    "build": "npm --prefix apps/web run build",
+    "install:web": "npm --prefix apps/web install"
+  }
+}

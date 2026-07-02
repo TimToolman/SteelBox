@@ -1,0 +1,10 @@
+id,name,company,email,phone,address,city,state,zip,notes,active,createdAt,notifySms,notifyEmail
+cus_11,Westfield Storage,Westfield Storage Co.,ops@westfieldstorage.com,(281) 555-0142,1420 Katy Fwy,Katy,TX,77494,Repeat buyer — 20ft units,true,2026-05-02T09:00:00.000Z,true,true
+cus_12,Bayou Contracting LLC,Bayou Contracting LLC,accounts@bayoucontracting.com,(504) 555-0199,88 Industrial Blvd,New Orleans,LA,70129,Net-30 terms,true,2026-05-10T09:00:00.000Z,false,true
+cus_13,B&R Construction,B&R Construction,dispatch@brconstruction.com,(936) 555-0170,305 Loop 336,Conroe,TX,77301,,true,2026-05-18T09:00:00.000Z,true,true
+cus_14,Gulf Coast Logistics,Gulf Coast Logistics,ops@gulfcoastlog.com,(504) 555-0142,2200 Airline Dr,Metairie,LA,70001,6-month rentals,true,2026-05-22T09:00:00.000Z,true,true
+cus_15,Delta Freight,Delta Freight,dispatch@deltafreight.com,(228) 555-0155,470 Seaway Rd,Gulfport,MS,39501,,true,2026-06-01T09:00:00.000Z,false,true
+cus_16,Acme Rentals,Acme Rentals,rentals@acmerentals.com,(251) 555-0166,915 Water St,Mobile,AL,36602,Prefers high-cube,true,2026-06-05T09:00:00.000Z,true,true
+cus_17,Pelican Storage,Pelican Storage,hello@pelicanstorage.com,(985) 555-0177,60 Gause Blvd,Slidell,LA,70458,,true,2026-06-11T09:00:00.000Z,true,true
+cus_18,Crescent Logistics,Crescent Logistics,ops@crescentlog.com,(713) 555-0188,1300 Preston St,Houston,TX,77002,,true,2026-06-15T09:00:00.000Z,false,true
+cus_19,Bayou Construction,Bayou Construction,build@bayoucon.com,(225) 555-0170,410 Government St,Baton Rouge,LA,70802,,true,2026-06-20T09:00:00.000Z,true,true

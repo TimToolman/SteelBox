@@ -1,0 +1,5 @@
+id,timestamp,type,jobType,sku,containerId,actor,location,note
+act_seed01,2026-06-30T14:12:00.000Z,arrived,pickup,NOLA-20-0004,ctr_0067,Mike Torres,NOLA Depot · Bay 4,Arrived on site
+act_seed02,2026-06-30T14:41:00.000Z,photos_submitted,pickup,NOLA-20-0004,ctr_0067,Mike Torres,NOLA Depot · Bay 4,12/12 photos uploaded
+act_seed03,2026-06-30T16:05:00.000Z,arrived,return,NOLA-20-0001,ctr_0041,Ray Donovan,Gulfport MS,Arrived on site
+act_seed04,2026-06-30T16:22:00.000Z,return_complete,return,NOLA-20-0001,ctr_0041,Ray Donovan,Gulfport MS,Container returned to depot

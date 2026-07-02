@@ -51,7 +51,7 @@ export const auth = {
 
 // ── Containers ────────────────────────────────────────────
 
-export type ContainerSize = '20ft-std' | '20ft-hc' | '40ft-std' | '40ft-hc'
+export type ContainerSize = '10ft-std' | '20ft-std' | '20ft-hc' | '40ft-std' | '40ft-hc'
 export type ContainerStatus =
   | 'draft'
   | 'available'
@@ -61,6 +61,8 @@ export type ContainerStatus =
   | 'in_transit'
   | 'delivered'
 export type ContainerGrade = 'A' | 'B' | 'C' | 'R' | 'X'
+// How a container may be transacted on the marketplace.
+export type ListingType = 'buy' | 'rent' | 'both'
 
 export interface Container {
   id: string
@@ -70,7 +72,10 @@ export interface Container {
   size: ContainerSize
   grade: ContainerGrade
   status: ContainerStatus
+  listingType: ListingType
   buyPrice: number
+  purchaseCost: number       // acquisition cost from the depot (COGS)
+  conditionScore: number     // field-scored condition 1–5 (0 = not inspected)
   rentMonthly: number | null
   photos: string[]          // CloudFront URLs
   photoCount: number
@@ -112,6 +117,8 @@ export const containers = {
     request<Container>('/containers', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<Container>) =>
     request<Container>(`/containers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  remove: (id: string) =>
+    request<{ id: string; sku: string; deleted: true }>(`/containers/${id}`, { method: 'DELETE' }),
   reserve: (id: string) =>
     request<{ lockExpiresAt: string }>(`/containers/${id}/reserve`, { method: 'POST' }),
   photoUploadUrl: (id: string, filename: string) =>
@@ -140,11 +147,18 @@ export interface Order {
   scheduledDate: string | null
   completedAt: string | null
   createdAt: string
+  saleType: 'buy' | 'rent'
+  unitCost: number       // container acquisition cost snapshot (COGS)
+  deposit: number        // refundable rental deposit
+  driverHours: number    // labor hours for this job
+  notifySms?: boolean     // transient: customer's SMS opt-in from checkout (drives customers.csv, not stored on order)
 }
 
 export const orders = {
   list: () => request<Order[]>('/orders'),
   get: (id: string) => request<Order>(`/orders/${id}`),
+  create: (data: Partial<Order>) =>
+    request<Order>('/orders', { method: 'POST', body: JSON.stringify(data) }),
   assignDriver: (id: string, driverId: string, scheduledDate: string) =>
     request<Order>(`/orders/${id}/assign-driver`, {
       method: 'POST',
@@ -173,11 +187,49 @@ export interface Driver {
   activeOrderSku: string | null
   nextShift: string | null
   colorHex: string
+  active: boolean            // false = soft-deleted (archived)
+  address: string
+  cellPhone: string
+  hourlyWage: number         // used to calculate profit labor cost
+  trucks: string             // encoded: "Name~size+size;Name2~size+size"
+  workHours: string          // driver availability, encoded: "d:start-end|…" (d 0=Sun..6=Sat, 24h)
+}
+
+export interface DayHours { start: number; end: number }  // hours 6..22, or null = off
+export function parseWorkHours(s: string): Record<number, DayHours> {
+  const out: Record<number, DayHours> = {}
+  ;(s || '').split('|').filter(Boolean).forEach(part => {
+    const [d, span] = part.split(':')
+    const [a, b] = (span || '').split('-').map(Number)
+    if (!Number.isNaN(a) && !Number.isNaN(b)) out[Number(d)] = { start: a, end: b }
+  })
+  return out
+}
+export function encodeWorkHours(days: Record<number, DayHours | null>): string {
+  return [0, 1, 2, 3, 4, 5, 6].filter(d => days[d]).map(d => `${d}:${days[d]!.start}-${days[d]!.end}`).join('|')
+}
+
+export interface Truck { name: string; sizes: ContainerSize[] }
+// Parse/encode the trucks field (avoids commas so it stays CSV-clean).
+export function parseTrucks(s: string): Truck[] {
+  return (s || '').split(';').filter(Boolean).map(t => {
+    const [name, sizesStr] = t.split('~')
+    return { name: (name || '').trim(), sizes: (sizesStr || '').split('+').filter(Boolean) as ContainerSize[] }
+  })
+}
+export function encodeTrucks(trucks: Truck[]): string {
+  return trucks.filter(t => t.name.trim()).map(t => `${t.name.trim()}~${t.sizes.join('+')}`).join(';')
 }
 
 export const drivers = {
   list: () => request<Driver[]>('/drivers'),
   get: (id: string) => request<Driver>(`/drivers/${id}`),
+  create: (data: Partial<Driver>) =>
+    request<Driver>('/drivers', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<Driver>) =>
+    request<Driver>(`/drivers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  remove: (id: string) =>
+    request<{ id: string; archived: true }>(`/drivers/${id}`, { method: 'DELETE' }),
 }
 
 // ── Quotes ────────────────────────────────────────────────
@@ -197,6 +249,164 @@ export interface QuoteRequest {
 export const quotes = {
   submit: (data: QuoteRequest) =>
     request<{ id: string }>('/quotes', { method: 'POST', body: JSON.stringify(data) }),
+}
+
+// ── Activity log ──────────────────────────────────────────
+
+export type ActivityType =
+  | 'arrived'
+  | 'photos_started'
+  | 'photos_submitted'
+  | 'pickup_complete'
+  | 'delivery_complete'
+  | 'return_complete'
+  | 'sms_sent'
+  | 'signature'
+  | 'receipt_sent'
+  | 'event'
+
+export interface ActivityEvent {
+  id: string
+  timestamp: string      // ISO
+  type: ActivityType
+  jobType: 'pickup' | 'delivery' | 'return' | ''
+  sku: string
+  containerId: string
+  actor: string
+  location: string
+  note: string
+}
+
+export const activity = {
+  list: () => request<ActivityEvent[]>('/activity'),
+  log: (data: Partial<ActivityEvent>) =>
+    request<ActivityEvent>('/activity', { method: 'POST', body: JSON.stringify(data) }),
+}
+
+// ── Depots (pickup locations) ─────────────────────────────
+
+export interface Depot {
+  id: string
+  name: string
+  address: string
+  attendantName: string
+  attendantCell: string
+  code: string        // SKU prefix, e.g. NOLA, BR
+}
+
+export const depots = {
+  list: () => request<Depot[]>('/depots'),
+  create: (data: Partial<Depot>) =>
+    request<Depot>('/depots', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<Depot>) =>
+    request<Depot>(`/depots/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  remove: (id: string) =>
+    request<{ id: string; deleted: true }>(`/depots/${id}`, { method: 'DELETE' }),
+}
+
+// ── Customers (master list — CRUD in admin portal) ───────
+
+export interface Customer {
+  id: string
+  name: string
+  company: string
+  email: string
+  phone: string
+  address: string
+  city: string
+  state: string
+  zip: string
+  notes: string
+  active: boolean
+  createdAt: string
+  notifySms: boolean    // customer opt-in for text notifications
+  notifyEmail: boolean  // always true — email is mandatory
+}
+
+export const customers = {
+  list: () => request<Customer[]>('/customers'),
+  create: (data: Partial<Customer>) =>
+    request<Customer>('/customers', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<Customer>) =>
+    request<Customer>(`/customers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  remove: (id: string) =>
+    request<{ id: string; archived: true }>(`/customers/${id}`, { method: 'DELETE' }),
+}
+
+// ── Messages (driver Inbox/Trash — from admin or customers) ──
+
+export type MsgRole = 'admin' | 'customer' | 'driver'
+export interface Message {
+  id: string
+  fromRole: MsgRole
+  fromName: string
+  fromEmail: string
+  toDriverId: string   // the driver party in the conversation (sender or recipient)
+  toRole: MsgRole
+  toName: string
+  toEmail: string
+  subject: string
+  body: string
+  createdAt: string
+  read: boolean
+  trashed: boolean
+}
+
+export const messages = {
+  list: (driverId?: string) => request<Message[]>(`/messages${driverId ? `?driverId=${encodeURIComponent(driverId)}` : ''}`),
+  create: (data: Partial<Message>) =>
+    request<Message>('/messages', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<Message>) =>
+    request<Message>(`/messages/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  remove: (id: string) =>
+    request<{ id: string; deleted: true }>(`/messages/${id}`, { method: 'DELETE' }),
+  emptyTrash: (driverId: string) =>
+    request<{ emptied: true; removed: number }>(`/messages?driverId=${encodeURIComponent(driverId)}&trashed=true`, { method: 'DELETE' }),
+}
+
+// ── Schedule (shared by admin Schedule + field app) ───────
+
+export type SchedType = 'pickup' | 'delivery' | 'return' | 'transfer'
+export interface SchedJob {
+  id: string
+  dayOffset: number   // days from today (relative model; maps to a date at render)
+  startMin: number    // minutes from midnight
+  driverId: string
+  type: SchedType
+  sku: string
+  customer: string
+  origin: string              // display name (depot or customer)
+  originAddress: string       // full street address (for Google Maps + clarity)
+  destination: string         // display name (depot or customer)
+  destinationAddress: string  // full street address
+  miles: number
+  contact: string     // customer phone for delivery/return jobs
+}
+
+export const schedule = {
+  list: () => request<SchedJob[]>('/schedule'),
+  create: (data: Partial<SchedJob>) =>
+    request<SchedJob>('/schedule', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<SchedJob>) =>
+    request<SchedJob>(`/schedule/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  remove: (id: string) =>
+    request<{ id: string; deleted: true }>(`/schedule/${id}`, { method: 'DELETE' }),
+}
+
+// ── Availability (per-week driver working hours) ──────────
+
+export interface Availability {
+  id: string
+  driverId: string
+  weekStart: string   // Monday of the week, YYYY-MM-DD
+  workHours: string   // same encoding as Driver.workHours
+}
+
+export const availability = {
+  list: () => request<Availability[]>('/availability'),
+  // Upsert by (driverId, weekStart).
+  save: (data: { driverId: string; weekStart: string; workHours: string }) =>
+    request<Availability>('/availability', { method: 'POST', body: JSON.stringify(data) }),
 }
 
 // ── ZIP coverage check ────────────────────────────────────
