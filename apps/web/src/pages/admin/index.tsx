@@ -43,36 +43,9 @@ const ACTIVITY_META: Record<string, { label: string; color: string; bg: string }
   event:            { label: 'Event',            color: 'var(--ink2)',    bg: 'var(--surf1)' },
 }
 
-// ── Returns / pickups schedule ─────────────────────────────
-// Rental units due back: 'pickup' = we retrieve from the customer site,
-// 'return' = customer drops off at a depot. (Demo data pending a rentals backend.)
-
-interface ReturnEvent {
-  id: string
-  date: string // YYYY-MM-DD
-  type: 'pickup' | 'return'
-  sku: string
-  customer: string
-  location: string
-  driver: string
-  note: string
-}
-
-const RETURN_EVENTS: ReturnEvent[] = [
-  { id: 'ret_01', date: '2026-07-03', type: 'pickup', sku: 'NOLA-20-0003', customer: 'Gulf Coast Logistics', location: 'Metairie, LA 70001',     driver: 'Mike Torres', note: '6-month rental ended' },
-  { id: 'ret_02', date: '2026-07-08', type: 'return', sku: 'HOU-40-0001', customer: 'Bayou Construction',   location: 'Baton Rouge, LA 70802',  driver: '—',           note: 'Customer drop-off' },
-  { id: 'ret_03', date: '2026-07-12', type: 'pickup', sku: 'HOU-20-0001', customer: 'Westfield Storage Co.', location: 'Katy, TX 77493',        driver: 'Ray Donovan', note: '3-month rental ended' },
-  { id: 'ret_04', date: '2026-07-15', type: 'pickup', sku: 'NOLA-20-0001', customer: 'Delta Freight',        location: 'Gulfport, MS 39501',     driver: 'Mike Torres', note: '12-month rental ended' },
-  { id: 'ret_05', date: '2026-07-18', type: 'return', sku: 'NOLA-20-0002', customer: 'Acme Rentals',         location: 'Mobile, AL 36602',       driver: '—',           note: 'Customer drop-off' },
-  { id: 'ret_06', date: '2026-07-22', type: 'pickup', sku: 'BR-40-0001', customer: 'Port City Movers',     location: 'New Orleans, LA 70130',  driver: 'Ray Donovan', note: '1-month rental ended' },
-  { id: 'ret_07', date: '2026-07-25', type: 'pickup', sku: 'NOLA-20-0004', customer: 'Pelican Storage',      location: 'Slidell, LA 70458',      driver: 'Mike Torres', note: '6-month rental ended' },
-  { id: 'ret_08', date: '2026-07-29', type: 'return', sku: 'NOLA-20-0005', customer: 'Crescent Logistics',   location: 'Houston, TX 77002',      driver: '—',           note: 'Customer drop-off' },
-]
-
-const RETURN_META = {
-  pickup: { label: 'Pickup', color: 'var(--cta)',     bg: 'var(--cta-cont)' },
-  return: { label: 'Return', color: 'var(--primary)', bg: 'var(--primary-cont)' },
-} as const
+// Company dispatch identity used when messaging drivers / logging admin actions
+// (kept in sync with the field app's DISPATCH constant).
+const DISPATCH = { name: 'Dispatch (James R.)', email: 'ops@steelbox.co' }
 
 // ── Combined delivery/return schedule (types from lib/api) ─
 
@@ -130,7 +103,10 @@ function DriverCard({ driver, onAssign, onToast, onSchedule, onRemove }: { drive
           <div style={{ fontSize: '14px', fontWeight: 700 }}>{driver.name}</div>
           <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--ink3)', marginTop: '1px' }}>{driver.driverCode} · CDL {driver.cdlClass} · ${driver.hourlyWage || 0}/hr</div>
         </div>
-        <StatusBadge status={isOn ? 'available' : 'sold'} />
+        {/* Duty chip — drivers aren't containers, so don't reuse container StatusBadge */}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: isOn ? 'var(--green-cont)' : 'var(--surf1)', color: isOn ? 'var(--green)' : 'var(--ink3)', borderRadius: '4px', padding: '3px 9px', fontSize: '10px', fontWeight: 700, whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: '6px' }}>●</span>{isOn ? 'On Duty' : 'Off Duty'}
+        </span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '7px', marginBottom: '12px' }}>
         {[
@@ -160,8 +136,11 @@ function DriverCard({ driver, onAssign, onToast, onSchedule, onRemove }: { drive
 
 // ── Assign Driver Modal ────────────────────────────────────
 
-function AssignDriverModal({ open, onClose, drivers, orders: orderList, onAssigned, lockedDriverId }: {
-  open: boolean; onClose: () => void; drivers: Driver[]; orders: Order[]; onAssigned: (msg: string) => void; lockedDriverId?: string
+function AssignDriverModal({ open, onClose, drivers, orders: orderList, onAssigned, afterAssign, lockedDriverId }: {
+  open: boolean; onClose: () => void; drivers: Driver[]; orders: Order[]; onAssigned: (msg: string) => void
+  // Runs after a successful assignment — keeps the shared schedule + container in lockstep.
+  afterAssign?: (orderId: string, driverId: string, date: string) => Promise<void>
+  lockedDriverId?: string
 }) {
   const [orderId, setOrderId] = useState('')
   const [driverId, setDriverId] = useState('')
@@ -175,8 +154,11 @@ function AssignDriverModal({ open, onClose, drivers, orders: orderList, onAssign
     if (!orderId || !driverId || !date) return
     setLoading(true)
     try {
-      await ordersApi.assignDriver(orderId, driverId, date)
-      onAssigned('Driver assigned successfully')
+      // Date input yields YYYY-MM-DD — store in the same UTC-midnight shape as seeded data.
+      const isoDate = `${date}T00:00:00.000Z`
+      await ordersApi.assignDriver(orderId, driverId, isoDate)
+      await afterAssign?.(orderId, driverId, isoDate)
+      onAssigned('Driver assigned — order, schedule & container updated')
       onClose()
     } catch {
       onAssigned('Failed to assign driver — please try again')
@@ -933,7 +915,7 @@ function MessageDriverModal({ open, drivers, onClose, onSent }: {
     if (sending || !driverId || !body.trim()) return
     setSending(true)
     try {
-      await messagesApi.create({ toDriverId: driverId, fromRole: 'admin', fromName: 'Dispatch (James R.)', fromEmail: 'ops@steelbox.co', subject: subject.trim() || '(no subject)', body: body.trim() })
+      await messagesApi.create({ toDriverId: driverId, fromRole: 'admin', fromName: DISPATCH.name, fromEmail: DISPATCH.email, subject: subject.trim() || '(no subject)', body: body.trim() })
       onSent(`Message sent to ${drivers.find(d => d.id === driverId)?.name ?? 'driver'}`)
       onClose()
     } catch (e) { onSent(`Failed to send — ${e instanceof Error ? e.message : 'try again'}`) }
@@ -1009,13 +991,15 @@ export default function AdminPage() {
   const available = containerList.filter(c => c.status === 'available')
   // ── Combined delivery/return schedule state (shared CSV via API) ──
   const [scheduleEvents, setScheduleEvents] = useState<SchedJob[]>([])
-  const refetchSchedule = useCallback(() => { scheduleApi.list().then(setScheduleEvents).catch(() => {}) }, [])
-  useEffect(() => { refetchSchedule() }, [refetchSchedule])
+  // Returns its promise so explicit refresh buttons can surface failures;
+  // background syncs attach a silent catch.
+  const refetchSchedule = useCallback(() => scheduleApi.list().then(setScheduleEvents), [])
+  useEffect(() => { refetchSchedule().catch(() => {}) }, [refetchSchedule])
   // Re-sync whenever the admin navigates back to the Schedule page.
-  useEffect(() => { if (view === 'schedule') refetchSchedule() }, [view, refetchSchedule])
+  useEffect(() => { if (view === 'schedule') refetchSchedule().catch(() => {}) }, [view, refetchSchedule])
   // Re-sync with field-app reschedules on window focus (e.g. switching back from the field tab).
   useEffect(() => {
-    const onFocus = () => { if (document.visibilityState !== 'hidden') refetchSchedule() }
+    const onFocus = () => { if (document.visibilityState !== 'hidden') refetchSchedule().catch(() => {}) }
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onFocus)
     return () => { window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus) }
@@ -1066,16 +1050,17 @@ export default function AdminPage() {
   const labor30 = orders30.reduce((s, o) => s + orderLabor(o), 0)
 
   const [activityLog, setActivityLog] = useState<ActivityEvent[]>([])
-  useEffect(() => { activityApi.list().then(setActivityLog).catch(() => {}) }, [])
+  const refetchActivity = useCallback(() => activityApi.list().then(setActivityLog), [])
+  useEffect(() => { refetchActivity().catch(() => {}) }, [refetchActivity])
   const [depotList, setDepotList] = useState<Depot[]>([])
   const [editDepot, setEditDepot] = useState<Depot | 'new' | null>(null)
-  const refetchDepots = useCallback(() => { depotsApi.list().then(setDepotList).catch(() => {}) }, [])
-  useEffect(() => { refetchDepots() }, [refetchDepots])
+  const refetchDepots = useCallback(() => depotsApi.list().then(setDepotList), [])
+  useEffect(() => { refetchDepots().catch(() => {}) }, [refetchDepots])
   // ── Customers (master list, CRUD) ──
   const [customerList, setCustomerList] = useState<Customer[]>([])
   const [editCustomer, setEditCustomer] = useState<Customer | 'new' | null>(null)
-  const refetchCustomers = useCallback(() => { customersApi.list().then(setCustomerList).catch(() => {}) }, [])
-  useEffect(() => { refetchCustomers() }, [refetchCustomers])
+  const refetchCustomers = useCallback(() => customersApi.list().then(setCustomerList), [])
+  useEffect(() => { refetchCustomers().catch(() => {}) }, [refetchCustomers])
   const handleDeleteCustomer = async (c: Customer) => {
     if (!window.confirm(`Archive ${c.name}? They'll be hidden from lists but kept in order history.`)) return
     try { await customersApi.remove(c.id); toast(`${c.name} archived`); refetchCustomers() }
@@ -1087,7 +1072,21 @@ export default function AdminPage() {
     catch (e) { toast(`Failed to delete — ${e instanceof Error ? e.message : 'try again'}`) }
   }
   const inTransit = orderList.filter(o => o.status === 'in_transit')
-  const deliveredMonth = orderList.filter(o => o.status === 'delivered')
+  // Delivered this calendar month (not all-time).
+  const now = new Date()
+  const deliveredMonth = orderList.filter(o => {
+    if (o.status !== 'delivered') return false
+    const d = new Date(o.completedAt || o.createdAt)
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+  })
+  // Revenue month-to-date, computed from real orders (was a hardcoded KPI).
+  const mtdRevenue = orderList.filter(o => {
+    const d = new Date(o.createdAt)
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+  }).reduce((s, o) => s + (o.amount || 0), 0)
+  const fmtMoneyShort = (n: number) => n >= 1000 ? `$${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}k` : `$${n.toLocaleString()}`
+  // Next scheduled delivery date, from the shared schedule board.
+  const nextDeliveryOffset = scheduleEvents.filter(e => e.type === 'delivery').reduce<number | null>((min, e) => min === null || e.dayOffset < min ? e.dayOffset : min, null)
 
   const refreshAll = useCallback(() => {
     refetchContainers()
@@ -1126,14 +1125,73 @@ export default function AdminPage() {
     try { await containersApi.update(c.id, { status: 'available' }); toast(`${c.sku} returned to marketplace`); refetchContainers() }
     catch (e) { toast(`Failed to reject — ${e instanceof Error ? e.message : 'try again'}`) }
   }
+  // scheduledDate strings are calendar dates (stored as UTC midnight or bare
+  // YYYY-MM-DD) — read the date digits directly so local timezones can't shift
+  // the day when converting to a schedule dayOffset.
+  const dayOffsetFromDate = useCallback((s: string) => {
+    const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (!m) return 0
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+    return Math.max(0, Math.round((d.getTime() - finToday.getTime()) / 86400000))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // Format a local calendar day (today + offset) back into the stored shape.
+  const dateFromDayOffset = (offset: number) => {
+    const d = new Date(finToday); d.setDate(d.getDate() + offset)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T00:00:00.000Z`
+  }
+
+  // Create or update the schedule row that matches an order's delivery, so the
+  // shared board (admin Schedule + field app) always mirrors driver assignments.
+  const scheduleDeliveryForOrder = useCallback(async (order: Order, driverId: string, scheduledDate?: string | null) => {
+    const container = containerList.find(x => x.id === order.containerId || x.sku === order.containerSku)
+    const depot = depotList.find(d => d.name === container?.depotLocation)
+    const day = scheduledDate ? dayOffsetFromDate(scheduledDate) : 0
+    const existing = scheduleEvents.find(e => e.sku === order.containerSku && e.type === 'delivery')
+    if (existing) {
+      await scheduleApi.update(existing.id, { driverId, dayOffset: day })
+    } else {
+      await scheduleApi.create({
+        dayOffset: day, startMin: 9 * 60, driverId, type: 'delivery',
+        sku: order.containerSku, customer: order.customerName,
+        origin: container?.depotLocation || 'Depot', originAddress: depot?.address || '',
+        destination: order.customerName, destinationAddress: order.deliveryAddress || '',
+        miles: 20, contact: order.customerPhone || '',
+      })
+    }
+    await refetchSchedule()
+  }, [containerList, depotList, scheduleEvents, refetchSchedule, dayOffsetFromDate])
+
+  // After an order-level assignment: sync the schedule board + container status.
+  const afterOrderAssign = useCallback(async (orderId: string, driverId: string, date: string) => {
+    const order = orderList.find(o => o.id === orderId)
+    if (!order) return
+    try {
+      await scheduleDeliveryForOrder(order, driverId, date)
+      const cont = containerList.find(x => x.id === order.containerId || x.sku === order.containerSku)
+      if (cont && ['available', 'sale_in_progress', 'sold'].includes(cont.status)) {
+        await containersApi.update(cont.id, { status: 'assigned' })
+      }
+      refetchContainers()
+    } catch {
+      toast('Driver assigned, but the schedule board didn’t sync — use Refresh on the Schedule page')
+    }
+  }, [orderList, containerList, scheduleDeliveryForOrder, refetchContainers, toast])
+
   // Assign (or re-assign — drivers can no-show) a driver to an approved purchase.
+  // Also syncs the order record and the shared schedule board.
   const assignPurchaseDriver = async (c: Container, driverId: string) => {
     const driver = driverList.find(d => d.id === driverId)
     if (!driver) return
     try {
       await containersApi.update(c.id, { status: 'assigned' })
+      const order = orderList.find(o => (o.containerId === c.id || o.containerSku === c.sku) && o.status !== 'delivered')
+      if (order) {
+        await ordersApi.assignDriver(order.id, driverId, order.scheduledDate || dateFromDayOffset(1))
+        await scheduleDeliveryForOrder(order, driverId, order.scheduledDate)
+        refetchOrders()
+      }
       setAssignedDrivers(prev => ({ ...prev, [c.id]: driver.name }))
-      toast(`${c.sku} assigned to ${driver.name}`)
+      toast(`${c.sku} assigned to ${driver.name}${order ? ` — order ${order.orderNumber} & schedule updated` : ''}`)
       refetchContainers()
     } catch (e) { toast(`Failed to assign — ${e instanceof Error ? e.message : 'try again'}`) }
   }
@@ -1141,7 +1199,12 @@ export default function AdminPage() {
   // Reassign a scheduled job to another driver (persists to the shared schedule CSV).
   const reassignJob = (jobId: string, driverId: string) => {
     setScheduleEvents(prev => prev.map(j => j.id === jobId ? { ...j, driverId } : j))  // optimistic
-    scheduleApi.update(jobId, { driverId }).then(refetchSchedule).catch(() => {})
+    scheduleApi.update(jobId, { driverId })
+      .then(() => refetchSchedule().catch(() => {}))
+      .catch(() => {
+        refetchSchedule().catch(() => {})  // revert to server truth
+        toast('Reassignment didn’t save — check connection and retry')
+      })
   }
   const archiveDriver = async () => {
     if (!removeDriver) return
@@ -1149,6 +1212,40 @@ export default function AdminPage() {
     try { await driversApi.remove(removeDriver.id); toast(`${name} archived — hidden from scheduling`); refetchDrivers() }
     catch (e) { toast(`Failed to archive — ${e instanceof Error ? e.message : 'try again'}`) }
     setRemoveDriver(null)
+  }
+
+  // Real CSV export of the orders table (was a placeholder toast).
+  const exportOrdersCsv = () => {
+    try {
+      const headers = ['orderNumber', 'containerSku', 'customerName', 'customerEmail', 'customerPhone', 'deliveryAddress', 'deliveryZip', 'amount', 'status', 'driverName', 'scheduledDate', 'completedAt', 'createdAt', 'saleType'] as const
+      const esc = (v: unknown) => { const s = v === null || v === undefined ? '' : String(v); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
+      const csv = [headers.join(','), ...orderList.map(o => headers.map(h => esc(o[h])).join(','))].join('\n')
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `steelbox-orders-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast(`Exported ${orderList.length} orders to CSV`)
+    } catch {
+      toast('Export failed — please try again')
+    }
+  }
+
+  // "SMS" logs a real sms_sent activity row (visible in the Activity Log +
+  // field app) rather than only pretending via a toast.
+  const sendCustomerSms = async (o: Order) => {
+    try {
+      await activityApi.log({
+        type: 'sms_sent', jobType: 'delivery', sku: o.containerSku, containerId: o.containerId,
+        actor: DISPATCH.name, location: o.deliveryAddress,
+        note: `Status text sent to ${o.customerName}${o.customerPhone ? ` (${o.customerPhone})` : ''}`,
+      })
+      refetchActivity().catch(() => {})
+      toast(`SMS sent to ${o.customerName}`)
+    } catch {
+      toast('SMS didn’t send — check connection and retry')
+    }
   }
 
   // ── Table helpers ──
@@ -1199,7 +1296,7 @@ export default function AdminPage() {
           <NavItem active={view === 'drivers'} onClick={() => setView('drivers')} label="Drivers" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="10" cy="6.5" r="3" /><path d="M3 18A7 7 0 0 1 17 18" /></svg>} />
           <NavItem active={view === 'customers'} onClick={() => setView('customers')} label="Customers" badge={customerList.filter(c => c.active !== false).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="7" cy="7" r="2.6" /><path d="M2 16.5A5 5 0 0 1 12 16.5" /><path d="M13 4.6a2.6 2.6 0 0 1 0 4.8" /><path d="M14.5 16.5a5 5 0 0 0-2.2-4.1" /></svg>} />
           <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', padding: '16px 18px 3px' }}>System</div>
-          <NavItem active={view === 'notifications'} onClick={() => setView('notifications')} label="Alerts" badge={5} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M4 8A6 6 0 0 1 16 8L16 12L18 14L2 14L4 12Z" /><path d="M8 16a2 2 0 004 0" /></svg>} />
+          <NavItem active={view === 'notifications'} onClick={() => setView('notifications')} label="Alerts" badge={reserved.length + orderList.filter(o => !o.driverId && o.status !== 'delivered').length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M4 8A6 6 0 0 1 16 8L16 12L18 14L2 14L4 12Z" /><path d="M8 16a2 2 0 004 0" /></svg>} />
           <NavItem active={view === 'settings'} onClick={() => setView('settings')} label="Settings" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="10" cy="10" r="2.5" /><path d="M10 2v2M10 16v2M2 10h2M16 10h2" /></svg>} />
         </div>
 
@@ -1241,8 +1338,8 @@ export default function AdminPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '14px', marginBottom: '24px' }}>
                 <KpiCard label="Available Units" value={available.length} color="var(--primary)" bgColor="var(--primary-cont)" delta="Active in marketplace" icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="5" width="18" height="12" rx="1.5" /><line x1="5" y1="5" x2="5" y2="17" /><line x1="9" y1="5" x2="9" y2="17" /><line x1="13" y1="5" x2="13" y2="17" /></svg>} />
                 <KpiCard label="Purchase in Progress" value={reserved.length} color="var(--cta)" bgColor="var(--cta-cont)" delta="Awaiting driver assignment" deltaType="warn" icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--cta)" strokeWidth="1.5" strokeLinecap="round"><path d="M1 2H3.5L5.5 11H14.5L16.5 4H5" /><circle cx="8" cy="17.5" r="1.5" fill="currentColor" stroke="none" /><circle cx="13" cy="17.5" r="1.5" fill="currentColor" stroke="none" /></svg>} />
-                <KpiCard label="Deliveries Scheduled" value={inTransit.length} color="var(--green)" bgColor="var(--green-cont)" delta={`Next: ${new Date(Date.now() + 86400000 * 2).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`} icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--green)" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="8" width="11" height="8" rx="1.5" /><path d="M12 10H16L19 13V16H12Z" /></svg>} />
-                <KpiCard label="Revenue (MTD)" value="$87k" color="var(--purple)" bgColor="var(--purple-cont)" delta="↑ 22% vs last month" icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--purple)" strokeWidth="1.5" strokeLinecap="round"><circle cx="10" cy="10" r="8" /><path d="M10 5v10M7 8H13M7 12H13" /></svg>} />
+                <KpiCard label="Deliveries Scheduled" value={scheduleEvents.filter(e => e.type === 'delivery').length} color="var(--green)" bgColor="var(--green-cont)" delta={nextDeliveryOffset !== null ? `Next: ${dayDate(nextDeliveryOffset).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : 'None scheduled'} icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--green)" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="8" width="11" height="8" rx="1.5" /><path d="M12 10H16L19 13V16H12Z" /></svg>} />
+                <KpiCard label="Revenue (MTD)" value={fmtMoneyShort(mtdRevenue)} color="var(--purple)" bgColor="var(--purple-cont)" delta={finPeriods.mom.prev.rev ? `${finPeriods.mom.cur.rev >= finPeriods.mom.prev.rev ? '↑' : '↓'} ${Math.abs(((finPeriods.mom.cur.rev - finPeriods.mom.prev.rev) / finPeriods.mom.prev.rev) * 100).toFixed(0)}% vs prior 30d` : 'From live orders'} icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--purple)" strokeWidth="1.5" strokeLinecap="round"><circle cx="10" cy="10" r="8" /><path d="M10 5v10M7 8H13M7 12H13" /></svg>} />
               </div>
 
               {/* Recent orders */}
@@ -1269,7 +1366,11 @@ export default function AdminPage() {
                           <Td>
                             <div style={{ display: 'flex', gap: '5px' }}>
                               {!o.driverId && <TblBtn variant="primary" onClick={() => { setAssignDriverId(undefined); setAssignOpen(true) }}>Assign</TblBtn>}
-                              <TblBtn onClick={() => toast(`Order ${o.orderNumber} details`)}>Details</TblBtn>
+                              <TblBtn onClick={() => {
+                                const cont = containerList.find(x => x.id === o.containerId || x.sku === o.containerSku)
+                                if (cont) setDetailPurchase(cont)
+                                else toast(`No container record found for ${o.containerSku}`)
+                              }}>Details</TblBtn>
                             </div>
                           </Td>
                         </tr>
@@ -1317,16 +1418,18 @@ export default function AdminPage() {
                             : c.status === 'sold' ? { label: 'Approved · needs driver', color: 'var(--amber)', bg: 'var(--amb-c,#FEF3C7)' }
                             : { label: 'Driver assigned', color: 'var(--green)', bg: 'var(--green-cont)' }
                           const onDuty = activeDrivers.filter(d => d.status === 'on_duty')
+                          const rowOrder = orderList.find(o => (o.containerId === c.id || o.containerSku === c.sku) && o.status !== 'delivered')
+                          const rowDriver = rowOrder?.driverName || assignedDrivers[c.id] || ''
                           return (
                             <tr key={c.id} onClick={() => setDetailPurchase(c)} style={{ cursor: 'pointer' }}>
                               <Td mono>{c.sku}</Td>
                               <Td><ListingBadge listingType={c.listingType} /></Td>
                               <Td><span style={{ fontFamily: 'var(--mono)', fontWeight: 700 }}>${c.buyPrice.toLocaleString()}</span></Td>
                               <Td><span style={{ display: 'inline-block', padding: '2px 9px', borderRadius: 'var(--r4)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', background: stage.bg, color: stage.color }}>{stage.label}</span></Td>
-                              <Td>{(assignedDrivers[c.id] || c.status === 'assigned') ? (
+                              <Td>{(rowDriver || c.status === 'assigned') ? (
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: 'var(--green)', fontWeight: 600 }}>
                                   <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="var(--green)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3,10.5 8,16 17,5" /></svg>
-                                  {assignedDrivers[c.id] || 'Assigned'}
+                                  {rowDriver || 'Assigned'}
                                 </span>
                               ) : <span style={{ color: 'var(--ink3)' }}>—</span>}</Td>
                               <Td>
@@ -1360,7 +1463,7 @@ export default function AdminPage() {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                 <div style={{ fontSize: '15px', fontWeight: 700 }}>All Orders</div>
-                <Button variant="ghost" size="sm" onClick={() => toast('Exporting CSV…')}>Export CSV</Button>
+                <Button variant="ghost" size="sm" onClick={exportOrdersCsv}>Export CSV</Button>
               </div>
               <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', overflow: 'hidden' }}>
                 <div style={{ overflowX: 'auto' }}>
@@ -1379,7 +1482,7 @@ export default function AdminPage() {
                           <Td>
                             <div style={{ display: 'flex', gap: '5px' }}>
                               {!o.driverId && <TblBtn variant="primary" onClick={() => { setAssignDriverId(undefined); setAssignOpen(true) }}>Assign</TblBtn>}
-                              <TblBtn onClick={() => toast(`SMS sent to ${o.customerName}`)}>SMS</TblBtn>
+                              <TblBtn onClick={() => sendCustomerSms(o)}>SMS</TblBtn>
                             </div>
                           </Td>
                         </tr>
@@ -1507,7 +1610,7 @@ export default function AdminPage() {
                       <span key={t} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: '9px', height: '9px', borderRadius: '2px', background: SCHED_META[t].color }} />{SCHED_META[t].label}</span>
                     ))}
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => { refetchSchedule(); toast('Schedule refreshed') }} icon={<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M15.5 6.5A6.5 6.5 0 1 0 17 11" /><polyline points="16 2.5 16 6.5 12 6.5" /></svg>}>Refresh</Button>
+                  <Button variant="ghost" size="sm" onClick={() => { refetchSchedule().then(() => toast('Schedule refreshed')).catch(() => toast('Refresh failed — check the API connection')) }} icon={<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M15.5 6.5A6.5 6.5 0 1 0 17 11" /><polyline points="16 2.5 16 6.5 12 6.5" /></svg>}>Refresh</Button>
                   <Button variant="primary" size="sm" onClick={() => setSchedModal({})} icon={<span>+</span>}>Schedule Job</Button>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
@@ -1615,7 +1718,7 @@ export default function AdminPage() {
                   <div style={{ fontSize: '15px', fontWeight: 700 }}>Field Activity Log</div>
                   <div style={{ fontSize: '12px', color: 'var(--ink3)', marginTop: '2px' }}>{activityLog.length} events · timestamped pickups, arrivals & photo sessions · newest first</div>
                 </div>
-                <Button variant="ghost" size="md" onClick={() => activityApi.list().then(setActivityLog).catch(() => {})} icon={<span>⟳</span>}>Refresh</Button>
+                <Button variant="ghost" size="md" onClick={() => refetchActivity().then(() => toast('Activity refreshed')).catch(() => toast('Refresh failed — check the API connection'))} icon={<span>⟳</span>}>Refresh</Button>
               </div>
               <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', overflow: 'hidden' }}>
                 <div style={{ overflowX: 'auto' }}>
@@ -1700,33 +1803,61 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* ── Notifications ── */}
-          {view === 'notifications' && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                <div style={{ fontSize: '15px', fontWeight: 700 }}>Alert Log</div>
-                <Button variant="ghost" size="sm" onClick={() => toast('All marked read')}>Mark All Read</Button>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
-                {[
-                  { icon: 'cart',   color: 'var(--cta)',     bg: 'var(--cta-cont)', title: 'NEW RESERVATION', body: 'A customer reserved NOLA-20-0002 for $4,850 via marketplace. Container locked as Purchase in Progress. Driver assignment required.', time: `${new Date().toLocaleDateString()} · 10:14 AM`, unread: true },
-                  { icon: 'camera', color: '#B45309',        bg: '#FFF3E0', title: 'PHOTO UPLOAD COMPLETE', body: 'T. Rivera uploaded 12 photos for NOLA-20-0003. Container ready for listing review.', time: `${new Date().toLocaleDateString()} · 8:42 AM`, unread: true },
-                  { icon: 'truck',  color: 'var(--primary)', bg: '#E3F2FD', title: 'DELIVERY STARTED', body: 'Mike Torres picked up HOU-40-0001 en route to Westfield Storage, Katy TX. ETA 2 hours.', time: `${new Date().toLocaleDateString()} · 7:05 AM`, unread: true },
-                  { icon: 'check',  color: 'var(--green)',   bg: 'var(--green-cont)', title: 'DELIVERED', body: 'Dan Park completed delivery of HOU-20-0001 to B&R Construction, Conroe TX. Customer signature captured.', time: 'Jun 28 · 3:22 PM', unread: false },
-                  { icon: 'card',   color: '#6D28D9',        bg: 'var(--purple-cont)', title: 'PAYMENT CONFIRMED', body: '$4,850 received for #ORD-0089 · NOLA-20-0001. Container locked as Purchase in Progress.', time: 'Jun 28 · 11:58 AM', unread: false },
-                ].map((n, i) => (
-                  <div key={i} style={{ background: 'var(--surf-w)', borderRadius: 'var(--r12)', border: '1px solid var(--div)', padding: '13px 15px', display: 'flex', gap: '11px', boxShadow: 'var(--sh1)', opacity: n.unread ? 1 : 0.55 }}>
-                    <div style={{ width: '38px', height: '38px', borderRadius: 'var(--r8)', background: n.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><AIcon name={n.icon} size={18} color={n.color} sw={1.7} /></div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '12px', lineHeight: 1.55 }}><strong style={{ color: 'var(--primary)' }}>{n.title}</strong> — {n.body}</div>
-                      <div style={{ fontSize: '10px', color: 'var(--ink3)', fontFamily: 'var(--mono)', marginTop: '3px' }}>{n.time}</div>
-                    </div>
-                    {n.unread && <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--primary)', flexShrink: 0, marginTop: '5px' }} />}
+          {/* ── Notifications — derived from live orders + field activity, not stored separately ── */}
+          {view === 'notifications' && (() => {
+            const fmtTs = (iso: string) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+            const actMeta: Record<string, { icon: string; color: string; bg: string; title: string }> = {
+              photos_submitted:  { icon: 'camera', color: '#B45309',        bg: '#FFF3E0',            title: 'PHOTO UPLOAD' },
+              photos_started:    { icon: 'camera', color: 'var(--primary)', bg: 'var(--primary-cont)', title: 'PHOTOS STARTED' },
+              arrived:           { icon: 'truck',  color: 'var(--primary)', bg: '#E3F2FD',            title: 'DRIVER ARRIVED' },
+              pickup_complete:   { icon: 'check',  color: 'var(--green)',   bg: 'var(--green-cont)',  title: 'PICKUP COMPLETE' },
+              delivery_complete: { icon: 'check',  color: 'var(--green)',   bg: 'var(--green-cont)',  title: 'DELIVERED' },
+              return_complete:   { icon: 'check',  color: '#6D28D9',        bg: '#EDE9FE',            title: 'RETURN COMPLETE' },
+              sms_sent:          { icon: 'bell',   color: 'var(--primary)', bg: 'var(--primary-cont)', title: 'SMS SENT' },
+              signature:         { icon: 'check',  color: 'var(--green)',   bg: 'var(--green-cont)',  title: 'SIGNATURE' },
+              receipt_sent:      { icon: 'card',   color: '#6D28D9',        bg: 'var(--purple-cont)', title: 'RECEIPT SENT' },
+            }
+            const alerts = [
+              // Action needed: marketplace reservations awaiting approval.
+              ...reserved.map(c => {
+                const o = orderList.find(x => x.containerId === c.id || x.containerSku === c.sku)
+                return { key: `res_${c.id}`, icon: 'cart', color: 'var(--cta)', bg: 'var(--cta-cont)', title: 'NEW RESERVATION', body: `${c.sku} reserved${o ? ` by ${o.customerName} for $${o.amount.toLocaleString()}` : ''} via marketplace — approve and assign a driver on the Orders page.`, time: o ? fmtTs(o.createdAt) : '', unread: true }
+              }),
+              // Action needed: orders without a driver.
+              ...orderList.filter(o => !o.driverId && o.status !== 'delivered').map(o => (
+                { key: `un_${o.id}`, icon: 'truck', color: 'var(--cta)', bg: 'var(--cta-cont)', title: 'DRIVER NEEDED', body: `${o.orderNumber} · ${o.containerSku} for ${o.customerName} has no driver assigned.`, time: fmtTs(o.createdAt), unread: true }
+              )),
+              // Informational: latest field activity.
+              ...activityLog.slice(0, 10).map(e => {
+                const m = actMeta[e.type] ?? { icon: 'bell', color: 'var(--ink2)', bg: 'var(--surf1)', title: 'EVENT' }
+                return { key: `act_${e.id}`, ...m, body: `${e.sku ? `${e.sku} — ` : ''}${e.note || e.type}${e.actor ? ` · ${e.actor}` : ''}${e.location ? ` · ${e.location}` : ''}`, time: fmtTs(e.timestamp), unread: false }
+              }),
+            ]
+            return (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                  <div>
+                    <div style={{ fontSize: '15px', fontWeight: 700 }}>Alert Log</div>
+                    <div style={{ fontSize: '12px', color: 'var(--ink3)', marginTop: '2px' }}>Live from orders + field activity · {alerts.filter(a => a.unread).length} need attention</div>
                   </div>
-                ))}
+                  <Button variant="ghost" size="sm" onClick={() => { Promise.all([refetchActivity(), refetchOrders(), refetchContainers()]).then(() => toast('Alerts refreshed')).catch(() => toast('Refresh failed — check the API connection')) }}>Refresh</Button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
+                  {alerts.length === 0 && <div style={{ textAlign: 'center', padding: '30px', color: 'var(--ink3)', fontSize: '13px' }}>All clear — no alerts.</div>}
+                  {alerts.map(n => (
+                    <div key={n.key} style={{ background: 'var(--surf-w)', borderRadius: 'var(--r12)', border: '1px solid var(--div)', padding: '13px 15px', display: 'flex', gap: '11px', boxShadow: 'var(--sh1)', opacity: n.unread ? 1 : 0.55 }}>
+                      <div style={{ width: '38px', height: '38px', borderRadius: 'var(--r8)', background: n.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><AIcon name={n.icon} size={18} color={n.color} sw={1.7} /></div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '12px', lineHeight: 1.55 }}><strong style={{ color: 'var(--primary)' }}>{n.title}</strong> — {n.body}</div>
+                        {n.time && <div style={{ fontSize: '10px', color: 'var(--ink3)', fontFamily: 'var(--mono)', marginTop: '3px' }}>{n.time}</div>}
+                      </div>
+                      {n.unread && <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--primary)', flexShrink: 0, marginTop: '5px' }} />}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
 
           {/* ── Settings ── */}
           {view === 'settings' && (
@@ -1775,6 +1906,7 @@ export default function AdminPage() {
         orders={orderList}
         lockedDriverId={assignDriverId}
         onAssigned={(msg) => { toast(msg); refetchOrders() }}
+        afterAssign={afterOrderAssign}
       />
       <AddContainerModal
         open={addContainerOpen}
@@ -1789,12 +1921,12 @@ export default function AdminPage() {
       <DepotModal
         target={editDepot}
         onClose={() => setEditDepot(null)}
-        onSaved={(msg) => { toast(msg); refetchDepots() }}
+        onSaved={(msg) => { toast(msg); refetchDepots().catch(() => {}) }}
       />
       <CustomerModal
         target={editCustomer}
         onClose={() => setEditCustomer(null)}
-        onSaved={(_c, msg) => { toast(msg); refetchCustomers() }}
+        onSaved={(_c, msg) => { toast(msg); refetchCustomers().catch(() => {}) }}
       />
       <MessageDriverModal
         open={composeOpen}
@@ -1809,11 +1941,25 @@ export default function AdminPage() {
         containers={containerList}
         customers={customerList}
         depots={depotList}
-        onCustomersChanged={refetchCustomers}
+        onCustomersChanged={() => refetchCustomers().catch(() => {})}
         onClose={() => setSchedModal(null)}
-        onSave={(job, editId) => {
-          if (editId) { scheduleApi.update(editId, job).then(refetchSchedule).catch(() => {}); toast(`${SCHED_META[job.type].label} rescheduled`) }
-          else { scheduleApi.create(job).then(refetchSchedule).catch(() => {}); toast(`${SCHED_META[job.type].label} scheduled for ${driverById(job.driverId)?.name ?? 'driver'}`) }
+        onSave={async (job, editId) => {
+          try {
+            if (editId) { await scheduleApi.update(editId, job); toast(`${SCHED_META[job.type].label} rescheduled`) }
+            else { await scheduleApi.create(job); toast(`${SCHED_META[job.type].label} scheduled for ${driverById(job.driverId)?.name ?? 'driver'}`) }
+            refetchSchedule().catch(() => {})
+            // Keep the matching order in lockstep when scheduling its delivery:
+            // same driver + a scheduledDate derived from the job's day.
+            if (job.type === 'delivery') {
+              const order = orderList.find(o => o.containerSku === job.sku && o.status !== 'delivered')
+              if (order && (order.driverId !== job.driverId || !order.scheduledDate || dayOffsetFromDate(order.scheduledDate) !== job.dayOffset)) {
+                await ordersApi.assignDriver(order.id, job.driverId, dateFromDayOffset(job.dayOffset))
+                refetchOrders()
+              }
+            }
+          } catch (e) {
+            toast(`Failed to save schedule — ${e instanceof Error ? e.message : 'try again'}`)
+          }
           setSchedDay(job.dayOffset)
         }}
       />
@@ -1912,7 +2058,7 @@ export default function AdminPage() {
                 {lblRow('Name', order.customerName)}
                 {lblRow('Email', order.customerEmail || '—')}
                 {lblRow('Phone', order.customerPhone || '—', { mono: true })}
-                {lblRow('Delivery address', `${order.deliveryAddress}${order.deliveryZip ? `, ${order.deliveryZip}` : ''}`)}
+                {lblRow('Delivery address', order.deliveryZip && !(order.deliveryAddress || '').includes(order.deliveryZip) ? `${order.deliveryAddress}, ${order.deliveryZip}` : order.deliveryAddress || '—')}
                 {order.orderNumber && lblRow('Order #', order.orderNumber, { mono: true })}
               </>
             ) : (
@@ -1932,7 +2078,8 @@ export default function AdminPage() {
             {/* Driver assignment */}
             <div style={sectionHd}>Driver Assignment</div>
             {(() => {
-              const driverName = assignedDrivers[c.id] || (c.status === 'assigned' ? 'Assigned' : '')
+              // Server truth first (order.driverName), then this session's picks.
+              const driverName = order?.driverName || assignedDrivers[c.id] || (c.status === 'assigned' ? 'a driver' : '')
               return driverName ? (
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', fontSize: '13px', marginBottom: '10px', background: 'var(--green-cont)', color: 'var(--green)', border: '1px solid var(--green)', borderRadius: 'var(--pill)', padding: '5px 12px', fontWeight: 600 }}>
                   <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="var(--green)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3,10.5 8,16 17,5" /></svg>

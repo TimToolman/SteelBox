@@ -7,7 +7,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { GradeBadge, StatusBadge, Button, Modal, Snackbar, Input, Select } from '../components/ui'
 import { useContainers, useSnackbar, useAuth } from '../hooks'
-import { containers, quotes, orders, isZipCovered, estimateDelivery, drivers as driversApi, messages as messagesApi, type Container, type ContainerGrade, type ContainerSize, type Driver } from '../lib/api'
+import { containers, quotes, orders, isZipCovered, estimateDelivery, drivers as driversApi, messages as messagesApi, customers as customersApi, type Container, type ContainerGrade, type ContainerSize, type Driver, type Customer, type Order, type Message } from '../lib/api'
 
 // ── Types ─────────────────────────────────────────────────
 
@@ -70,15 +70,24 @@ function QuoteDialog({ open, onClose, title, subtitle, defaultNeed = '', contain
     deliveryZip: '', need: defaultNeed, notes: ''
   })
   const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  // Reset stale errors each time the dialog opens.
+  useEffect(() => { if (open) setError('') }, [open])
 
   const handleSubmit = async () => {
+    if (!form.firstName.trim() || (!form.phone.trim() && !form.email.trim())) {
+      setError('Please give us your first name and a phone number or email so we can reach you.')
+      return
+    }
     setSubmitting(true)
+    setError('')
     try {
       await quotes.submit({ ...form, containerSku })
       onSuccess?.()
       onClose()
-    } catch {
-      // silent fail in prototype — real error handling goes here
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong — please try again or call (504) 555-0190.')
     } finally {
       setSubmitting(false)
     }
@@ -113,6 +122,11 @@ function QuoteDialog({ open, onClose, title, subtitle, defaultNeed = '', contain
           style={{ width: '100%', padding: '11px 13px', border: '1.5px solid var(--div)', borderRadius: 'var(--r12)', fontSize: '14px', resize: 'vertical', fontFamily: 'var(--sans)', outline: 'none' }}
         />
       </div>
+      {error && (
+        <div style={{ background: '#FDECEA', border: '1px solid #F5C6C0', color: '#B3261E', borderRadius: 'var(--r8)', padding: '9px 12px', fontSize: '12px', lineHeight: 1.5, marginBottom: '4px' }}>
+          {error}
+        </div>
+      )}
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '20px' }}>
         <Button variant="ghost" onClick={onClose}>Cancel</Button>
         <Button variant="primary" onClick={handleSubmit} disabled={submitting}>
@@ -551,6 +565,8 @@ function CartModal({ open, cart, onClose, onRemove, onUpdateItem, onLongTermInqu
   const [form, setForm] = useState<CheckoutDetails>(EMPTY_CHECKOUT)
   const [placing, setPlacing] = useState(false)
   const [placed, setPlaced] = useState(false)
+  const [placeError, setPlaceError] = useState('')
+  const [placedCount, setPlacedCount] = useState(0)
 
   const set = (k: keyof CheckoutDetails, v: string | boolean) => setForm(p => ({ ...p, [k]: v }))
 
@@ -569,12 +585,15 @@ function CartModal({ open, cart, onClose, onRemove, onUpdateItem, onLongTermInqu
 
   const num = (n: number) => `$${n.toLocaleString()}`
 
-  const close = () => { onClose(); setTimeout(() => { setPlaced(false); setForm(EMPTY_CHECKOUT) }, 200) }
+  const close = () => { onClose(); setTimeout(() => { setPlaced(false); setPlaceError(''); setForm(EMPTY_CHECKOUT) }, 200) }
 
   const place = async () => {
     if (!canPlace) return
     setPlacing(true)
+    setPlaceError('')
+    setPlacedCount(cart.length)
     try { await onPlaceOrder(form); setPlaced(true) }
+    catch (e) { setPlaceError(e instanceof Error ? e.message : 'We couldn’t place your order — please try again or call (504) 555-0190.') }
     finally { setPlacing(false) }
   }
 
@@ -595,7 +614,7 @@ function CartModal({ open, cart, onClose, onRemove, onUpdateItem, onLongTermInqu
           </div>
           <h2 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '8px' }}>Order placed!</h2>
           <p style={{ fontSize: '13px', color: 'var(--ink3)', lineHeight: 1.6, marginBottom: '20px', maxWidth: '360px', margin: '0 auto 20px' }}>
-            Thanks, {form.firstName}. We've reserved your container{cart.length > 1 ? 's' : ''} and emailed a confirmation to <strong style={{ color: 'var(--ink)' }}>{form.email}</strong>. Our team will confirm delivery to {form.city}, {form.state} and finalize payment within 2 hours.
+            Thanks, {form.firstName}. We've reserved your container{placedCount > 1 ? 's' : ''} and emailed a confirmation to <strong style={{ color: 'var(--ink)' }}>{form.email}</strong>. Our team will confirm delivery to {form.city}, {form.state} and finalize payment within 2 hours.
           </p>
           <button onClick={close} style={{ padding: '12px 28px', borderRadius: 'var(--pill)', background: 'var(--primary)', color: '#fff', fontSize: '14px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>Done</button>
         </div>
@@ -768,6 +787,11 @@ function CartModal({ open, cart, onClose, onRemove, onUpdateItem, onLongTermInqu
           </div>
           {rentItems.length > 0 && <div style={{ fontSize: '11px', color: 'var(--ink3)', marginBottom: '12px', textAlign: 'right' }}>{num(rentContract)} rental + {num(deposit)} deposit</div>}
 
+          {placeError && (
+            <div style={{ background: '#FDECEA', border: '1px solid #F5C6C0', color: '#B3261E', borderRadius: 'var(--r8)', padding: '9px 12px', fontSize: '12px', lineHeight: 1.5, marginBottom: '10px' }}>
+              {placeError}
+            </div>
+          )}
           <button onClick={place} disabled={!canPlace} style={{ width: '100%', padding: '14px', borderRadius: 'var(--pill)', background: canPlace ? 'var(--cta)' : 'var(--surf-w)', color: canPlace ? '#fff' : 'var(--ink3)', fontSize: '14px', fontWeight: 700, border: canPlace ? 'none' : '1.5px solid var(--div)', cursor: canPlace ? 'pointer' : 'not-allowed', boxShadow: canPlace ? '0 4px 14px rgba(230,81,0,.3)' : 'none' }}>
             {placing ? 'Placing order…' : `Place order · ${num(dueToday)}`}
           </button>
@@ -833,6 +857,362 @@ function CustomerMessageModal({ open, onClose, onSent }: { open: boolean; onClos
   )
 }
 
+// ── Bulk / B2B request form ────────────────────────────────
+// Submits through the same quotes endpoint as the quote dialog.
+
+function BulkForm({ onSuccess }: { onSuccess: () => void }) {
+  const [form, setForm] = useState({ firstName: '', company: '', phone: '', email: '', units: '' })
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [k]: e.target.value }))
+
+  const submit = async () => {
+    if (!form.firstName.trim() || (!form.phone.trim() && !form.email.trim())) {
+      setError('Please give us your name and a phone number or email.')
+      return
+    }
+    setSubmitting(true)
+    setError('')
+    try {
+      await quotes.submit({
+        firstName: form.firstName.trim(), lastName: '', phone: form.phone.trim(), email: form.email.trim(),
+        deliveryZip: '', need: 'bulk',
+        notes: `B2B request${form.company.trim() ? ` — company: ${form.company.trim()}` : ''}${form.units.trim() ? ` — estimated units: ${form.units.trim()}` : ''}`,
+      })
+      setForm({ firstName: '', company: '', phone: '', email: '', units: '' })
+      onSuccess()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong — please call (504) 555-0190.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', padding: '28px 30px' }}>
+      <Input label="First Name" placeholder="Jane" value={form.firstName} onChange={set('firstName')} />
+      <Input label="Company" placeholder="Your Company LLC" value={form.company} onChange={set('company')} />
+      <Input label="Phone" type="tel" placeholder="(504) 555-0000" value={form.phone} onChange={set('phone')} />
+      <Input label="Email" type="email" placeholder="jane@company.com" value={form.email} onChange={set('email')} />
+      <Input label="Estimated Units Needed" type="number" placeholder="10" value={form.units} onChange={set('units')} />
+      {error && (
+        <div style={{ background: '#FDECEA', border: '1px solid #F5C6C0', color: '#B3261E', borderRadius: 'var(--r8)', padding: '9px 12px', fontSize: '12px', lineHeight: 1.5, marginBottom: '12px' }}>
+          {error}
+        </div>
+      )}
+      <button onClick={submit} disabled={submitting} style={{ width: '100%', padding: '14px', borderRadius: 'var(--pill)', background: 'var(--primary)', color: '#fff', fontSize: '14px', fontWeight: 700, border: 'none', cursor: submitting ? 'wait' : 'pointer', opacity: submitting ? 0.7 : 1 }}>
+        {submitting ? 'Submitting…' : 'Request B2B Pricing'}
+      </button>
+      <div style={{ textAlign: 'center', marginTop: '14px', fontSize: '12px', color: 'var(--ink3)' }}>
+        Or call us directly: <strong style={{ color: 'var(--ink)' }}>(504) 555-0190</strong> — we respond within 2 hours
+      </div>
+    </div>
+  )
+}
+
+// ── Customer Profile ───────────────────────────────────────
+// Email-identified profile (no password in the prototype — RBAC will bring
+// real customer sign-in). Reads and writes the customer's record in
+// customers.csv via the API, and lists their orders from orders.csv.
+
+type ProfileTab = 'account' | 'info' | 'orders'
+
+const PROFILE_TABS: { key: ProfileTab; label: string }[] = [
+  { key: 'account', label: 'Account' },
+  { key: 'info', label: 'My Info' },
+  { key: 'orders', label: 'Orders' },
+]
+
+interface ProfileFormState {
+  name: string; company: string; email: string; phone: string
+  address: string; city: string; state: string; zip: string
+  notifySms: boolean
+}
+
+const customerToForm = (c: Customer): ProfileFormState => ({
+  name: c.name || '', company: c.company || '', email: c.email || '', phone: c.phone || '',
+  address: c.address || '', city: c.city || '', state: c.state || '', zip: c.zip || '',
+  notifySms: c.notifySms === true,
+})
+
+interface CustomerProfileModalProps {
+  open: boolean
+  initialTab: ProfileTab
+  customerEmail: string           // identified email ('' = signed out)
+  onClose: () => void
+  onIdentify: (email: string) => void
+  onSignOut: () => void
+  onMessageDriver: () => void
+  toast: (msg: string) => void
+}
+
+function CustomerProfileModal({ open, initialTab, customerEmail, onClose, onIdentify, onSignOut, onMessageDriver, toast }: CustomerProfileModalProps) {
+  const [tab, setTab] = useState<ProfileTab>(initialTab)
+  const [emailInput, setEmailInput] = useState('')
+  const [nameInput, setNameInput] = useState('')
+  const [notFound, setNotFound] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [customer, setCustomer] = useState<Customer | null>(null)
+  const [myOrders, setMyOrders] = useState<Order[]>([])
+  const [myMessages, setMyMessages] = useState<Message[]>([])
+  const [form, setForm] = useState<ProfileFormState | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const set = (k: keyof ProfileFormState, v: string | boolean) => setForm(p => p ? { ...p, [k]: v } : p)
+
+  const lookup = useCallback(async (email: string) => {
+    const norm = email.trim().toLowerCase()
+    setLoading(true)
+    setError('')
+    setNotFound(false)
+    try {
+      const all = await customersApi.list()
+      const match = all.find(c => c.active !== false && (c.email || '').trim().toLowerCase() === norm)
+      if (!match) {
+        setCustomer(null)
+        setForm(null)
+        setMyOrders([])
+        setMyMessages([])
+        setNotFound(true)
+        return null
+      }
+      setCustomer(match)
+      setForm(customerToForm(match))
+      // Order history + driver replies are best-effort — the profile still works without them.
+      try {
+        const allOrders = await orders.list()
+        setMyOrders(allOrders
+          .filter(o => o.customerId === match.id || (o.customerEmail || '').trim().toLowerCase() === norm)
+          .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')))
+      } catch { setMyOrders([]) }
+      try {
+        const allMsgs = await messagesApi.list()
+        setMyMessages(allMsgs.filter(m => m.toRole === 'customer' && !m.trashed
+          && ((m.toEmail || '').trim().toLowerCase() === norm || (m.toName || '') === match.name)))
+      } catch { setMyMessages([]) }
+      return match
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load your profile — please try again.')
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    setTab(initialTab)
+    setError('')
+    setNotFound(false)
+    setEmailInput('')
+    setNameInput('')
+    if (customerEmail) lookup(customerEmail)
+    else { setCustomer(null); setForm(null); setMyOrders([]); setMyMessages([]) }
+  }, [open, customerEmail, initialTab, lookup])
+
+  const signIn = async () => {
+    const norm = emailInput.trim().toLowerCase()
+    if (!/^\S+@\S+\.\S+$/.test(norm)) { setError('Please enter a valid email address.'); return }
+    const match = await lookup(norm)
+    if (match) onIdentify(norm)
+  }
+
+  const createProfile = async () => {
+    const norm = emailInput.trim().toLowerCase()
+    if (!nameInput.trim()) { setError('Please enter your name.'); return }
+    setLoading(true)
+    setError('')
+    try {
+      await customersApi.create({ name: nameInput.trim(), email: norm, notes: 'Created from marketplace profile' })
+      onIdentify(norm)
+      await lookup(norm)
+      toast('Profile created')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not create your profile — please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const save = async () => {
+    if (!customer || !form) return
+    if (!form.name.trim()) { setError('Name is required.'); return }
+    setSaving(true)
+    setError('')
+    try {
+      const updated = await customersApi.update(customer.id, {
+        name: form.name.trim(), company: form.company.trim(), phone: form.phone.trim(),
+        address: form.address.trim(), city: form.city.trim(), state: form.state.trim(), zip: form.zip.trim(),
+        notifySms: form.notifySms,
+      })
+      setCustomer(updated)
+      setForm(customerToForm(updated))
+      toast('Profile saved')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save your changes — please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const unread = myMessages.filter(m => !m.read).length
+  // Date-only values (UTC midnight) render in UTC so the calendar day never shifts locally.
+  const fmtDate = (iso: string | null) => {
+    if (!iso) return '—'
+    const dateOnly = /T00:00:00(\.000)?Z$/.test(iso) || /^\d{4}-\d{2}-\d{2}$/.test(iso)
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', ...(dateOnly ? { timeZone: 'UTC' } : {}) })
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} maxWidth={560}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+        <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: 'var(--pri-c,#D6E4FF)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+          <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6.5" r="3" /><path d="M3.5 17a6.5 6.5 0 0 1 13 0" /></svg>
+        </div>
+        <div>
+          <div style={{ fontSize: '17px', fontWeight: 700 }}>{customer ? customer.name : 'Your Profile'}</div>
+          <div style={{ fontSize: '12px', color: 'var(--ink3)' }}>{customer ? customer.email : 'Sign in with the email you order with'}</div>
+        </div>
+      </div>
+
+      {error && (
+        <div style={{ background: '#FDECEA', border: '1px solid #F5C6C0', color: '#B3261E', borderRadius: 'var(--r8)', padding: '9px 12px', fontSize: '12px', lineHeight: 1.5, marginBottom: '12px' }}>
+          {error}
+        </div>
+      )}
+
+      {/* ── Signed out: email lookup / create ── */}
+      {!customer && (
+        <div>
+          <Input label="Email" type="email" placeholder="jane@company.com" value={emailInput}
+            onChange={e => { setEmailInput(e.target.value); setNotFound(false) }}
+            onKeyDown={e => e.key === 'Enter' && signIn()} />
+          {notFound && (
+            <div style={{ background: 'var(--surf1)', border: '1px solid var(--div)', borderRadius: 'var(--r12)', padding: '12px 14px', marginBottom: '13px' }}>
+              <div style={{ fontSize: '12px', color: 'var(--ink2)', lineHeight: 1.55, marginBottom: '10px' }}>
+                We don't have a profile for <strong>{emailInput.trim().toLowerCase()}</strong> yet. Placing an order creates one automatically — or create it now:
+              </div>
+              <Input label="Your name" placeholder="Jane Smith" value={nameInput} onChange={e => setNameInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && createProfile()} />
+              <Button variant="primary" fullWidth onClick={createProfile} disabled={loading}>{loading ? 'Creating…' : 'Create profile'}</Button>
+            </div>
+          )}
+          {!notFound && (
+            <Button variant="primary" fullWidth onClick={signIn} disabled={loading || !emailInput.trim()}>
+              {loading ? 'Looking up…' : 'Continue'}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* ── Signed in ── */}
+      {customer && form && (
+        <div>
+          {/* Tabs */}
+          <div style={{ display: 'flex', gap: '4px', background: 'var(--surf1)', border: '1px solid var(--div)', borderRadius: 'var(--pill)', padding: '3px', marginBottom: '16px' }}>
+            {PROFILE_TABS.map(t => (
+              <button key={t.key} onClick={() => setTab(t.key)}
+                style={{ flex: 1, padding: '7px 0', borderRadius: 'var(--pill)', border: 'none', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: tab === t.key ? 'var(--surf-w)' : 'transparent', color: tab === t.key ? 'var(--primary)' : 'var(--ink3)', boxShadow: tab === t.key ? 'var(--sh1)' : 'none' }}>
+                {t.label}{t.key === 'orders' && myOrders.length > 0 ? ` (${myOrders.length})` : ''}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'account' && (
+            <div>
+              <div style={{ background: 'var(--surf1)', border: '1px solid var(--div)', borderRadius: 'var(--r12)', padding: '13px 14px', marginBottom: '12px' }}>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--ink3)', fontWeight: 700, marginBottom: '4px' }}>Signed in as</div>
+                <div style={{ fontSize: '14px', fontWeight: 700 }}>{customer.name}</div>
+                <div style={{ fontSize: '12px', color: 'var(--ink3)', fontFamily: 'var(--mono)' }}>{customer.email}</div>
+                {customer.company && <div style={{ fontSize: '12px', color: 'var(--ink3)', marginTop: '2px' }}>{customer.company}</div>}
+              </div>
+
+              {/* Notifications */}
+              <div style={{ marginBottom: '14px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '8px' }}>Notifications</div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '6px' }}>
+                  <input type="checkbox" checked={form.notifySms} onChange={e => set('notifySms', e.target.checked)} style={{ width: '17px', height: '17px', accentColor: 'var(--primary)' }} />
+                  <span style={{ fontSize: '13px' }}>Text me (SMS) about deliveries &amp; driver messages</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input type="checkbox" checked disabled style={{ width: '17px', height: '17px', accentColor: 'var(--green)' }} />
+                  <span style={{ fontSize: '13px', color: 'var(--ink2)' }}>Email updates <span style={{ color: 'var(--ink3)' }}>· required</span></span>
+                </label>
+              </div>
+
+              <button onClick={onMessageDriver} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', marginBottom: '12px', borderRadius: 'var(--r12)', border: '1.5px solid var(--div)', background: 'var(--surf-w)', cursor: 'pointer', textAlign: 'left' }}>
+                <span style={{ width: '34px', height: '34px', borderRadius: 'var(--r8)', background: 'var(--surf1)', display: 'grid', placeItems: 'center', flexShrink: 0, position: 'relative' }}>
+                  <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 5.5A1.5 1.5 0 0 1 4 4h12a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5z" /><polyline points="3 5.5 10 11 17 5.5" /></svg>
+                  {unread > 0 && <span style={{ position: 'absolute', top: '-4px', right: '-4px', minWidth: '15px', height: '15px', padding: '0 3px', borderRadius: '999px', background: 'var(--cta)', color: '#fff', fontSize: '9px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{unread}</span>}
+                </span>
+                <span style={{ flex: 1 }}>
+                  <span style={{ display: 'block', fontSize: '14px', fontWeight: 700 }}>Message Driver</span>
+                  <span style={{ display: 'block', fontSize: '11px', color: 'var(--ink3)' }}>{unread > 0 ? `${unread} unread repl${unread > 1 ? 'ies' : 'y'} from your driver` : 'Send a note to your delivery driver'}</span>
+                </span>
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="var(--ink3)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="8 4 14 10 8 16" /></svg>
+              </button>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Button variant="primary" onClick={save} disabled={saving} style={{ flex: 1 }}>{saving ? 'Saving…' : 'Save preferences'}</Button>
+                <Button variant="ghost" onClick={onSignOut}>Sign out</Button>
+              </div>
+            </div>
+          )}
+
+          {tab === 'info' && (
+            <div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 10px' }}>
+                <Input label="Full name" value={form.name} onChange={e => set('name', e.target.value)} />
+                <Input label="Company" value={form.company} onChange={e => set('company', e.target.value)} placeholder="Optional" />
+              </div>
+              <Input label="Phone" type="tel" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="(504) 555-0000" />
+              <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--ink3)', margin: '4px 0 8px' }}>Delivery address</div>
+              <Input label="Street address" value={form.address} onChange={e => set('address', e.target.value)} placeholder="5500 Industrial Pkwy" />
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '0 10px' }}>
+                <Input label="City" value={form.city} onChange={e => set('city', e.target.value)} />
+                <Input label="State" value={form.state} onChange={e => set('state', e.target.value)} placeholder="LA" />
+                <Input label="ZIP" value={form.zip} onChange={e => set('zip', e.target.value)} placeholder="70112" />
+              </div>
+              <Button variant="primary" fullWidth onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</Button>
+            </div>
+          )}
+
+          {tab === 'orders' && (
+            <div>
+              {myOrders.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '26px 12px', color: 'var(--ink3)' }}>
+                  <div style={{ fontSize: '26px', marginBottom: '8px' }}>📦</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '3px', color: 'var(--ink)' }}>No orders yet</div>
+                  <div style={{ fontSize: '12px' }}>Orders placed with {customer.email} will show up here.</div>
+                </div>
+              ) : (
+                <div style={{ maxHeight: '340px', overflowY: 'auto' }}>
+                  {myOrders.map(o => (
+                    <div key={o.id} style={{ padding: '11px 2px', borderBottom: '1px solid var(--div)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: '12px', fontWeight: 700 }}>{o.orderNumber}</span>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--ink3)' }}>{o.containerSku}</span>
+                        <span style={{ marginLeft: 'auto' }}><StatusBadge status={o.status} /></span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '12px', fontSize: '11px', color: 'var(--ink3)', flexWrap: 'wrap' }}>
+                        <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--ink)' }}>${(o.amount || 0).toLocaleString()}</span>
+                        <span>{o.saleType === 'rent' ? 'Rental' : 'Purchase'}</span>
+                        <span>Ordered {fmtDate(o.createdAt)}</span>
+                        {o.scheduledDate && <span>{o.status === 'delivered' ? 'Delivered' : 'Delivery'} {fmtDate(o.completedAt || o.scheduledDate)}{o.driverName ? ` · ${o.driverName}` : ''}</span>}
+                      </div>
+                      {o.deliveryAddress && <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '3px' }}>→ {o.deliveryAddress}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
+  )
+}
+
 // ── Main Marketplace Page ──────────────────────────────────
 
 export default function MarketplacePage() {
@@ -852,16 +1232,37 @@ export default function MarketplacePage() {
   const [cartOpen, setCartOpen] = useState(false)
   const [msgOpen, setMsgOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
-  // Replies addressed to customers. (Once RBAC lands this filters to the signed-in customer.)
+  const [accountOpen, setAccountOpen] = useState(false)
+  const [accountTab, setAccountTab] = useState<ProfileTab>('account')
+  // Lightweight identity: the email the customer last ordered/signed in with.
+  const [customerEmail, setCustomerEmail] = useState(() => {
+    try { return (localStorage.getItem('sbx_customer_email') || '').toLowerCase() } catch { return '' }
+  })
+  const identify = (email: string) => {
+    const norm = email.trim().toLowerCase()
+    try { localStorage.setItem('sbx_customer_email', norm) } catch {}
+    setCustomerEmail(norm)
+  }
+  const signOut = () => {
+    try { localStorage.removeItem('sbx_customer_email') } catch {}
+    setCustomerEmail('')
+    setAccountOpen(false)
+  }
+  // Unread replies addressed to this customer (all customers while signed out).
   const [customerReplies, setCustomerReplies] = useState(0)
   useEffect(() => {
-    const load = () => messagesApi.list().then(ms => setCustomerReplies(ms.filter(m => m.toRole === 'customer' && !m.read && !m.trashed).length)).catch(() => {})
+    const load = () => messagesApi.list().then(ms => {
+      const unread = ms.filter(m => m.toRole === 'customer' && !m.read && !m.trashed)
+      setCustomerReplies((customerEmail
+        ? unread.filter(m => (m.toEmail || '').trim().toLowerCase() === customerEmail)
+        : unread).length)
+    }).catch(() => {})
     load()
     const onFocus = () => { if (document.visibilityState !== 'hidden') load() }
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onFocus)
     return () => { window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus) }
-  }, [])
+  }, [customerEmail])
   const browseRef = useRef<HTMLDivElement>(null)
   const { toast, message, open: snackOpen, close: snackClose } = useSnackbar()
 
@@ -889,16 +1290,17 @@ export default function MarketplacePage() {
     return true
   })
 
-  // Filter containers
+  // Filter containers. On the Rent tab, "price" means the monthly rate.
+  const priceOf = (c: Container) => activeTab === 'rent' ? (c.rentMonthly ?? c.buyPrice) : c.buyPrice
   const filtered = tabListable.filter(c => {
     if (!sizeFilters.has(c.size)) return false
     if (!gradeFilters.has(c.grade)) return false
-    if (minPrice && c.buyPrice < Number(minPrice)) return false
-    if (maxPrice && c.buyPrice > Number(maxPrice)) return false
+    if (minPrice && priceOf(c) < Number(minPrice)) return false
+    if (maxPrice && priceOf(c) > Number(maxPrice)) return false
     return true
   }).sort((a, b) => {
-    if (sort === 'price-asc') return a.buyPrice - b.buyPrice
-    if (sort === 'price-desc') return b.buyPrice - a.buyPrice
+    if (sort === 'price-asc') return priceOf(a) - priceOf(b)
+    if (sort === 'price-desc') return priceOf(b) - priceOf(a)
     if (sort === 'condition') return (b.conditionScore || 0) - (a.conditionScore || 0)
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   })
@@ -943,8 +1345,12 @@ export default function MarketplacePage() {
   const longTermInquiry = () => { setCartOpen(false); openQuote('rental') }
 
   // Finalize the order: reserve each container, write a real order row per item, refresh inventory.
+  // Items that fail stay in the cart; the checkout modal surfaces the error.
   const placeOrder = async (details: CheckoutDetails) => {
-    await Promise.allSettled(cart.map(async i => {
+    // Same "street, city, ST zip" shape used by orders.csv and schedule.csv addresses.
+    const fullAddress = `${details.address.trim()}, ${details.city.trim()}, ${details.state.trim()} ${details.zip.trim()}`
+    const results = await Promise.allSettled(cart.map(async i => {
+      // Reserve is best-effort: a failed lock shouldn't lose the sale.
       await containers.reserve(i.container.id).catch(() => {})
       const isRent = i.mode === 'rent'
       const amount = isRent ? (i.container.rentMonthly || 0) * i.rentTerm : i.container.buyPrice
@@ -954,7 +1360,7 @@ export default function MarketplacePage() {
         customerName: `${details.firstName} ${details.lastName}`.trim(),
         customerEmail: details.email,
         customerPhone: details.phone,
-        deliveryAddress: `${details.address}, ${details.city} ${details.state}`.trim(),
+        deliveryAddress: fullAddress,
         deliveryZip: details.zip,
         amount,
         status: 'sale_in_progress',
@@ -963,10 +1369,21 @@ export default function MarketplacePage() {
         unitCost: i.container.purchaseCost || 0,
         deposit: isRent ? (i.container.rentMonthly || 0) : 0,
         driverHours: 0,           // set when a driver is scheduled
-      }).catch(() => {})
+      })
     }))
+    const failedIds = new Set(cart.filter((_, idx) => results[idx].status === 'rejected').map(i => i.container.id))
+    setCart(prev => prev.filter(i => failedIds.has(i.container.id)))
+    // Remember the buyer so the Profile modal recognizes them next visit.
+    if (details.email.trim()) {
+      try { localStorage.setItem('sbx_customer_email', details.email.trim().toLowerCase()) } catch {}
+      setCustomerEmail(details.email.trim().toLowerCase())
+    }
     await refetchContainers()
-    setCart([])
+    if (failedIds.size > 0) {
+      throw new Error(failedIds.size === cart.length
+        ? 'Your order could not be placed — please try again or call (504) 555-0190.'
+        : `${cart.length - failedIds.size} of ${cart.length} items were ordered, but ${failedIds.size} failed and stayed in your cart. Please retry those.`)
+    }
   }
 
   const openQuote = (purpose: 'quote' | 'contact' | 'rental') => {
@@ -1197,19 +1614,7 @@ export default function MarketplacePage() {
           <p style={{ fontSize: '14px', color: 'var(--ink3)', lineHeight: 1.65, marginBottom: '24px' }}>
             Purchasing 5+ units or need ongoing rental supply? We offer volume discounts, ACH payment terms, dedicated account management, and priority inventory access.
           </p>
-          <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', padding: '28px 30px' }}>
-            <Input label="First Name" placeholder="Jane" />
-            <Input label="Company" placeholder="Your Company LLC" />
-            <Input label="Phone" type="tel" placeholder="(504) 555-0000" />
-            <Input label="Email" type="email" placeholder="jane@company.com" />
-            <Input label="Estimated Units Needed" type="number" placeholder="10" />
-            <button onClick={() => toast('Request submitted! We\'ll call you within 2 hours.')} style={{ width: '100%', padding: '14px', borderRadius: 'var(--pill)', background: 'var(--primary)', color: '#fff', fontSize: '14px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
-              Request B2B Pricing
-            </button>
-            <div style={{ textAlign: 'center', marginTop: '14px', fontSize: '12px', color: 'var(--ink3)' }}>
-              Or call us directly: <strong style={{ color: 'var(--ink)' }}>(504) 555-0190</strong> — we respond within 2 hours
-            </div>
-          </div>
+          <BulkForm onSuccess={() => toast('Request submitted! We\'ll call you within 2 hours.')} />
         </div>
       )}
 
@@ -1287,7 +1692,7 @@ export default function MarketplacePage() {
             onClick={() => {
               setProfileOpen(false)
               if (item.key === 'message') setMsgOpen(true)
-              else toast('Coming soon — available once you sign in')
+              else { setAccountTab(item.key === 'info' ? 'info' : 'account'); setAccountOpen(true) }
             }}
             style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', marginBottom: '8px', borderRadius: 'var(--r12)', border: '1.5px solid var(--div)', background: 'var(--surf-w)', cursor: 'pointer', textAlign: 'left' }}
           >
@@ -1302,6 +1707,18 @@ export default function MarketplacePage() {
           </button>
         ))}
       </Modal>
+
+      {/* ── Account / My Info / Orders ── */}
+      <CustomerProfileModal
+        open={accountOpen}
+        initialTab={accountTab}
+        customerEmail={customerEmail}
+        onClose={() => setAccountOpen(false)}
+        onIdentify={identify}
+        onSignOut={signOut}
+        onMessageDriver={() => { setAccountOpen(false); setMsgOpen(true) }}
+        toast={toast}
+      />
 
       <CustomerMessageModal open={msgOpen} onClose={() => setMsgOpen(false)} onSent={(m) => toast(m)} />
 

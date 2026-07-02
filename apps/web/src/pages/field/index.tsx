@@ -8,11 +8,13 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useSnackbar } from '../../hooks'
 import { Snackbar } from '../../components/ui'
-import { activity, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, containers as containersApi, availability as availabilityApi, messages as messagesApi, customers as customersApi, parseTrucks, parseWorkHours, encodeWorkHours, type ActivityEvent, type Depot, type Driver, type SchedJob, type DayHours, type Availability, type Message, type Customer } from '../../lib/api'
+import { activity, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, containers as containersApi, availability as availabilityApi, messages as messagesApi, customers as customersApi, orders as ordersApi, parseTrucks, parseWorkHours, encodeWorkHours, type ActivityEvent, type Depot, type Driver, type SchedJob, type DayHours, type Availability, type Message, type Customer, type Container, type Order } from '../../lib/api'
 
 // The signed-in field driver (demo — fixed to one driver for now).
 const DRIVER_ID = 'drv_01'
 const ACTOR = 'Mike Torres'
+// Company dispatch identity for driver ⇄ admin messaging (single place to change).
+const DISPATCH = { name: 'Dispatch (James R.)', email: 'ops@steelbox.co' }
 
 // ── Stroke icons (match the admin portal's simple iconography) ──
 const ICON_PATHS: Record<string, React.ReactNode> = {
@@ -65,7 +67,7 @@ const SCHED_TYPE_META: Record<string, { label: string; color: string; bg: string
   return:   { label: 'Return',   color: '#6D28D9', bg: '#EDE9FE' },
   transfer: { label: 'Transfer', color: '#B45309', bg: '#FEF3C7' },
 }
-const fmtMin = (m: number) => { const h = Math.floor(m / 60), mm = m % 60, ap = h < 12 ? 'AM' : 'PM', hh = ((h + 11) % 12) + 1; return `${hh}:${String(mm).padStart(2, '0')} ${ap}` }
+const fmtMin = (m: number) => { const h = Math.floor(m / 60) % 24, mm = m % 60, ap = h < 12 ? 'AM' : 'PM', hh = ((h + 11) % 12) + 1; return `${hh}:${String(mm).padStart(2, '0')} ${ap}` }
 
 const KIND_META: Record<JobKind, { label: string; icon: string; color: string; bg: string }> = {
   pickup:   { label: 'Pickup',   icon: 'box',   color: '#E65100', bg: '#FFE0CC' },
@@ -258,6 +260,11 @@ export default function FieldAppPage() {
   // Composer: reply (recipient known) or a new message to dispatch/a customer.
   const [compose, setCompose] = useState<null | { toRole: 'admin' | 'customer'; toName: string; toEmail: string; subject: string; body: string }>(null)
   const [depots, setDepots] = useState<Depot[]>([])
+  // Shared containers/orders — used to link schedule jobs back to the container
+  // + order records so completions and photo sessions update the same rows the
+  // admin portal and marketplace read.
+  const [containerList, setContainerList] = useState<Container[]>([])
+  const [orderList, setOrderList] = useState<Order[]>([])
   const [me, setMe] = useState<Driver | null>(null)          // the signed-in driver
   const [mySchedule, setMySchedule] = useState<SchedJob[]>([]) // this driver's jobs (shared CSV)
   const [editJob, setEditJob] = useState<{ id: string; dayOffset: number; time: string } | null>(null)
@@ -271,32 +278,42 @@ export default function FieldAppPage() {
   const [signed, setSigned] = useState(false)
   const [returnPhoto, setReturnPhoto] = useState(false)
   const [condScore, setCondScore] = useState(0)  // driver's 1–5 condition score for the active job
+  const [inspectorNotes, setInspectorNotes] = useState('')  // optional notes attached to the photo submission
   const { toast, message, open: snackOpen, close: snackClose } = useSnackbar()
 
   const doneCount = shots.filter(s => s.done).length
   const progress = Math.round((doneCount / PHOTO_TARGET) * 100)
 
-  const fetchActivity = () => { activity.list().then(setActivityLog).catch(() => {}) }
-  const fetchMessages = () => { messagesApi.list(DRIVER_ID).then(setMessages).catch(() => {}) }
-  const fetchSchedule = () => { scheduleApi.list().then(all => setMySchedule(all.filter(s => s.driverId === DRIVER_ID))).catch(() => {}) }
-  const loadMe = () => driversApi.list().then(ds => setMe(ds.find(x => x.id === DRIVER_ID) ?? null)).catch(() => {})
-  const loadAvailability = () => availabilityApi.list().then(rows => setAvailRows(rows.filter(r => r.driverId === DRIVER_ID))).catch(() => {})
+  // Fetchers return their promise so callers decide how to surface failures
+  // (background syncs stay silent; explicit refresh buttons toast an error).
+  const fetchActivity = () => activity.list().then(setActivityLog)
+  const fetchMessages = () => messagesApi.list(DRIVER_ID).then(setMessages)
+  const fetchSchedule = () => scheduleApi.list().then(all => setMySchedule(all.filter(s => s.driverId === DRIVER_ID)))
+  const loadMe = () => driversApi.list().then(ds => setMe(ds.find(x => x.id === DRIVER_ID) ?? null))
+  const loadAvailability = () => availabilityApi.list().then(rows => setAvailRows(rows.filter(r => r.driverId === DRIVER_ID)))
+  const fetchContainers = () => containersApi.list().then(setContainerList)
+  const fetchOrders = () => ordersApi.list().then(setOrderList)
   useEffect(() => {
-    fetchActivity()
+    fetchActivity().catch(() => {})
     depotsApi.list().then(setDepots).catch(() => {})
-    loadMe()
-    loadAvailability()
-    fetchSchedule()
-    fetchMessages()
+    loadMe().catch(() => {})
+    loadAvailability().catch(() => {})
+    fetchSchedule().catch(() => {})
+    fetchMessages().catch(() => {})
+    fetchContainers().catch(() => {})
+    fetchOrders().catch(() => {})
     customersApi.list().then(cs => setMsgCustomers(cs.filter(c => c.active !== false))).catch(() => {})
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pull the latest shared schedule/availability whenever the driver navigates to a data screen,
   // or on window focus — so admin-side changes show up without a full reload.
-  const syncFromServer = () => { fetchSchedule(); loadAvailability(); loadMe(); fetchMessages() }
+  const syncFromServer = () => {
+    ;[fetchSchedule(), loadAvailability(), loadMe(), fetchMessages(), fetchContainers(), fetchOrders()]
+      .forEach(p => p.catch(() => {}))
+  }
   useEffect(() => {
     if (screen === 'jobs' || screen === 'schedule') syncFromServer()
-    if (screen === 'inbox') fetchMessages()
+    if (screen === 'inbox') fetchMessages().catch(() => {})
   }, [screen]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const onFocus = () => { if (document.visibilityState !== 'hidden') syncFromServer() }
@@ -318,26 +335,39 @@ export default function FieldAppPage() {
     ?? parseWorkHours(savedForWeek ? savedForWeek.workHours : (me?.workHours || ''))
   const setDayHours = (d: number, h: DayHours | null) => setWeekEdits(prev => ({ ...prev, [weekStart]: { ...weekDays, [d]: h } }))
   const saveWorkHours = () => {
-    availabilityApi.save({ driverId: DRIVER_ID, weekStart, workHours: encodeWorkHours(weekDays) }).then(() => { loadAvailability(); setWeekEdits(p => { const n = { ...p }; delete n[weekStart]; return n }) }).catch(() => {})
-    toast('Working hours saved for this week')
+    availabilityApi.save({ driverId: DRIVER_ID, weekStart, workHours: encodeWorkHours(weekDays) })
+      .then(() => {
+        loadAvailability().catch(() => {})
+        setWeekEdits(p => { const n = { ...p }; delete n[weekStart]; return n })
+        toast('Working hours saved for this week')
+      })
+      .catch(() => toast('Could not save working hours — check connection and retry'))
   }
 
   const depotById = (id?: string) => depots.find(d => d.id === id)
   const depotByName = (name?: string) => depots.find(d => d.name === name)
 
   // Map a shared schedule entry → a field workflow Job (single source of truth).
+  // Container id + customer email/phone are hydrated from the shared containers /
+  // orders / customers tables so completions and receipts hit the right records.
   const schedToJob = (s: SchedJob): Job => {
     const isDepotDest = s.type === 'transfer' || /depot/i.test(s.destination)
     const kind: JobKind = s.type === 'pickup' ? 'pickup' : s.type === 'return' ? 'return' : 'delivery'
     const cust = s.customer && s.customer !== '-' ? s.customer : ''
+    const cont = containerList.find(c => c.sku === s.sku)
+    const order = orderList.find(o => o.containerSku === s.sku && o.status !== 'delivered')
+      ?? orderList.find(o => o.containerSku === s.sku)
+    const custRec = cust ? msgCustomers.find(c => c.name === cust || c.company === cust) : undefined
     return {
       id: s.id, kind,
       dest: kind === 'delivery' ? (isDepotDest ? 'depot' : 'customer') : undefined,
-      sku: s.sku, containerId: '',
+      sku: s.sku, containerId: cont?.id || '',
       depotId: (kind === 'pickup' ? depotByName(s.origin) : isDepotDest ? depotByName(s.destination) : undefined)?.id,
       originDepotId: kind === 'delivery' && isDepotDest ? depotByName(s.origin)?.id : undefined,
-      customer: cust, contact: s.contact || '', email: '',
-      address: kind === 'return' ? s.origin : s.destination,
+      customer: cust,
+      contact: s.contact || order?.customerPhone || custRec?.phone || '',
+      email: order?.customerEmail || custRec?.email || '',
+      address: (kind === 'return' ? s.originAddress || s.origin : s.destinationAddress || s.destination),
       time: fmtMin(s.startMin),
     }
   }
@@ -367,9 +397,9 @@ export default function FieldAppPage() {
   const logActivity = async (job: Job | null, type: ActivityEvent['type'], note: string) => {
     if (!job) return
     try {
-      await activity.log({ type, jobType: job.kind, sku: job.sku, containerId: job.containerId, actor: ACTOR, location: jobLocation(job), note })
+      await activity.log({ type, jobType: job.kind, sku: job.sku, containerId: job.containerId, actor: me?.name ?? ACTOR, location: jobLocation(job), note })
     } catch { /* offline — non-blocking */ }
-    fetchActivity()
+    fetchActivity().catch(() => {})
   }
 
   const toggleShot = (id: number) => {
@@ -386,6 +416,7 @@ export default function FieldAppPage() {
     setSigned(false)
     setReturnPhoto(false)
     setCondScore(0)
+    setInspectorNotes('')
     if (job.kind === 'pickup') setShots(SHOT_LIST.map(s => ({ ...s })))
     goTo('flow')
   }
@@ -396,10 +427,35 @@ export default function FieldAppPage() {
     const w = window.open('', '_blank', 'width=420,height=640')
     if (w) {
       const now = new Date().toLocaleString('en-US')
-      w.document.write(`<html><head><title>SteelBox Receipt ${job.sku}</title><style>body{font:14px -apple-system,sans-serif;padding:28px;color:#0D0E12}h1{font-size:20px;margin:0 0 2px}.sub{color:#6B7280;font-size:12px}.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}.k{color:#6B7280}b{font-family:monospace}</style></head><body><h1><span style="color:#2B7FD4">Steel</span><span style="color:#E65100">Box</span></h1><div class="sub">${KIND_META[job.kind].label} receipt · ${now}</div><div style="margin-top:20px"><div class="row"><span class="k">Container</span><b>${job.sku}</b></div><div class="row"><span class="k">Customer</span><span>${job.customer || '—'}</span></div><div class="row"><span class="k">Location</span><span>${job.address || '—'}</span></div><div class="row"><span class="k">Field rep</span><span>${ACTOR}</span></div><div class="row"><span class="k">Status</span><span>Completed</span></div></div><p class="sub" style="margin-top:24px">A copy has been emailed to ${job.email || 'the customer'} and the SteelBox admin portal.</p><button onclick="window.print()" style="margin-top:14px;padding:10px 18px;border:none;border-radius:999px;background:#0057B8;color:#fff;font-weight:700;cursor:pointer">Save as PDF</button></body></html>`)
+      w.document.write(`<html><head><title>SteelBox Receipt ${job.sku}</title><style>body{font:14px -apple-system,sans-serif;padding:28px;color:#0D0E12}h1{font-size:20px;margin:0 0 2px}.sub{color:#6B7280;font-size:12px}.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}.k{color:#6B7280}b{font-family:monospace}</style></head><body><h1><span style="color:#2B7FD4">Steel</span><span style="color:#E65100">Box</span></h1><div class="sub">${KIND_META[job.kind].label} receipt · ${now}</div><div style="margin-top:20px"><div class="row"><span class="k">Container</span><b>${job.sku}</b></div><div class="row"><span class="k">Customer</span><span>${job.customer || '—'}</span></div><div class="row"><span class="k">Location</span><span>${job.address || '—'}</span></div><div class="row"><span class="k">Field rep</span><span>${me?.name ?? ACTOR}</span></div><div class="row"><span class="k">Status</span><span>Completed</span></div></div><p class="sub" style="margin-top:24px">A copy has been emailed to ${job.email || 'the customer'} and the SteelBox admin portal.</p><button onclick="window.print()" style="margin-top:14px;padding:10px 18px;border:none;border-radius:999px;background:#0057B8;color:#fff;font-weight:700;cursor:pointer">Save as PDF</button></body></html>`)
       w.document.close()
     }
     toast(`Receipt PDF emailed to ${job.customer || 'customer'} + admin`)
+  }
+
+  // On completion, sync the shared tables so every portal agrees:
+  // the order is marked delivered, the container status/location moves,
+  // and the finished schedule row is cleared from the shared board.
+  const finalizeJob = async (job: Job) => {
+    const target = job.containerId || job.sku // API resolves either
+    try {
+      if (job.kind === 'delivery' && job.dest === 'customer') {
+        const order = orderList.find(o => o.containerSku === job.sku && o.status !== 'delivered')
+        if (order) await ordersApi.markDelivered(order.id)
+        await containersApi.update(target, { status: 'delivered' })
+      } else if (job.kind === 'delivery' && job.dest === 'depot') {
+        // Storage transfer — the unit now lives at the destination depot.
+        const destName = depotById(job.depotId)?.name
+        if (destName) await containersApi.update(target, { depotLocation: destName })
+      } else if (job.kind === 'return') {
+        // Rental came back to the yard — relist it.
+        await containersApi.update(target, { status: 'available' })
+      }
+      await scheduleApi.remove(job.id) // done — off the shared schedule board
+    } catch {
+      toast('Job completed — some updates didn’t sync. Use Refresh to retry.')
+    }
+    ;[fetchSchedule(), fetchOrders(), fetchContainers()].forEach(p => p.catch(() => {}))
   }
 
   // Advance the active workflow one step, running the step's side effect.
@@ -415,11 +471,16 @@ export default function FieldAppPage() {
       case 'sms':       logActivity(job, 'sms_sent', `ETA text sent to ${job.customer}`); toast('ETA text sent to customer'); break
       case 'photos12':  if (doneCount < PHOTO_TARGET) { goTo('camera'); return } break // photos_submitted logged on submit
       case 'photo1':    setReturnPhoto(true); logActivity(job, 'photos_submitted', job.kind === 'return' ? 'Return condition photo captured' : 'Proof-of-delivery photo captured'); toast(job.kind === 'return' ? 'Return photo captured' : 'Delivery photo captured'); break
-      case 'score':     containersApi.update(job.sku, { conditionScore: condScore }).catch(() => {}); logActivity(job, 'event', `Condition scored ${condScore}/5`); toast(`Condition ${condScore}/5 saved`); break
+      case 'score':
+        containersApi.update(job.containerId || job.sku, { conditionScore: condScore })
+          .then(() => fetchContainers().catch(() => {}))
+          .catch(() => toast('Condition score didn’t sync — check connection'))
+        logActivity(job, 'event', `Condition scored ${condScore}/5`); toast(`Condition ${condScore}/5 saved`); break
       case 'signature': setSigned(true); logActivity(job, 'signature', 'Customer signature captured'); break
       case 'receipt':   sendReceipt(job); break
       case 'complete':
         logActivity(job, (job.kind + '_complete') as ActivityEvent['type'], `${KIND_META[job.kind].label} complete`)
+        finalizeJob(job)
         toast(`${KIND_META[job.kind].label} complete`)
         setActiveJob(null); goTo('dashboard'); return
       default: break
@@ -724,7 +785,7 @@ export default function FieldAppPage() {
             <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '20px', fontWeight: 700, marginBottom: '2px' }}>Pickups, Deliveries &amp; Returns</div>
             <div style={{ fontSize: '12px', color: '#44475A' }}>{mySchedule.length} jobs this week · tap to start the workflow</div>
           </div>
-          <button onClick={() => { fetchSchedule(); toast('Schedule refreshed') }} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 12px', borderRadius: '999px', border: '1.5px solid #E1E2EC', background: 'transparent', fontSize: '12px', fontWeight: 700, color: '#0057B8', cursor: 'pointer' }}>
+          <button onClick={() => { Promise.all([fetchSchedule(), fetchContainers(), fetchOrders()]).then(() => toast('Schedule refreshed')).catch(() => toast('Refresh failed — check connection')) }} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 12px', borderRadius: '999px', border: '1.5px solid #E1E2EC', background: 'transparent', fontSize: '12px', fontWeight: 700, color: '#0057B8', cursor: 'pointer' }}>
             <Icon name="refresh" size={14} color="#0057B8" sw={1.8} /> Refresh
           </button>
         </div>
@@ -746,12 +807,17 @@ export default function FieldAppPage() {
 
   // ── Camera / Photo Checklist ───────────────────────────
 
-  const renderCamera = () => (
+  const renderCamera = () => {
+    const cont = activeJob ? containerList.find(c => c.sku === activeJob.sku) : undefined
+    const locLine = cont
+      ? `${cont.bayNumber ? `${cont.bayNumber} · ` : ''}${cont.depotLocation || depotById(activeJob?.depotId)?.name || 'Depot'}`
+      : depotById(activeJob?.depotId)?.name || 'Photo session'
+    return (
     <div>
       <div style={{ background: '#fff', borderBottom: '1px solid #E1E2EC', padding: '44px 16px 14px' }}>
         <button onClick={() => goTo('dashboard')} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: '#0057B8', cursor: 'pointer', background: 'none', border: 'none', marginBottom: '10px' }}>← Dashboard</button>
-        <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#44475A', marginBottom: '2px' }}>Bay 4 · NOLA Depot</div>
-        <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '19px', fontWeight: 700 }}>NOLA-20-0004</div>
+        <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#44475A', marginBottom: '2px' }}>{locLine}</div>
+        <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '19px', fontWeight: 700 }}>{activeJob?.sku ?? 'Container'}</div>
       </div>
 
       {/* Progress */}
@@ -798,15 +864,41 @@ export default function FieldAppPage() {
       </button>
       <div style={{ textAlign: 'center', padding: '4px 12px 10px', fontSize: '11px', color: '#44475A' }}>Tap any row to toggle done · Open Camera captures next required shot</div>
     </div>
-  )
+    )
+  }
 
   // ── Review & Submit ────────────────────────────────────
 
-  const renderReview = () => (
+  // Persist the photo session to the shared container record — photoCount >= 12
+  // auto-promotes a draft to `available` on the marketplace (server-side rule).
+  const submitPhotos = async () => {
+    const job = activeJob
+    const note = `${doneCount}/${PHOTO_TARGET} photos uploaded${inspectorNotes.trim() ? ` — ${inspectorNotes.trim()}` : ''}`
+    if (job) {
+      try {
+        await containersApi.update(job.containerId || job.sku, {
+          photoCount: doneCount,
+          inspectorName: me?.name ?? ACTOR,
+          inspectedAt: new Date().toISOString(),
+        })
+        fetchContainers().catch(() => {})
+      } catch {
+        toast('Photo record didn’t sync — use Refresh on the Jobs tab to retry')
+      }
+    }
+    logActivity(job, 'photos_submitted', note)
+    goTo('success')
+  }
+
+  const GRADE_LABELS: Record<string, string> = { A: 'One-Trip', B: 'Cargo-Worthy', C: 'Wind & Watertight', R: 'Refurbished', X: 'Custom Build' }
+
+  const renderReview = () => {
+    const cont = activeJob ? containerList.find(c => c.sku === activeJob.sku) : undefined
+    return (
     <div>
       <div style={{ background: '#fff', borderBottom: '1px solid #E1E2EC', padding: '44px 16px 14px' }}>
         <button onClick={() => goTo('camera')} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: '#0057B8', cursor: 'pointer', background: 'none', border: 'none', marginBottom: '10px' }}>← Checklist</button>
-        <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#44475A', marginBottom: '2px' }}>NOLA-20-0004 · {doneCount} photos captured</div>
+        <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#44475A', marginBottom: '2px' }}>{activeJob?.sku ?? 'Container'} · {doneCount} photos captured</div>
         <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '19px', fontWeight: 700 }}>Review & Submit</div>
       </div>
 
@@ -829,12 +921,12 @@ export default function FieldAppPage() {
       {card(
         <>
           {[
-            { label: 'SKU', val: 'NOLA-20-0004', blue: true },
-            { label: 'GUID', val: 'a3f9-b22e-4d1c-9f83', small: true },
-            { label: 'Condition', val: 'One Trip', orange: true },
+            { label: 'SKU', val: activeJob?.sku ?? '—', blue: true },
+            { label: 'GUID', val: cont?.guid ? cont.guid.slice(0, 19) : '—', small: true },
+            { label: 'Condition', val: cont ? `Grade ${cont.grade} · ${GRADE_LABELS[cont.grade] ?? ''}` : condScore ? `${condScore}/5 scored` : '—', orange: true },
             { label: 'Photos', val: `${doneCount} / ${PHOTO_TARGET} ready`, green: doneCount >= PHOTO_TARGET },
-            { label: 'Upload size', val: '~48 MB' },
-            { label: 'Captured by', val: 'Mike Torres · DRV-001' },
+            { label: 'Upload size', val: `~${doneCount * 4} MB` },
+            { label: 'Captured by', val: `${me?.name ?? ACTOR} · ${me?.driverCode ?? 'DRV'}` },
             { label: 'GPS stamp', val: '29.7604° N · 95.3698° W', green: true, small: true },
           ].map((row, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 16px', borderBottom: '1px solid #E1E2EC', fontSize: '12px' }}>
@@ -848,15 +940,16 @@ export default function FieldAppPage() {
       {/* Notes */}
       <div style={{ margin: '0 12px 12px' }}>
         <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: '#44475A', marginBottom: '6px' }}>Inspector Notes (optional)</div>
-        <textarea placeholder="Condition observations, location notes, damage details…" rows={3} style={{ width: '100%', background: '#fff', border: '1.5px solid #C4C6D0', borderRadius: '12px', padding: '12px', color: '#1A1C2E', fontFamily: "'Roboto', sans-serif", fontSize: '13px', resize: 'none', height: '64px', outline: 'none' }} />
+        <textarea value={inspectorNotes} onChange={e => setInspectorNotes(e.target.value)} placeholder="Condition observations, location notes, damage details…" rows={3} style={{ width: '100%', background: '#fff', border: '1.5px solid #C4C6D0', borderRadius: '12px', padding: '12px', color: '#1A1C2E', fontFamily: "'Roboto', sans-serif", fontSize: '13px', resize: 'none', height: '64px', outline: 'none' }} />
       </div>
 
-      <button onClick={() => { logActivity(activeJob, 'photos_submitted', `${doneCount}/${PHOTO_TARGET} photos uploaded`); goTo('success') }} style={{ margin: '0 12px 12px', width: 'calc(100% - 24px)', background: '#0057B8', color: '#fff', border: 'none', borderRadius: '16px', padding: '16px', fontFamily: "'Google Sans', sans-serif", fontSize: '15px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 14px rgba(0,87,184,.3)' }}>
+      <button onClick={submitPhotos} style={{ margin: '0 12px 12px', width: 'calc(100% - 24px)', background: '#0057B8', color: '#fff', border: 'none', borderRadius: '16px', padding: '16px', fontFamily: "'Google Sans', sans-serif", fontSize: '15px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 14px rgba(0,87,184,.3)' }}>
         Submit to Admin Portal →
       </button>
       <div style={{ textAlign: 'center', padding: '0 12px 12px', fontSize: '11px', color: '#44475A' }}>Uploads via WiFi or LTE · Admin notified instantly</div>
     </div>
-  )
+    )
+  }
 
   // ── Success ────────────────────────────────────────────
 
@@ -874,7 +967,7 @@ export default function FieldAppPage() {
         </button>
       )}
       <button onClick={() => goTo('dashboard')} style={{ width: '100%', padding: '13px', borderRadius: '16px', background: '#EEF2FF', color: '#1A1C2E', border: '1.5px solid #E1E2EC', fontFamily: "'Google Sans', sans-serif", fontSize: '14px', fontWeight: 700, cursor: 'pointer' }}>Back to Dashboard</button>
-      <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#44475A', marginTop: '14px', letterSpacing: '0.5px' }}>UPLOADED IN 41s · 48.2 MB · WiFi</div>
+      <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#44475A', marginTop: '14px', letterSpacing: '0.5px' }}>UPLOADED · ~{doneCount * 4} MB · WiFi</div>
     </div>
   )
 
@@ -884,10 +977,12 @@ export default function FieldAppPage() {
   const saveReschedule = () => {
     if (!editJob) return
     const [h, m] = editJob.time.split(':').map(Number)
+    if (Number.isNaN(h)) { toast('Pick a valid time first'); return }
     const startMin = h * 60 + (m || 0)
     setMySchedule(prev => prev.map(j => j.id === editJob.id ? { ...j, dayOffset: editJob.dayOffset, startMin } : j)) // optimistic
-    scheduleApi.update(editJob.id, { dayOffset: editJob.dayOffset, startMin }).then(fetchSchedule).catch(() => {})
-    toast('Rescheduled · dispatch notified')
+    scheduleApi.update(editJob.id, { dayOffset: editJob.dayOffset, startMin })
+      .then(() => { fetchSchedule().catch(() => {}); toast('Rescheduled · dispatch notified') })
+      .catch(() => { fetchSchedule().catch(() => {}); toast('Reschedule didn’t save — previous time restored') })
     setEditJob(null)
   }
   const dayName = (off: number) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + off); return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) }
@@ -912,7 +1007,7 @@ export default function FieldAppPage() {
             <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '20px', fontWeight: 700, marginBottom: '2px' }}>My Working Hours</div>
             <div style={{ fontSize: '12px', color: '#44475A' }}>Set your Mon–Sun availability (6 AM–10 PM) up to 4 weeks ahead.</div>
           </div>
-          <button onClick={() => { loadAvailability(); loadMe(); toast('Hours refreshed') }} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 12px', borderRadius: '999px', border: '1.5px solid #E1E2EC', background: 'transparent', fontSize: '12px', fontWeight: 700, color: '#0057B8', cursor: 'pointer' }}>
+          <button onClick={() => { Promise.all([loadAvailability(), loadMe()]).then(() => toast('Hours refreshed')).catch(() => toast('Refresh failed — check connection')) }} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 12px', borderRadius: '999px', border: '1.5px solid #E1E2EC', background: 'transparent', fontSize: '12px', fontWeight: 700, color: '#0057B8', cursor: 'pointer' }}>
             <Icon name="refresh" size={14} color="#0057B8" sw={1.8} /> Refresh
           </button>
         </div>
@@ -969,21 +1064,35 @@ export default function FieldAppPage() {
   const isReceived = (m: Message) => m.toRole === 'driver'
   const unreadCount = messages.filter(m => isReceived(m) && !m.trashed && !m.read).length
   const patchMsg = (id: string, patch: Partial<Message>) => {
-    setMessages(prev => prev.map(x => x.id === id ? { ...x, ...patch } : x))
-    messagesApi.update(id, patch).catch(() => {})
+    setMessages(prev => prev.map(x => x.id === id ? { ...x, ...patch } : x))          // optimistic
+    messagesApi.update(id, patch).catch(() => {
+      fetchMessages().catch(() => {})                                                // revert to server truth
+      toast('Change didn’t sync — check connection')
+    })
   }
   const openMessage = (m: Message) => { setOpenMsgId(m.id); if (isReceived(m) && !m.read) patchMsg(m.id, { read: true }) }
   const trashMsg = (m: Message) => { patchMsg(m.id, { trashed: true }); setOpenMsgId(null); toast('Moved to Trash') }
   const restoreMsg = (m: Message) => { patchMsg(m.id, { trashed: false }); toast('Restored') }
-  const deleteMsg = (m: Message) => { setMessages(prev => prev.filter(x => x.id !== m.id)); messagesApi.remove(m.id).catch(() => {}); setOpenMsgId(null) }
-  const emptyTrash = () => { setMessages(prev => prev.filter(x => !x.trashed)); messagesApi.emptyTrash(DRIVER_ID).catch(() => {}); toast('Trash emptied') }
+  const deleteMsg = (m: Message) => {
+    setMessages(prev => prev.filter(x => x.id !== m.id))
+    messagesApi.remove(m.id).catch(() => { fetchMessages().catch(() => {}); toast('Delete didn’t sync — message restored') })
+    setOpenMsgId(null)
+  }
+  const emptyTrash = () => {
+    setMessages(prev => prev.filter(x => !x.trashed))
+    messagesApi.emptyTrash(DRIVER_ID)
+      .then(() => toast('Trash emptied'))
+      .catch(() => { fetchMessages().catch(() => {}); toast('Could not empty trash — check connection') })
+  }
   const fmtMsgTime = (iso: string) => { try { return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) } catch { return iso } }
   const sendCompose = () => {
     if (!compose || !compose.body.trim()) return
-    const payload = { fromRole: 'driver' as const, fromName: me?.name || 'Driver', fromEmail: '', toDriverId: DRIVER_ID, toRole: compose.toRole, toName: compose.toName, toEmail: compose.toEmail, subject: compose.subject.trim() || '(no subject)', body: compose.body.trim() }
-    messagesApi.create(payload).then(fetchMessages).catch(() => {})
+    const c = compose
+    const payload = { fromRole: 'driver' as const, fromName: me?.name || 'Driver', fromEmail: '', toDriverId: DRIVER_ID, toRole: c.toRole, toName: c.toName, toEmail: c.toEmail, subject: c.subject.trim() || '(no subject)', body: c.body.trim() }
     setCompose(null); setOpenMsgId(null); setInboxTab('sent')
-    toast(compose.toRole === 'admin' ? 'Sent to Dispatch' : `Sent to ${compose.toName}`)
+    messagesApi.create(payload)
+      .then(() => { fetchMessages().catch(() => {}); toast(c.toRole === 'admin' ? 'Sent to Dispatch' : `Sent to ${c.toName}`) })
+      .catch(() => toast('Message didn’t send — please try again'))
   }
   const replyTo = (m: Message) => setCompose({ toRole: m.fromRole === 'customer' ? 'customer' : 'admin', toName: m.fromName, toEmail: m.fromEmail, subject: m.subject.startsWith('Re:') ? m.subject : `Re: ${m.subject}`, body: '' })
 
@@ -1005,8 +1114,8 @@ export default function FieldAppPage() {
               <div style={{ fontSize: '12px', color: '#44475A' }}>{unreadCount} unread · dispatch &amp; customers</div>
             </div>
             <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-              <button onClick={() => { setCompose({ toRole: 'admin', toName: 'Dispatch (James R.)', toEmail: 'ops@steelbox.co', subject: '', body: '' }) }} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '7px 12px', borderRadius: '999px', border: 'none', background: '#0057B8', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>+ New</button>
-              <button onClick={() => { fetchMessages(); toast('Refreshed') }} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '7px 10px', borderRadius: '999px', border: '1.5px solid #E1E2EC', background: 'transparent', fontSize: '12px', fontWeight: 700, color: '#0057B8', cursor: 'pointer' }}><Icon name="refresh" size={14} color="#0057B8" sw={1.8} /></button>
+              <button onClick={() => { setCompose({ toRole: 'admin', toName: DISPATCH.name, toEmail: DISPATCH.email, subject: '', body: '' }) }} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '7px 12px', borderRadius: '999px', border: 'none', background: '#0057B8', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>+ New</button>
+              <button onClick={() => { fetchMessages().then(() => toast('Refreshed')).catch(() => toast('Refresh failed — check connection')) }} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '7px 10px', borderRadius: '999px', border: '1.5px solid #E1E2EC', background: 'transparent', fontSize: '12px', fontWeight: 700, color: '#0057B8', cursor: 'pointer' }}><Icon name="refresh" size={14} color="#0057B8" sw={1.8} /></button>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '18px' }}>
@@ -1081,10 +1190,10 @@ export default function FieldAppPage() {
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.5px', color: '#44475A', marginBottom: '5px' }}>To</label>
               <select
                 value={compose.toRole === 'admin' ? 'admin' : `c:${compose.toEmail}`}
-                onChange={e => { const v = e.target.value; if (v === 'admin') setCompose(c => c && { ...c, toRole: 'admin', toName: 'Dispatch (James R.)', toEmail: 'ops@steelbox.co' }); else { const cust = msgCustomers.find(x => `c:${x.email}` === v); if (cust) setCompose(c => c && { ...c, toRole: 'customer', toName: cust.company || cust.name, toEmail: cust.email }) } }}
+                onChange={e => { const v = e.target.value; if (v === 'admin') setCompose(c => c && { ...c, toRole: 'admin', toName: DISPATCH.name, toEmail: DISPATCH.email }); else { const cust = msgCustomers.find(x => `c:${x.email}` === v); if (cust) setCompose(c => c && { ...c, toRole: 'customer', toName: cust.company || cust.name, toEmail: cust.email }) } }}
                 style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #C4C6D0', borderRadius: '10px', fontSize: '13px', fontFamily: "'Roboto', sans-serif", marginBottom: '10px' }}
               >
-                <option value="admin">Dispatch (James R.)</option>
+                <option value="admin">{DISPATCH.name}</option>
                 <optgroup label="Customers">{msgCustomers.map(c => <option key={c.id} value={`c:${c.email}`}>{c.company || c.name}</option>)}</optgroup>
               </select>
               <input value={compose.subject} placeholder="Subject" onChange={e => setCompose(c => c && { ...c, subject: e.target.value })} style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #C4C6D0', borderRadius: '10px', fontSize: '13px', fontFamily: "'Roboto', sans-serif", marginBottom: '10px' }} />

@@ -93,7 +93,18 @@
       "Bash(curl -s -o /dev/null -w \"web %{http_code} \" http://localhost:3000/)",
       "Bash(curl -s -o /dev/null -w \"api %{http_code}\\\\n\" http://localhost:4000/customers)",
       "Bash(curl -s -X DELETE http://localhost:4000/messages/msg_mr314y8a4o0)",
-      "Bash(node -e 'let d=\"\";process.stdin.on\\(\"data\",c=>d+=c\\).on\\(\"end\",\\(\\)=>console.log\\(JSON.parse\\(d\\).length,\"messages remain\"\\)\\)')"
+      "Bash(node -e 'let d=\"\";process.stdin.on\\(\"data\",c=>d+=c\\).on\\(\"end\",\\(\\)=>console.log\\(JSON.parse\\(d\\).length,\"messages remain\"\\)\\)')",
+      "Bash(npx vite *)",
+      "Bash(PORT=4599 node apps/api/server.mjs)",
+      "Bash(curl -s localhost:4599/containers)",
+      "Bash(curl -s localhost:4599/orders)",
+      "Bash(curl -s localhost:4599/schedule)",
+      "Bash(curl -s localhost:4599/depots)",
+      "Bash(node -e \"console.log\\('depots:', JSON.parse\\(require\\('fs'\\).readFileSync\\(0\\)\\).map\\(d=>d.code\\).join\\(', '\\)\\)\")",
+      "Bash(cp /private/tmp/claude-501/-Users-tmoore-Documents-GitHub-SteelBox/8bc4a042-4d10-4d19-90cb-3295d19f3bb6/scratchpad/csvbak/*.csv /Users/tmoore/Documents/GitHub/SteelBox/apps/api/data/ && lsof -ti tcp:4599 | xargs kill 2>/dev/null; grep -c \"\" /Users/tmoore/Documents/GitHub/SteelBox/apps/api/data/orders.csv && grep -L \"Test Buyer\" /Users/tmoore/Documents/GitHub/SteelBox/apps/api/data/orders.csv)"
+    ],
+    "additionalDirectories": [
+      "/private/tmp/claude-501/-Users-tmoore-Documents-GitHub-SteelBox/8bc4a042-4d10-4d19-90cb-3295d19f3bb6/scratchpad/csvbak"
     ]
   }
 }
