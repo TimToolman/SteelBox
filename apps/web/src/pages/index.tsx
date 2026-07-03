@@ -7,7 +7,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { GradeBadge, StatusBadge, Button, Modal, Snackbar, Input, Select } from '../components/ui'
 import { useContainers, useSnackbar, useAuth } from '../hooks'
-import { containers, quotes, orders, isZipCovered, estimateDelivery, drivers as driversApi, messages as messagesApi, customers as customersApi, type Container, type ContainerGrade, type ContainerSize, type Driver, type Customer, type Order, type Message } from '../lib/api'
+import { LoginForm } from '../lib/auth'
+import { auth as authApi, containers, quotes, orders, isZipCovered, estimateDelivery, drivers as driversApi, messages as messagesApi, customers as customersApi, photoUrl, SHOT_LABELS, type Container, type ContainerGrade, type ContainerSize, type Driver, type Customer, type Order, type Message, type AuthUser } from '../lib/api'
 
 // ── Types ─────────────────────────────────────────────────
 
@@ -176,9 +177,9 @@ function ContainerCard({ container, onSelect, mode = 'buy', inCart = false, onAd
     >
       {/* Photo area */}
       <div style={{ position: 'relative', background: 'linear-gradient(135deg,#CBD5E8,#A8BFDF)', paddingBottom: '52%', height: 0, overflow: 'hidden' }}>
-        {photos?.[0] ? (
+        {photos?.filter(Boolean)[0] ? (
           <img
-            src={photos[0]}
+            src={photoUrl(photos.filter(Boolean)[0])}
             alt={sku}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
             loading="lazy"
@@ -275,13 +276,9 @@ function ContainerSVGIcon({ size }: { size: ContainerSize }) {
 }
 
 // ── 360° / 3D viewer ───────────────────────────────────────
-// The 12 field photos are the frames of a 360° spin; with no real photos we
-// render a rotatable 3D container model (drag to rotate around it).
-
-const SHOT_LABELS = [
-  'Front doors closed', 'Front doors open', 'Right side', 'Back', 'Left side', 'SKU sticker · outside',
-  'Inside back', 'Inside right', 'Inside left', 'Inside ceiling', 'Inside floor', 'SKU sticker · inside',
-]
+// The 12 field photos are the frames of a 360° spin; missing frames fall
+// back to a rotatable 3D container model (drag to rotate around it).
+// SHOT_LABELS comes from lib/api so slots match the field app + admin exactly.
 
 function Container3D({ size, grade, rotY, rotX }: { size: ContainerSize; grade: ContainerGrade; rotY: number; rotX: number }) {
   const is40 = size.startsWith('40'), is10 = size.startsWith('10')
@@ -335,23 +332,23 @@ function Spin360Gallery({ container }: { container: Container }) {
         style={{ position: 'relative', height: '230px', overflow: 'hidden', background: 'radial-gradient(circle at 50% 38%,#1a2b47,#0a1526)', cursor: 'grab', touchAction: 'none', userSelect: 'none' }}
       >
         <div style={{ position: 'absolute', inset: 0 }}>
-          {photos.length >= 12
-            ? <img src={photos[frame]} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          {photos[frame]
+            ? <img src={photoUrl(photos[frame])} alt={SHOT_LABELS[frame]} draggable={false} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             : <Container3D size={container.size} grade={container.grade} rotY={rotY} rotX={rotX} />}
         </div>
         <div style={{ position: 'absolute', top: '10px', left: '10px', display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(0,87,184,.9)', color: '#fff', borderRadius: 'var(--r4)', padding: '4px 10px', fontSize: '10px', fontWeight: 700 }}>
           <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round"><path d="M3 10a7 7 0 0 1 12-5" /><path d="M17 10a7 7 0 0 1-12 5" /><polyline points="15,2 15,5 12,5" /><polyline points="5,18 5,15 8,15" /></svg>
           360° · drag to rotate
         </div>
-        <div style={{ position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,.55)', borderRadius: 'var(--pill)', padding: '3px 10px', fontFamily: 'var(--mono)', fontSize: '10px', color: '#fff' }}>{frame + 1} / 12 · stitched from 12 photos</div>
+        <div style={{ position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,.55)', borderRadius: 'var(--pill)', padding: '3px 10px', fontFamily: 'var(--mono)', fontSize: '10px', color: '#fff', whiteSpace: 'nowrap' }}>{frame + 1} / 12 · {SHOT_LABELS[frame]}{photos.filter(Boolean).length ? ` · ${photos.slice(0, 12).filter(Boolean).length} field photos` : ''}</div>
       </div>
-      {/* 12 photo frames */}
+      {/* 12 photo frames — slot i is always the same labelled shot as the field app */}
       <div style={{ display: 'flex', gap: '3px', padding: '6px', background: '#060F1E', overflowX: 'auto' }}>
         {SHOT_LABELS.map((label, i) => (
           <button key={i} onClick={() => { setRotY(i * 30); setRotX(-12) }} title={label}
             style={{ width: '74px', height: '52px', flexShrink: 0, borderRadius: 'var(--r4)', overflow: 'hidden', cursor: 'pointer', border: `2px solid ${i === frame ? 'var(--cta)' : 'transparent'}`, background: '#162030', color: 'rgba(255,255,255,.65)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px', padding: '3px' }}>
             {photos[i]
-              ? <img src={photos[i]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ? <img src={photoUrl(photos[i])} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               : <><span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, color: '#fff' }}>{i + 1}</span><span style={{ fontSize: '7px', lineHeight: 1.1, textAlign: 'center' }}>{label}</span></>}
           </button>
         ))}
@@ -550,6 +547,7 @@ const EMPTY_CHECKOUT: CheckoutDetails = {
 interface CartModalProps {
   open: boolean
   cart: CartItem[]
+  user: AuthUser | null          // checkout requires a signed-in account
   onClose: () => void
   onRemove: (id: string) => void
   onUpdateItem: (id: string, patch: Partial<CartItem>) => void
@@ -561,14 +559,29 @@ const fieldLabel: React.CSSProperties = { display: 'block', fontSize: '11px', fo
 const fieldInput: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '13px', outline: 'none', fontFamily: 'var(--sans)', background: 'var(--surf-w)' }
 const sectionTitle: React.CSSProperties = { fontSize: '14px', fontWeight: 700, marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }
 
-function CartModal({ open, cart, onClose, onRemove, onUpdateItem, onLongTermInquiry, onPlaceOrder }: CartModalProps) {
+function CartModal({ open, cart, user, onClose, onRemove, onUpdateItem, onLongTermInquiry, onPlaceOrder }: CartModalProps) {
   const [form, setForm] = useState<CheckoutDetails>(EMPTY_CHECKOUT)
   const [placing, setPlacing] = useState(false)
   const [placed, setPlaced] = useState(false)
   const [placeError, setPlaceError] = useState('')
   const [placedCount, setPlacedCount] = useState(0)
+  // SMS two-factor — required on EVERY order (initial and subsequent).
+  const [twoFa, setTwoFa] = useState<{ stage: 'idle' | 'code'; sending: boolean; code: string; devCode: string; error: string }>(
+    { stage: 'idle', sending: false, code: '', devCode: '', error: '' })
 
   const set = (k: keyof CheckoutDetails, v: string | boolean) => setForm(p => ({ ...p, [k]: v }))
+
+  // Prefill contact details from the signed-in account.
+  useEffect(() => {
+    if (!open || !user) return
+    setForm(p => ({
+      ...p,
+      email: p.email || user.email,
+      firstName: p.firstName || (user.name || '').split(/\s+/)[0] || '',
+      lastName: p.lastName || (user.name || '').split(/\s+/).slice(1).join(' '),
+      phone: p.phone || user.phone || '',
+    }))
+  }, [open, user])
 
   const buyItems = cart.filter(i => i.mode === 'buy')
   const rentItems = cart.filter(i => i.mode === 'rent')
@@ -585,10 +598,9 @@ function CartModal({ open, cart, onClose, onRemove, onUpdateItem, onLongTermInqu
 
   const num = (n: number) => `$${n.toLocaleString()}`
 
-  const close = () => { onClose(); setTimeout(() => { setPlaced(false); setPlaceError(''); setForm(EMPTY_CHECKOUT) }, 200) }
+  const close = () => { onClose(); setTimeout(() => { setPlaced(false); setPlaceError(''); setForm(EMPTY_CHECKOUT); setTwoFa({ stage: 'idle', sending: false, code: '', devCode: '', error: '' }) }, 200) }
 
   const place = async () => {
-    if (!canPlace) return
     setPlacing(true)
     setPlaceError('')
     setPlacedCount(cart.length)
@@ -596,6 +608,32 @@ function CartModal({ open, cart, onClose, onRemove, onUpdateItem, onLongTermInqu
     catch (e) { setPlaceError(e instanceof Error ? e.message : 'We couldn’t place your order — please try again or call (504) 555-0190.') }
     finally { setPlacing(false) }
   }
+
+  // Step 1: text a 6-digit code to the mobile number on the order.
+  const sendCode = async () => {
+    if (!canPlace || twoFa.sending) return
+    setTwoFa(t => ({ ...t, sending: true, error: '' }))
+    try {
+      const r = await authApi.twoFaSend(form.phone)
+      setTwoFa({ stage: 'code', sending: false, code: '', devCode: r.devCode || '', error: '' })
+    } catch (e) {
+      setTwoFa(t => ({ ...t, sending: false, error: e instanceof Error ? e.message : 'Could not send the code — check the phone number' }))
+    }
+  }
+  // Step 2: verify the code, then place the order.
+  const verifyAndPlace = async () => {
+    if (twoFa.sending || placing) return
+    setTwoFa(t => ({ ...t, sending: true, error: '' }))
+    try {
+      await authApi.twoFaVerify(twoFa.code)
+      setTwoFa(t => ({ ...t, sending: false }))
+      await place()
+    } catch (e) {
+      setTwoFa(t => ({ ...t, sending: false, error: e instanceof Error ? e.message : 'Verification failed — try again' }))
+    }
+  }
+  // Admin/driver test orders skip customer SMS verification (server allows it).
+  const needsTwoFa = !!user && user.role === 'customer'
 
   const field = (label: string, key: keyof CheckoutDetails, opts: { type?: string; placeholder?: string; half?: boolean } = {}) => (
     <div style={{ marginBottom: '12px' }}>
@@ -654,7 +692,7 @@ function CartModal({ open, cart, onClose, onRemove, onUpdateItem, onLongTermInqu
                 <div key={c.id} style={{ padding: '12px 0', borderBottom: '1px solid var(--div)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{ width: '54px', height: '40px', borderRadius: 'var(--r8)', background: 'linear-gradient(135deg,#CBD5E8,#A8BFDF)', flexShrink: 0, overflow: 'hidden', display: 'grid', placeItems: 'center' }}>
-                      {c.photos?.[0] ? <img src={c.photos[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: '9px', color: '#fff', fontFamily: 'var(--mono)' }}>{c.size}</span>}
+                      {c.photos?.filter(Boolean)[0] ? <img src={photoUrl(c.photos.filter(Boolean)[0])} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: '9px', color: '#fff', fontFamily: 'var(--mono)' }}>{c.size}</span>}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: '13px', fontWeight: 700 }}>{SIZE_LABELS[c.size]} <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--ink3)', fontWeight: 400 }}>· {c.sku}</span></div>
@@ -792,10 +830,56 @@ function CartModal({ open, cart, onClose, onRemove, onUpdateItem, onLongTermInqu
               {placeError}
             </div>
           )}
-          <button onClick={place} disabled={!canPlace} style={{ width: '100%', padding: '14px', borderRadius: 'var(--pill)', background: canPlace ? 'var(--cta)' : 'var(--surf-w)', color: canPlace ? '#fff' : 'var(--ink3)', fontSize: '14px', fontWeight: 700, border: canPlace ? 'none' : '1.5px solid var(--div)', cursor: canPlace ? 'pointer' : 'not-allowed', boxShadow: canPlace ? '0 4px 14px rgba(230,81,0,.3)' : 'none' }}>
-            {placing ? 'Placing order…' : `Place order · ${num(dueToday)}`}
-          </button>
-          {!canPlace && !placing && <div style={{ fontSize: '10px', color: 'var(--ink3)', textAlign: 'center', marginTop: '8px' }}>Complete contact & delivery{rentItems.length > 0 ? ' & rental' : ''} details to continue</div>}
+
+          {!user ? (
+            /* ── Step 0: checkout requires an account ── */
+            <div style={{ borderTop: '1px solid var(--div)', paddingTop: '12px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '4px' }}>Sign in to complete your order</div>
+              <LoginForm allowRegister subtitle="Orders are tied to your SteelBox account so you can track delivery and message your driver." />
+            </div>
+          ) : !needsTwoFa ? (
+            <button onClick={place} disabled={!canPlace || placing} style={{ width: '100%', padding: '14px', borderRadius: 'var(--pill)', background: canPlace ? 'var(--cta)' : 'var(--surf-w)', color: canPlace ? '#fff' : 'var(--ink3)', fontSize: '14px', fontWeight: 700, border: canPlace ? 'none' : '1.5px solid var(--div)', cursor: canPlace ? 'pointer' : 'not-allowed', boxShadow: canPlace ? '0 4px 14px rgba(230,81,0,.3)' : 'none' }}>
+              {placing ? 'Placing order…' : `Place order · ${num(dueToday)}`}
+            </button>
+          ) : twoFa.stage === 'idle' ? (
+            /* ── Step 1: text a verification code (required on every order) ── */
+            <div>
+              <button onClick={sendCode} disabled={!canPlace || twoFa.sending} style={{ width: '100%', padding: '14px', borderRadius: 'var(--pill)', background: canPlace ? 'var(--primary)' : 'var(--surf-w)', color: canPlace ? '#fff' : 'var(--ink3)', fontSize: '14px', fontWeight: 700, border: canPlace ? 'none' : '1.5px solid var(--div)', cursor: canPlace ? 'pointer' : 'not-allowed' }}>
+                {twoFa.sending ? 'Sending code…' : '📱 Text me a verification code'}
+              </button>
+              <div style={{ fontSize: '10px', color: 'var(--ink3)', textAlign: 'center', marginTop: '8px', lineHeight: 1.5 }}>
+                Every order is confirmed with a code texted to your mobile{form.phone ? ` (${form.phone})` : ''}.
+              </div>
+            </div>
+          ) : (
+            /* ── Step 2: enter the code, then the order places ── */
+            <div style={{ background: 'var(--surf1)', border: '1px solid var(--div)', borderRadius: 'var(--r12)', padding: '12px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '6px' }}>Enter the 6-digit code we texted to {form.phone}</div>
+              {twoFa.devCode && (
+                <div style={{ fontSize: '11px', color: 'var(--ink3)', background: 'var(--amb-c,#FEF3C7)', borderRadius: 'var(--r8)', padding: '6px 9px', marginBottom: '8px' }}>
+                  Dev mode — no SMS gateway connected. Your code: <strong style={{ fontFamily: 'var(--mono)' }}>{twoFa.devCode}</strong>
+                </div>
+              )}
+              <input
+                value={twoFa.code}
+                onChange={e => setTwoFa(t => ({ ...t, code: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                onKeyDown={e => e.key === 'Enter' && twoFa.code.length === 6 && verifyAndPlace()}
+                placeholder="123456"
+                inputMode="numeric"
+                autoFocus
+                style={{ width: '100%', padding: '11px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontFamily: 'var(--mono)', fontSize: '20px', letterSpacing: '8px', textAlign: 'center', outline: 'none', marginBottom: '8px', boxSizing: 'border-box' }}
+              />
+              {twoFa.error && <div style={{ color: '#B3261E', fontSize: '11px', marginBottom: '8px' }}>{twoFa.error}</div>}
+              <button onClick={verifyAndPlace} disabled={twoFa.code.length !== 6 || twoFa.sending || placing}
+                style={{ width: '100%', padding: '13px', borderRadius: 'var(--pill)', background: twoFa.code.length === 6 ? 'var(--cta)' : 'var(--surf-w)', color: twoFa.code.length === 6 ? '#fff' : 'var(--ink3)', fontSize: '14px', fontWeight: 700, border: twoFa.code.length === 6 ? 'none' : '1.5px solid var(--div)', cursor: twoFa.code.length === 6 ? 'pointer' : 'not-allowed' }}>
+                {placing ? 'Placing order…' : twoFa.sending ? 'Verifying…' : `Verify & place order · ${num(dueToday)}`}
+              </button>
+              <button onClick={sendCode} disabled={twoFa.sending} style={{ width: '100%', marginTop: '6px', padding: '8px', borderRadius: 'var(--pill)', background: 'none', border: 'none', color: 'var(--primary)', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
+                Resend code
+              </button>
+            </div>
+          )}
+          {user && !canPlace && !placing && <div style={{ fontSize: '10px', color: 'var(--ink3)', textAlign: 'center', marginTop: '8px' }}>Complete contact & delivery{rentItems.length > 0 ? ' & rental' : ''} details to continue</div>}
         </div>
       </div>
     </Modal>
@@ -938,20 +1022,17 @@ const customerToForm = (c: Customer): ProfileFormState => ({
 interface CustomerProfileModalProps {
   open: boolean
   initialTab: ProfileTab
-  customerEmail: string           // identified email ('' = signed out)
   onClose: () => void
-  onIdentify: (email: string) => void
-  onSignOut: () => void
   onMessageDriver: () => void
   toast: (msg: string) => void
 }
 
-function CustomerProfileModal({ open, initialTab, customerEmail, onClose, onIdentify, onSignOut, onMessageDriver, toast }: CustomerProfileModalProps) {
+// Every profile feature requires a signed-in account (RBAC): signed-out
+// visitors get the login/register form; signed-in customers see their
+// customers.csv record (auto-created on first visit), orders, and messages.
+function CustomerProfileModal({ open, initialTab, onClose, onMessageDriver, toast }: CustomerProfileModalProps) {
+  const { user, logout } = useAuth()
   const [tab, setTab] = useState<ProfileTab>(initialTab)
-  const [emailInput, setEmailInput] = useState('')
-  const [nameInput, setNameInput] = useState('')
-  const [notFound, setNotFound] = useState(false)
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [myOrders, setMyOrders] = useState<Order[]>([])
@@ -961,21 +1042,15 @@ function CustomerProfileModal({ open, initialTab, customerEmail, onClose, onIden
 
   const set = (k: keyof ProfileFormState, v: string | boolean) => setForm(p => p ? { ...p, [k]: v } : p)
 
-  const lookup = useCallback(async (email: string) => {
-    const norm = email.trim().toLowerCase()
-    setLoading(true)
+  const lookup = useCallback(async (u: AuthUser) => {
+    const norm = u.email.trim().toLowerCase()
     setError('')
-    setNotFound(false)
     try {
-      const all = await customersApi.list()
-      const match = all.find(c => c.active !== false && (c.email || '').trim().toLowerCase() === norm)
+      const all = await customersApi.list() // customers get only their own record back
+      let match = all.find(c => c.active !== false && (c.email || '').trim().toLowerCase() === norm)
       if (!match) {
-        setCustomer(null)
-        setForm(null)
-        setMyOrders([])
-        setMyMessages([])
-        setNotFound(true)
-        return null
+        // First visit — create the customer record from the account.
+        match = await customersApi.create({ name: u.name || u.email, phone: u.phone || '', notes: 'Created from marketplace profile' })
       }
       setCustomer(match)
       setForm(customerToForm(match))
@@ -983,20 +1058,18 @@ function CustomerProfileModal({ open, initialTab, customerEmail, onClose, onIden
       try {
         const allOrders = await orders.list()
         setMyOrders(allOrders
-          .filter(o => o.customerId === match.id || (o.customerEmail || '').trim().toLowerCase() === norm)
+          .filter(o => o.customerId === match!.id || (o.customerEmail || '').trim().toLowerCase() === norm)
           .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')))
       } catch { setMyOrders([]) }
       try {
         const allMsgs = await messagesApi.list()
         setMyMessages(allMsgs.filter(m => m.toRole === 'customer' && !m.trashed
-          && ((m.toEmail || '').trim().toLowerCase() === norm || (m.toName || '') === match.name)))
+          && ((m.toEmail || '').trim().toLowerCase() === norm || (m.toName || '') === match!.name)))
       } catch { setMyMessages([]) }
       return match
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load your profile — please try again.')
       return null
-    } finally {
-      setLoading(false)
     }
   }, [])
 
@@ -1004,36 +1077,9 @@ function CustomerProfileModal({ open, initialTab, customerEmail, onClose, onIden
     if (!open) return
     setTab(initialTab)
     setError('')
-    setNotFound(false)
-    setEmailInput('')
-    setNameInput('')
-    if (customerEmail) lookup(customerEmail)
+    if (user) lookup(user)
     else { setCustomer(null); setForm(null); setMyOrders([]); setMyMessages([]) }
-  }, [open, customerEmail, initialTab, lookup])
-
-  const signIn = async () => {
-    const norm = emailInput.trim().toLowerCase()
-    if (!/^\S+@\S+\.\S+$/.test(norm)) { setError('Please enter a valid email address.'); return }
-    const match = await lookup(norm)
-    if (match) onIdentify(norm)
-  }
-
-  const createProfile = async () => {
-    const norm = emailInput.trim().toLowerCase()
-    if (!nameInput.trim()) { setError('Please enter your name.'); return }
-    setLoading(true)
-    setError('')
-    try {
-      await customersApi.create({ name: nameInput.trim(), email: norm, notes: 'Created from marketplace profile' })
-      onIdentify(norm)
-      await lookup(norm)
-      toast('Profile created')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not create your profile — please try again.')
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [open, user, initialTab, lookup])
 
   const save = async () => {
     if (!customer || !form) return
@@ -1072,7 +1118,7 @@ function CustomerProfileModal({ open, initialTab, customerEmail, onClose, onIden
         </div>
         <div>
           <div style={{ fontSize: '17px', fontWeight: 700 }}>{customer ? customer.name : 'Your Profile'}</div>
-          <div style={{ fontSize: '12px', color: 'var(--ink3)' }}>{customer ? customer.email : 'Sign in with the email you order with'}</div>
+          <div style={{ fontSize: '12px', color: 'var(--ink3)' }}>{customer ? customer.email : 'Sign in to manage your account, info & orders'}</div>
         </div>
       </div>
 
@@ -1082,27 +1128,12 @@ function CustomerProfileModal({ open, initialTab, customerEmail, onClose, onIden
         </div>
       )}
 
-      {/* ── Signed out: email lookup / create ── */}
-      {!customer && (
-        <div>
-          <Input label="Email" type="email" placeholder="jane@company.com" value={emailInput}
-            onChange={e => { setEmailInput(e.target.value); setNotFound(false) }}
-            onKeyDown={e => e.key === 'Enter' && signIn()} />
-          {notFound && (
-            <div style={{ background: 'var(--surf1)', border: '1px solid var(--div)', borderRadius: 'var(--r12)', padding: '12px 14px', marginBottom: '13px' }}>
-              <div style={{ fontSize: '12px', color: 'var(--ink2)', lineHeight: 1.55, marginBottom: '10px' }}>
-                We don't have a profile for <strong>{emailInput.trim().toLowerCase()}</strong> yet. Placing an order creates one automatically — or create it now:
-              </div>
-              <Input label="Your name" placeholder="Jane Smith" value={nameInput} onChange={e => setNameInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && createProfile()} />
-              <Button variant="primary" fullWidth onClick={createProfile} disabled={loading}>{loading ? 'Creating…' : 'Create profile'}</Button>
-            </div>
-          )}
-          {!notFound && (
-            <Button variant="primary" fullWidth onClick={signIn} disabled={loading || !emailInput.trim()}>
-              {loading ? 'Looking up…' : 'Continue'}
-            </Button>
-          )}
-        </div>
+      {/* ── Signed out: account sign-in / registration required ── */}
+      {!user && (
+        <LoginForm allowRegister subtitle="Your profile, saved info, and order history are tied to your SteelBox account." />
+      )}
+      {user && !customer && !error && (
+        <div style={{ textAlign: 'center', padding: '20px', color: 'var(--ink3)', fontSize: '13px' }}>Loading your profile…</div>
       )}
 
       {/* ── Signed in ── */}
@@ -1154,7 +1185,7 @@ function CustomerProfileModal({ open, initialTab, customerEmail, onClose, onIden
 
               <div style={{ display: 'flex', gap: '8px' }}>
                 <Button variant="primary" onClick={save} disabled={saving} style={{ flex: 1 }}>{saving ? 'Saving…' : 'Save preferences'}</Button>
-                <Button variant="ghost" onClick={onSignOut}>Sign out</Button>
+                <Button variant="ghost" onClick={() => { logout(); onClose() }}>Sign out</Button>
               </div>
             </div>
           )}
@@ -1234,40 +1265,27 @@ export default function MarketplacePage() {
   const [profileOpen, setProfileOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const [accountTab, setAccountTab] = useState<ProfileTab>('account')
-  // Lightweight identity: the email the customer last ordered/signed in with.
-  const [customerEmail, setCustomerEmail] = useState(() => {
-    try { return (localStorage.getItem('sbx_customer_email') || '').toLowerCase() } catch { return '' }
-  })
-  const identify = (email: string) => {
-    const norm = email.trim().toLowerCase()
-    try { localStorage.setItem('sbx_customer_email', norm) } catch {}
-    setCustomerEmail(norm)
-  }
-  const signOut = () => {
-    try { localStorage.removeItem('sbx_customer_email') } catch {}
-    setCustomerEmail('')
-    setAccountOpen(false)
-  }
-  // Unread replies addressed to this customer (all customers while signed out).
+  const browseRef = useRef<HTMLDivElement>(null)
+  const { toast, message, open: snackOpen, close: snackClose } = useSnackbar()
+
+  const { data: allContainers, loading, refetch: refetchContainers } = useContainers()
+  const { user } = useAuth()
+  const customerEmail = user?.email.toLowerCase() ?? ''
+
+  // Unread replies addressed to this customer (requires a signed-in account).
   const [customerReplies, setCustomerReplies] = useState(0)
   useEffect(() => {
+    if (!user) { setCustomerReplies(0); return }
     const load = () => messagesApi.list().then(ms => {
-      const unread = ms.filter(m => m.toRole === 'customer' && !m.read && !m.trashed)
-      setCustomerReplies((customerEmail
-        ? unread.filter(m => (m.toEmail || '').trim().toLowerCase() === customerEmail)
-        : unread).length)
+      setCustomerReplies(ms.filter(m => m.toRole === 'customer' && !m.read && !m.trashed
+        && (m.toEmail || '').trim().toLowerCase() === customerEmail).length)
     }).catch(() => {})
     load()
     const onFocus = () => { if (document.visibilityState !== 'hidden') load() }
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onFocus)
     return () => { window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus) }
-  }, [customerEmail])
-  const browseRef = useRef<HTMLDivElement>(null)
-  const { toast, message, open: snackOpen, close: snackClose } = useSnackbar()
-
-  const { data: allContainers, loading, refetch: refetchContainers } = useContainers()
-  const { user } = useAuth()
+  }, [user, customerEmail])
   // Admin draft-preview is on when signed in as admin, OR forced via ?admin=1
   // in the URL (handy for demos). Use ?admin=0 to force the customer view.
   const adminParam = new URLSearchParams(window.location.search).get('admin')
@@ -1373,11 +1391,6 @@ export default function MarketplacePage() {
     }))
     const failedIds = new Set(cart.filter((_, idx) => results[idx].status === 'rejected').map(i => i.container.id))
     setCart(prev => prev.filter(i => failedIds.has(i.container.id)))
-    // Remember the buyer so the Profile modal recognizes them next visit.
-    if (details.email.trim()) {
-      try { localStorage.setItem('sbx_customer_email', details.email.trim().toLowerCase()) } catch {}
-      setCustomerEmail(details.email.trim().toLowerCase())
-    }
     await refetchContainers()
     if (failedIds.size > 0) {
       throw new Error(failedIds.size === cart.length
@@ -1654,6 +1667,7 @@ export default function MarketplacePage() {
       <CartModal
         open={cartOpen}
         cart={cart}
+        user={user}
         onClose={() => setCartOpen(false)}
         onRemove={removeFromCart}
         onUpdateItem={updateCartItem}
@@ -1678,8 +1692,8 @@ export default function MarketplacePage() {
             <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6.5" r="3" /><path d="M3.5 17a6.5 6.5 0 0 1 13 0" /></svg>
           </div>
           <div>
-            <div style={{ fontSize: '17px', fontWeight: 700 }}>Your Profile</div>
-            <div style={{ fontSize: '12px', color: 'var(--ink3)' }}>Manage your account &amp; orders</div>
+            <div style={{ fontSize: '17px', fontWeight: 700 }}>{user ? user.name || 'Your Profile' : 'Your Profile'}</div>
+            <div style={{ fontSize: '12px', color: 'var(--ink3)' }}>{user ? `Signed in · ${user.email}` : 'Sign in to manage your account & orders'}</div>
           </div>
         </div>
         {([
@@ -1691,7 +1705,9 @@ export default function MarketplacePage() {
             key={item.key}
             onClick={() => {
               setProfileOpen(false)
-              if (item.key === 'message') setMsgOpen(true)
+              // Messaging a driver also requires a signed-in account — route
+              // signed-out visitors to the sign-in screen first.
+              if (item.key === 'message' && user) setMsgOpen(true)
               else { setAccountTab(item.key === 'info' ? 'info' : 'account'); setAccountOpen(true) }
             }}
             style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', marginBottom: '8px', borderRadius: 'var(--r12)', border: '1.5px solid var(--div)', background: 'var(--surf-w)', cursor: 'pointer', textAlign: 'left' }}
@@ -1708,14 +1724,11 @@ export default function MarketplacePage() {
         ))}
       </Modal>
 
-      {/* ── Account / My Info / Orders ── */}
+      {/* ── Account / My Info / Orders (requires a signed-in account) ── */}
       <CustomerProfileModal
         open={accountOpen}
         initialTab={accountTab}
-        customerEmail={customerEmail}
         onClose={() => setAccountOpen(false)}
-        onIdentify={identify}
-        onSignOut={signOut}
         onMessageDriver={() => { setAccountOpen(false); setMsgOpen(true) }}
         toast={toast}
       />

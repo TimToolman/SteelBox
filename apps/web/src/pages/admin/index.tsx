@@ -6,8 +6,8 @@
 
 import React, { useState, useCallback, useEffect } from 'react'
 import { GradeBadge, StatusBadge, Button, Modal, Snackbar } from '../../components/ui'
-import { useContainers, useOrders, useDrivers, useSnackbar } from '../../hooks'
-import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, parseTrucks, encodeTrucks, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer } from '../../lib/api'
+import { useContainers, useOrders, useDrivers, useSnackbar, useAuth } from '../../hooks'
+import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, SHOT_LABELS, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role } from '../../lib/api'
 
 // Container sizes a truck can be certified to pull.
 const TRUCK_SIZES: { value: ContainerSize; label: string }[] = [
@@ -466,6 +466,208 @@ function EditContainerModal({ container, onClose, onSaved }: {
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '20px' }}>
         <Button variant="ghost" onClick={onClose}>Cancel</Button>
         <Button variant="primary" onClick={handle} disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</Button>
+      </div>
+    </Modal>
+  )
+}
+
+// ── Photo Review Modal ─────────────────────────────────────
+// Admin view of a container's 12-shot documentation — the same slot layout
+// the field app captures and the marketplace spinner plays. Admin can upload,
+// replace, or remove any shot to fix a bad set.
+
+function PhotosModal({ container, onClose, onChanged }: {
+  container: Container | null
+  onClose: () => void
+  onChanged: (updated: Container, msg: string) => void
+}) {
+  const [busySlot, setBusySlot] = useState<number | null>(null)
+
+  if (!container) return null
+  const photos = container.photos ?? []
+  const realCount = photos.slice(0, 12).filter(Boolean).length
+  const extras = photos.slice(12).map((p, i) => ({ slot: i + 12, url: p })).filter(x => x.url)
+
+  const replaceSlot = (slot: number, label: string) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.onchange = async () => {
+      const file = input.files?.[0]
+      if (!file) return
+      setBusySlot(slot)
+      try {
+        const dataUrl = await fileToDataUrl(file)
+        const updated = await containersApi.uploadPhoto(container.id, { slot, label, dataUrl })
+        onChanged(updated, `${label} photo updated for ${container.sku}`)
+      } catch (e) {
+        onChanged(container, `Upload failed — ${e instanceof Error ? e.message : 'try again'}`)
+      } finally {
+        setBusySlot(null)
+      }
+    }
+    input.click()
+  }
+
+  const removeSlot = async (slot: number, label: string) => {
+    if (!window.confirm(`Remove the "${label}" photo from ${container.sku}?`)) return
+    setBusySlot(slot)
+    try {
+      const updated = await containersApi.deletePhoto(container.id, slot)
+      onChanged(updated, `${label} photo removed from ${container.sku}`)
+    } catch (e) {
+      onChanged(container, `Remove failed — ${e instanceof Error ? e.message : 'try again'}`)
+    } finally {
+      setBusySlot(null)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} maxWidth={760}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '2px' }}>
+        <h2 style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'var(--mono)' }}>{container.sku}</h2>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--ink3)' }}>{container.stockNumber}</span>
+        <span style={{ marginLeft: 'auto', fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: 'var(--pill)', background: realCount >= 12 ? 'var(--green-cont)' : 'var(--amb-c,#FEF3C7)', color: realCount >= 12 ? 'var(--green)' : 'var(--amber)' }}>
+          {realCount}/12 photos
+        </span>
+      </div>
+      <p style={{ fontSize: '12px', color: 'var(--ink3)', marginBottom: '16px' }}>
+        Slots match the field app's 12-shot standard and drive the marketplace 360° spinner. Slots 6 & 12 are the stock-number (SKU sticker) shots.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '10px' }}>
+        {SHOT_LABELS.map((label, i) => {
+          const p = photos[i]
+          const busy = busySlot === i
+          const isSkuShot = i === 5 || i === 11
+          return (
+            <div key={i} style={{ border: `1.5px solid ${p ? 'var(--green)' : 'var(--div)'}`, borderRadius: 'var(--r12)', overflow: 'hidden', background: 'var(--surf1)' }}>
+              <div style={{ aspectRatio: '4/3', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#EEF2F8', position: 'relative' }}>
+                {p
+                  ? <a href={photoUrl(p)} target="_blank" rel="noreferrer" title="Open full size"><img src={photoUrl(p)} alt={label} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} /></a>
+                  : <span style={{ fontSize: '20px', color: 'var(--ink3)' }}>{i + 1}</span>}
+                {isSkuShot && <span style={{ position: 'absolute', top: '4px', left: '4px', background: 'var(--primary)', color: '#fff', fontSize: '8px', fontWeight: 700, padding: '2px 6px', borderRadius: 'var(--r4)', letterSpacing: '0.4px' }}>STOCK #</span>}
+              </div>
+              <div style={{ padding: '7px 8px' }}>
+                <div style={{ fontSize: '10px', fontWeight: 700, marginBottom: '6px', lineHeight: 1.3 }}>{i + 1}. {label}</div>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <button onClick={() => replaceSlot(i, label)} disabled={busy}
+                    style={{ flex: 1, padding: '4px 0', borderRadius: 'var(--r4)', border: 'none', background: 'var(--primary)', color: '#fff', fontSize: '10px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer' }}>
+                    {busy ? '…' : p ? 'Replace' : 'Upload'}
+                  </button>
+                  {p && (
+                    <button onClick={() => removeSlot(i, label)} disabled={busy}
+                      style={{ padding: '4px 8px', borderRadius: 'var(--r4)', border: '1.5px solid var(--cta-cont)', background: 'transparent', color: 'var(--cta)', fontSize: '10px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer' }}>
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      {extras.length > 0 && (
+        <div style={{ marginTop: '14px' }}>
+          <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '6px' }}>Extra photos (proof of delivery / return condition)</div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {extras.map(x => (
+              <div key={x.slot} style={{ width: '110px', border: '1px solid var(--div)', borderRadius: 'var(--r8)', overflow: 'hidden' }}>
+                <a href={photoUrl(x.url)} target="_blank" rel="noreferrer"><img src={photoUrl(x.url)} alt="extra" style={{ width: '100%', height: '76px', objectFit: 'cover', display: 'block' }} /></a>
+                <button onClick={() => removeSlot(x.slot, 'extra')} style={{ width: '100%', padding: '3px 0', border: 'none', background: 'var(--surf1)', color: 'var(--cta)', fontSize: '10px', fontWeight: 700, cursor: 'pointer' }}>Remove</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+        <Button variant="primary" onClick={onClose}>Done</Button>
+      </div>
+    </Modal>
+  )
+}
+
+// ── User Add/Edit Modal (RBAC accounts) ────────────────────
+
+function UserModal({ target, drivers, onClose, onSaved }: {
+  target: AuthUser | 'new' | null
+  drivers: Driver[]
+  onClose: () => void
+  onSaved: (msg: string) => void
+}) {
+  const isNew = target === 'new'
+  const [form, setForm] = useState({ name: '', email: '', role: 'customer' as Role, phone: '', driverId: '', password: '' })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!target) return
+    if (target === 'new') setForm({ name: '', email: '', role: 'customer', phone: '', driverId: '', password: '' })
+    else setForm({ name: target.name, email: target.email, role: target.role, phone: target.phone || '', driverId: target.driverId || '', password: '' })
+    setError('')
+  }, [target])
+
+  if (!target) return null
+
+  const save = async () => {
+    if (saving) return
+    setSaving(true)
+    setError('')
+    try {
+      if (isNew) {
+        await usersApi.create({ name: form.name, email: form.email, role: form.role, phone: form.phone, driverId: form.role === 'driver' ? form.driverId : '', password: form.password })
+        onSaved(`Account created for ${form.email} (${form.role})`)
+      } else {
+        await usersApi.update((target as AuthUser).id, {
+          name: form.name, role: form.role, phone: form.phone,
+          driverId: form.role === 'driver' ? form.driverId : '',
+          ...(form.password ? { password: form.password } : {}),
+        })
+        onSaved(`Account updated${form.password ? ' · password reset' : ''}`)
+      }
+      onClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Save failed — please try again')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const lbl: React.CSSProperties = { display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '5px' }
+  const inp: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '13px', outline: 'none', fontFamily: 'var(--sans)', marginBottom: '12px', boxSizing: 'border-box' }
+
+  return (
+    <Modal open onClose={onClose} maxWidth={460}>
+      <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '4px' }}>{isNew ? 'Add User' : 'Edit User'}</h2>
+      <p style={{ fontSize: '12px', color: 'var(--ink3)', marginBottom: '18px' }}>
+        Admins manage the portal, drivers use the field app, customers order on the marketplace.
+      </p>
+      <label style={lbl}>Name</label>
+      <input style={inp} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Jane Smith" />
+      <label style={lbl}>Email {isNew ? '' : '(fixed)'}</label>
+      <input style={{ ...inp, background: isNew ? undefined : 'var(--surf1)' }} value={form.email} disabled={!isNew} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="user@steelbox.co" />
+      <label style={lbl}>Role</label>
+      <select style={inp} value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value as Role }))}>
+        <option value="admin">Admin — full portal access</option>
+        <option value="driver">Driver — field app</option>
+        <option value="customer">Customer — marketplace</option>
+      </select>
+      {form.role === 'driver' && (
+        <div>
+          <label style={lbl}>Linked driver record</label>
+          <select style={inp} value={form.driverId} onChange={e => setForm(p => ({ ...p, driverId: e.target.value }))}>
+            <option value="">— Select driver —</option>
+            {drivers.map(d => <option key={d.id} value={d.id}>{d.name} · {d.driverCode}</option>)}
+          </select>
+        </div>
+      )}
+      <label style={lbl}>Mobile phone</label>
+      <input style={inp} type="tel" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="(504) 555-0000" />
+      <label style={lbl}>{isNew ? 'Password' : 'Reset password (leave blank to keep)'}</label>
+      <input style={inp} type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="At least 8 characters" />
+      {error && <div style={{ background: '#FDECEA', border: '1px solid #F5C6C0', color: '#B3261E', borderRadius: 'var(--r8)', padding: '9px 12px', fontSize: '12px', marginBottom: '10px' }}>{error}</div>}
+      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '8px' }}>
+        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button variant="primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : isNew ? 'Create Account' : 'Save Changes'}</Button>
       </div>
     </Modal>
   )
@@ -968,13 +1170,23 @@ function NavItem({ icon, label, badge, active, onClick }: { icon: React.ReactNod
 }
 
 export default function AdminPage() {
+  const { user: adminUser, logout } = useAuth()
   const [view, setView] = useState<AdminView>('dashboard')
   const [assignOpen, setAssignOpen] = useState(false)
   const [assignDriverId, setAssignDriverId] = useState<string | undefined>(undefined)
   const [composeOpen, setComposeOpen] = useState(false)
   const [addContainerOpen, setAddContainerOpen] = useState(false)
   const [editContainer, setEditContainer] = useState<Container | null>(null)
+  const [photosFor, setPhotosFor] = useState<Container | null>(null)   // photo review/fix modal
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  // RBAC accounts (users.csv) + sent email/SMS log (outbox.csv)
+  const [userList, setUserList] = useState<AuthUser[]>([])
+  const [editUser, setEditUser] = useState<AuthUser | 'new' | null>(null)
+  const refetchUsers = useCallback(() => usersApi.list().then(setUserList), [])
+  useEffect(() => { refetchUsers().catch(() => {}) }, [refetchUsers])
+  const [outboxList, setOutboxList] = useState<OutboxMessage[]>([])
+  const refetchOutbox = useCallback(() => outboxApi.list().then(setOutboxList), [])
+  useEffect(() => { refetchOutbox().catch(() => {}) }, [refetchOutbox])
   const { toast, message, open: snackOpen, close: snackClose } = useSnackbar()
 
   const { data: containerList, refetch: refetchContainers } = useContainers()
@@ -1301,12 +1513,17 @@ export default function AdminPage() {
         </div>
 
         <div style={{ padding: '10px', borderTop: '1px solid var(--div)', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: 'var(--r12)', cursor: 'pointer' }}>
-            <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'linear-gradient(135deg,#0057B8,#0048A3)', color: '#fff', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>JR</div>
-            <div>
-              <div style={{ fontSize: '13px', fontWeight: 600 }}>James R.</div>
-              <div style={{ fontSize: '10px', color: 'var(--ink3)', fontFamily: 'var(--mono)' }}>Administrator</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: 'var(--r12)' }}>
+            <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'linear-gradient(135deg,#0057B8,#0048A3)', color: '#fff', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {(adminUser?.name || 'A').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()}
             </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adminUser?.name || 'Admin'}</div>
+              <div style={{ fontSize: '10px', color: 'var(--ink3)', fontFamily: 'var(--mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adminUser?.email || 'Administrator'}</div>
+            </div>
+            <button onClick={logout} title="Sign out" style={{ width: '30px', height: '30px', borderRadius: '50%', border: '1.5px solid var(--div)', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="var(--ink2)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 17H4a1 1 0 01-1-1V4a1 1 0 011-1h4" /><polyline points="13,6 17,10 13,14" /><line x1="17" y1="10" x2="7" y2="10" /></svg>
+            </button>
           </div>
         </div>
       </nav>
@@ -1559,11 +1776,14 @@ export default function AdminPage() {
                           <Td><GradeBadge grade={c.grade as any} showLabel /></Td>
                           <Td><ListingBadge listingType={c.listingType} /></Td>
                           <Td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <div style={{ flex: 1, height: '4px', background: 'var(--div)', borderRadius: '2px', minWidth: '60px' }}>
+                            <div onClick={() => setPhotosFor(c)} title="Review & fix photos" style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                              {c.photos?.filter(Boolean)[0]
+                                ? <img src={photoUrl(c.photos.filter(Boolean)[0])} alt="" style={{ width: '34px', height: '26px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0, border: '1px solid var(--div)' }} />
+                                : <div style={{ width: '34px', height: '26px', borderRadius: '4px', background: 'var(--surf1)', border: '1px dashed var(--div)', flexShrink: 0 }} />}
+                              <div style={{ flex: 1, height: '4px', background: 'var(--div)', borderRadius: '2px', minWidth: '48px' }}>
                                 <div style={{ height: '100%', borderRadius: '2px', background: c.photoCount >= 12 ? 'var(--green)' : c.photoCount > 0 ? 'var(--amber)' : 'var(--div)', width: `${Math.min(100, (c.photoCount / 12) * 100)}%` }} />
                               </div>
-                              <span style={{ fontFamily: 'var(--mono)', fontSize: '10px' }}>{c.photoCount}/12</span>
+                              <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--primary)', fontWeight: 700 }}>{c.photoCount}/12</span>
                             </div>
                           </Td>
                           <Td>{c.inspectorName || '—'}</Td>
@@ -1840,7 +2060,7 @@ export default function AdminPage() {
                     <div style={{ fontSize: '15px', fontWeight: 700 }}>Alert Log</div>
                     <div style={{ fontSize: '12px', color: 'var(--ink3)', marginTop: '2px' }}>Live from orders + field activity · {alerts.filter(a => a.unread).length} need attention</div>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => { Promise.all([refetchActivity(), refetchOrders(), refetchContainers()]).then(() => toast('Alerts refreshed')).catch(() => toast('Refresh failed — check the API connection')) }}>Refresh</Button>
+                  <Button variant="ghost" size="sm" onClick={() => { Promise.all([refetchActivity(), refetchOrders(), refetchContainers(), refetchOutbox()]).then(() => toast('Alerts refreshed')).catch(() => toast('Refresh failed — check the API connection')) }}>Refresh</Button>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
                   {alerts.length === 0 && <div style={{ textAlign: 'center', padding: '30px', color: 'var(--ink3)', fontSize: '13px' }}>All clear — no alerts.</div>}
@@ -1854,6 +2074,33 @@ export default function AdminPage() {
                       {n.unread && <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--primary)', flexShrink: 0, marginTop: '5px' }} />}
                     </div>
                   ))}
+                </div>
+
+                {/* ── Sent email & text log (outbox.csv) ── */}
+                <div style={{ margin: '26px 0 12px' }}>
+                  <div style={{ fontSize: '15px', fontWeight: 700 }}>Email &amp; Text Log</div>
+                  <div style={{ fontSize: '12px', color: 'var(--ink3)', marginTop: '2px' }}>
+                    {outboxList.length} message{outboxList.length === 1 ? '' : 's'} sent · order confirmations, delivery updates, verification codes · newest first
+                  </div>
+                </div>
+                <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', overflow: 'hidden' }}>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px' }}>
+                      <thead><tr><Th>Sent</Th><Th>Channel</Th><Th>To</Th><Th>Subject</Th><Th>Message</Th></tr></thead>
+                      <tbody>
+                        {outboxList.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', padding: '20px', color: 'var(--ink3)', fontSize: '13px' }}>Nothing sent yet — order confirmations, delivery updates and 2FA codes will appear here.</td></tr>}
+                        {outboxList.slice(0, 50).map(m => (
+                          <tr key={m.id}>
+                            <Td mono>{new Date(m.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Td>
+                            <Td><span style={{ display: 'inline-block', padding: '2px 9px', borderRadius: 'var(--r4)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', background: m.channel === 'sms' ? 'var(--green-cont)' : 'var(--primary-cont)', color: m.channel === 'sms' ? 'var(--green)' : 'var(--primary)' }}>{m.channel === 'sms' ? '💬 SMS' : '✉ Email'}</span></Td>
+                            <Td mono>{m.to}</Td>
+                            <Td>{m.subject}</Td>
+                            <Td><div style={{ fontSize: '11px', color: 'var(--ink3)', maxWidth: '380px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={m.body}>{m.body}</div></Td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )
@@ -1893,6 +2140,68 @@ export default function AdminPage() {
                 ))}
                 {depotList.length === 0 && <div style={{ fontSize: '13px', color: 'var(--ink3)', padding: '20px' }}>No depots yet. Add your first pickup location.</div>}
               </div>
+
+              {/* ── Users & access (RBAC accounts from users.csv) ── */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '28px 0 14px' }}>
+                <div>
+                  <div style={{ fontSize: '15px', fontWeight: 700 }}>Users &amp; Access</div>
+                  <div style={{ fontSize: '12px', color: 'var(--ink3)', marginTop: '2px' }}>
+                    {userList.filter(u => u.active !== false).length} active account{userList.filter(u => u.active !== false).length === 1 ? '' : 's'} · admin → portal, driver → field app, customer → marketplace
+                  </div>
+                </div>
+                <Button variant="primary" size="md" onClick={() => setEditUser('new')} icon={<span>+</span>}>Add User</Button>
+              </div>
+              <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', overflow: 'hidden' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px' }}>
+                    <thead><tr><Th>User</Th><Th>Role</Th><Th>Phone</Th><Th>Linked To</Th><Th>2FA</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
+                    <tbody>
+                      {userList.map(u => {
+                        const roleMeta = u.role === 'admin' ? { bg: 'var(--primary-cont)', color: 'var(--primary)' }
+                          : u.role === 'driver' ? { bg: 'var(--green-cont)', color: 'var(--green)' }
+                          : { bg: 'var(--cta-cont)', color: 'var(--cta)' }
+                        const linked = u.driverId ? (driverList.find(d => d.id === u.driverId)?.name ?? u.driverId)
+                          : u.customerId ? (customerList.find(c => c.id === u.customerId)?.name ?? 'customer record') : '—'
+                        return (
+                          <tr key={u.id} style={{ opacity: u.active === false ? 0.5 : 1 }}>
+                            <Td>
+                              <div style={{ fontWeight: 700 }}>{u.name || '—'}</div>
+                              <div style={{ fontSize: '11px', color: 'var(--ink3)', fontFamily: 'var(--mono)' }}>{u.email}</div>
+                            </Td>
+                            <Td><span style={{ display: 'inline-block', padding: '2px 9px', borderRadius: 'var(--r4)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', ...roleMeta, background: roleMeta.bg }}>{u.role}</span></Td>
+                            <Td mono>{u.phone || '—'}</Td>
+                            <Td>{linked}</Td>
+                            <Td>{u.phoneVerified
+                              ? <span style={{ color: 'var(--green)', fontWeight: 600, fontSize: '11px' }}>✓ verified</span>
+                              : <span style={{ color: 'var(--ink3)', fontSize: '11px' }}>not yet</span>}</Td>
+                            <Td>{u.active === false
+                              ? <span style={{ color: 'var(--cta)', fontWeight: 600, fontSize: '11px' }}>Deactivated</span>
+                              : <span style={{ color: 'var(--green)', fontWeight: 600, fontSize: '11px' }}>Active</span>}</Td>
+                            <Td>
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                <TblBtn onClick={() => setEditUser(u)}>Edit</TblBtn>
+                                {u.active === false ? (
+                                  <TblBtn variant="success" onClick={async () => {
+                                    try { await usersApi.update(u.id, { active: true }); toast(`${u.email} reactivated`); refetchUsers() }
+                                    catch (e) { toast(`Failed — ${e instanceof Error ? e.message : 'try again'}`) }
+                                  }}>Reactivate</TblBtn>
+                                ) : u.id !== adminUser?.id && (
+                                  <TblBtn variant="danger" onClick={async () => {
+                                    if (!window.confirm(`Deactivate ${u.email}? They will no longer be able to sign in.`)) return
+                                    try { await usersApi.remove(u.id); toast(`${u.email} deactivated`); refetchUsers() }
+                                    catch (e) { toast(`Failed — ${e instanceof Error ? e.message : 'try again'}`) }
+                                  }}>Deactivate</TblBtn>
+                                )}
+                              </div>
+                            </Td>
+                          </tr>
+                        )
+                      })}
+                      {userList.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: '20px', color: 'var(--ink3)', fontSize: '13px' }}>No accounts yet.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -1917,6 +2226,17 @@ export default function AdminPage() {
         container={editContainer}
         onClose={() => setEditContainer(null)}
         onSaved={(msg) => { toast(msg); refetchContainers() }}
+      />
+      <PhotosModal
+        container={photosFor}
+        onClose={() => setPhotosFor(null)}
+        onChanged={(updated, msg) => { toast(msg); setPhotosFor(updated); refetchContainers() }}
+      />
+      <UserModal
+        target={editUser}
+        drivers={activeDrivers}
+        onClose={() => setEditUser(null)}
+        onSaved={(msg) => { toast(msg); refetchUsers().catch(() => {}) }}
       />
       <DepotModal
         target={editDepot}

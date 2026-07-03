@@ -4,7 +4,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import {
-  auth,
   containers,
   orders,
   drivers,
@@ -15,41 +14,11 @@ import {
 } from '../lib/api'
 
 // ── useAuth ───────────────────────────────────────────────
+// Re-exported from the shared auth context so every page sees the same
+// session (login/logout in one tab section updates the whole app).
 
-export interface User {
-  id: string
-  email: string
-  role: 'customer' | 'employee' | 'driver' | 'admin'
-  name: string
-}
-
-export function useAuth() {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const token = localStorage.getItem('sbx_token')
-    if (!token) { setLoading(false); return }
-    auth.me()
-      .then(setUser)
-      .catch(() => { localStorage.removeItem('sbx_token') })
-      .finally(() => setLoading(false))
-  }, [])
-
-  const login = useCallback(async (email: string, password: string) => {
-    const result = await auth.login(email, password)
-    localStorage.setItem('sbx_token', result.token)
-    setUser(result.user)
-    return result.user
-  }, [])
-
-  const logout = useCallback(() => {
-    localStorage.removeItem('sbx_token')
-    setUser(null)
-  }, [])
-
-  return { user, loading, login, logout }
-}
+export { useAuth } from '../lib/auth'
+export type { AuthUser as User } from '../lib/api'
 
 // ── useContainers ─────────────────────────────────────────
 

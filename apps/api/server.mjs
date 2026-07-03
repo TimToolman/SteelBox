@@ -21,7 +21,9 @@ const PHOTO_TARGET = 12
 
 // Promote a draft to available once photo documentation is complete.
 function withPhotoPromotion(c) {
-  const count = Math.max(c.photoCount ?? 0, Array.isArray(c.photos) ? c.photos.length : 0)
+  // photos slots can contain '' placeholders — only real URLs count.
+  const real = Array.isArray(c.photos) ? c.photos.filter(Boolean).length : 0
+  const count = Math.max(c.photoCount ?? 0, real)
   if (c.status === 'draft' && count >= PHOTO_TARGET) return { ...c, status: 'available' }
   return c
 }
@@ -417,16 +419,151 @@ const server = createServer(async (req, res) => {
   if (method === 'OPTIONS') return send(res, 204, {})
 
   try {
-    // ── Auth (stubbed — any credentials succeed) ──
-    if (path === '/auth/login' && method === 'POST') {
-      const { email } = await readBody(req)
-      return send(res, 200, {
-        token: 'dev-token',
-        user: { id: 'usr_admin', email: email || 'admin@steelbox.dev', role: 'admin', name: 'James R.' },
+    // ── Static photo files (public — marketplace guests see listings) ──
+    if (seg[0] === 'photos' && seg.length === 2 && method === 'GET') {
+      const file = basename(seg[1]) // basename() blocks path traversal
+      const full = join(PHOTO_DIR, file)
+      if (!existsSync(full)) return send(res, 404, { message: 'Photo not found' })
+      const ext = file.split('.').pop().toLowerCase()
+      res.writeHead(200, {
+        'Content-Type': PHOTO_MIME[ext] || 'application/octet-stream',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, max-age=86400',
       })
+      return res.end(readFileSync(full))
     }
+
+    // Resolve the signed-in user (if any) once for the whole request.
+    const user = currentUser(req)
+    const denied = (status = 401, message = 'Sign in required') => send(res, status, { message })
+    const hasRole = (...roles) => !!user && roles.includes(user.role)
+
+    // ── Auth ──
+    if (path === '/auth/login' && method === 'POST') {
+      const { email, password } = await readBody(req)
+      const u = readTable('users').find(x =>
+        (x.email || '').toLowerCase() === String(email || '').trim().toLowerCase() && x.active !== false)
+      if (!u || !checkPassword(password || '', u.passwordHash)) {
+        return send(res, 401, { message: 'Invalid email or password' })
+      }
+      return send(res, 200, { token: signToken(u.id), user: publicUser(u) })
+    }
+
+    // Customer self-registration (marketplace). Creates the login and links
+    // (or creates) the customers.csv record by email.
+    if (path === '/auth/register' && method === 'POST') {
+      const body = await readBody(req)
+      const email = String(body.email || '').trim().toLowerCase()
+      if (!/^\S+@\S+\.\S+$/.test(email)) return send(res, 400, { message: 'A valid email is required' })
+      if (!body.name || !String(body.name).trim()) return send(res, 400, { message: 'Name is required' })
+      if (!body.password || String(body.password).length < 8) return send(res, 400, { message: 'Password must be at least 8 characters' })
+      const users = readTable('users')
+      if (users.some(u => (u.email || '').toLowerCase() === email)) {
+        return send(res, 409, { message: 'An account with that email already exists — sign in instead' })
+      }
+      const customerId = upsertCustomerFromOrder({ customerEmail: email, customerName: String(body.name).trim(), customerPhone: body.phone || '' })
+      const rec = {
+        id: uid('usr'), email, passwordHash: hashPassword(body.password),
+        role: 'customer', name: String(body.name).trim(), phone: body.phone || '',
+        driverId: '', customerId, phoneVerified: false, active: true,
+        createdAt: new Date().toISOString(),
+      }
+      users.push(rec)
+      writeTable('users', users)
+      queueMessage('email', email, 'Welcome to SteelBox',
+        `Hi ${rec.name}, your SteelBox account is ready. Browse containers and order any time — you'll verify your mobile number at checkout.`,
+        'user', rec.id)
+      return send(res, 201, { token: signToken(rec.id), user: publicUser(rec) })
+    }
+
     if (path === '/auth/me' && method === 'GET') {
-      return send(res, 200, { id: 'usr_admin', email: 'admin@steelbox.dev', role: 'admin', name: 'James R.' })
+      if (!user) return denied()
+      return send(res, 200, { ...publicUser(user), twoFaVerified: twoFaVerified(user.id) })
+    }
+
+    // ── Two-factor: send + verify a 6-digit SMS code ──
+    if (path === '/auth/2fa/send' && method === 'POST') {
+      if (!user) return denied()
+      const { phone } = await readBody(req)
+      const cleaned = String(phone || user.phone || '').trim()
+      if (cleaned.replace(/\D/g, '').length < 10) return send(res, 400, { message: 'A valid mobile number is required' })
+      const code = String(randomInt(100000, 1000000))
+      twoFactor.set(user.id, { code, phone: cleaned, expires: Date.now() + TWOFA_CODE_TTL, verifiedAt: null })
+      queueMessage('sms', cleaned, 'Verification code',
+        `Your SteelBox verification code is ${code}. It expires in 10 minutes.`, 'user', user.id)
+      // Dev convenience: no real SMS gateway, so surface the code to the client.
+      return send(res, 200, { sent: true, devCode: code })
+    }
+    if (path === '/auth/2fa/verify' && method === 'POST') {
+      if (!user) return denied()
+      const { code } = await readBody(req)
+      const rec = twoFactor.get(user.id)
+      if (!rec || Date.now() > rec.expires) return send(res, 400, { message: 'Code expired — request a new one' })
+      if (String(code || '').trim() !== rec.code) return send(res, 400, { message: 'Incorrect code — check the text and try again' })
+      rec.verifiedAt = Date.now()
+      // Persist the verified mobile number on the account.
+      const users = readTable('users')
+      const i = users.findIndex(u => u.id === user.id)
+      if (i !== -1) {
+        users[i] = { ...users[i], phone: rec.phone, phoneVerified: true }
+        writeTable('users', users)
+      }
+      return send(res, 200, { verified: true })
+    }
+
+    // ── Users (admin-managed accounts) ──
+    if (seg[0] === 'users') {
+      if (!hasRole('admin')) return denied(user ? 403 : 401, user ? 'Admin access required' : 'Sign in required')
+      const users = readTable('users')
+      if (seg.length === 1 && method === 'GET') return send(res, 200, users.map(publicUser))
+      if (seg.length === 1 && method === 'POST') {
+        const body = await readBody(req)
+        const email = String(body.email || '').trim().toLowerCase()
+        if (!/^\S+@\S+\.\S+$/.test(email)) return send(res, 400, { message: 'A valid email is required' })
+        if (users.some(u => (u.email || '').toLowerCase() === email)) return send(res, 409, { message: 'Email already in use' })
+        if (!body.password || String(body.password).length < 8) return send(res, 400, { message: 'Password must be at least 8 characters' })
+        const rec = {
+          id: uid('usr'), email, passwordHash: hashPassword(body.password),
+          role: ['admin', 'driver', 'customer'].includes(body.role) ? body.role : 'customer',
+          name: body.name || email, phone: body.phone || '',
+          driverId: body.driverId || '', customerId: body.customerId || '',
+          phoneVerified: false, active: true, createdAt: new Date().toISOString(),
+        }
+        users.push(rec)
+        writeTable('users', users)
+        return send(res, 201, publicUser(rec))
+      }
+      const idx = users.findIndex(u => u.id === seg[1])
+      if (idx === -1) return send(res, 404, { message: 'User not found' })
+      if (seg.length === 2 && method === 'PATCH') {
+        const body = await readBody(req)
+        const patch = {}
+        if (body.name != null) patch.name = body.name
+        if (body.phone != null) patch.phone = body.phone
+        if (body.driverId != null) patch.driverId = body.driverId
+        if (['admin', 'driver', 'customer'].includes(body.role)) patch.role = body.role
+        if (body.active != null) patch.active = body.active === true
+        if (body.password) {
+          if (String(body.password).length < 8) return send(res, 400, { message: 'Password must be at least 8 characters' })
+          patch.passwordHash = hashPassword(body.password)
+        }
+        users[idx] = { ...users[idx], ...patch, id: users[idx].id }
+        writeTable('users', users)
+        return send(res, 200, publicUser(users[idx]))
+      }
+      // Soft delete — deactivate (self-deactivation blocked so admin can't lock themselves out).
+      if (seg.length === 2 && method === 'DELETE') {
+        if (users[idx].id === user.id) return send(res, 400, { message: 'You cannot deactivate your own account' })
+        users[idx] = { ...users[idx], active: false }
+        writeTable('users', users)
+        return send(res, 200, { id: users[idx].id, archived: true })
+      }
+    }
+
+    // ── Outbox (sent email/SMS log — admin only) ──
+    if (path === '/outbox' && method === 'GET') {
+      if (!hasRole('admin')) return denied(user ? 403 : 401, user ? 'Admin access required' : 'Sign in required')
+      return send(res, 200, [...readTable('outbox')].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')))
     }
 
     // ── Containers ──
@@ -436,6 +573,7 @@ const server = createServer(async (req, res) => {
       if (seg.length === 1 && method === 'GET') return send(res, 200, containers)
 
       if (seg.length === 1 && method === 'POST') {
+        if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
         const body = await readBody(req)
         if (!body.size || !body.grade) return send(res, 400, { message: 'size and grade are required' })
         const buyPrice = Number(body.buyPrice) || 0
@@ -487,6 +625,7 @@ const server = createServer(async (req, res) => {
       }
 
       if (seg.length === 2 && method === 'PATCH') {
+        if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Admin or driver access required')
         if (idx === -1) return send(res, 404, { message: 'Container not found' })
         const body = await readBody(req)
         containers[idx] = withPhotoPromotion({ ...containers[idx], ...body, id: containers[idx].id })
@@ -495,6 +634,7 @@ const server = createServer(async (req, res) => {
       }
 
       if (seg.length === 2 && method === 'DELETE') {
+        if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
         if (idx === -1) return send(res, 404, { message: 'Container not found' })
         // Guard: a container tied to an in-flight sale can't be removed.
         if (containers[idx].status === 'sale_in_progress') {
@@ -506,11 +646,54 @@ const server = createServer(async (req, res) => {
       }
 
       if (seg.length === 3 && seg[2] === 'reserve' && method === 'POST') {
+        if (!user) return denied()
         if (idx === -1) return send(res, 404, { message: 'Container not found' })
         containers[idx].status = 'sale_in_progress'
         writeTable('containers', containers)
         const lockExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
         return send(res, 200, { lockExpiresAt })
+      }
+
+      // Upload one shot into a photo slot (0–11 = the 12-shot standard; 12+ =
+      // extras like proof-of-delivery). Field drivers document, admin fixes.
+      if (seg.length === 3 && seg[2] === 'photos' && method === 'POST') {
+        if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Admin or driver access required')
+        if (idx === -1) return send(res, 404, { message: 'Container not found' })
+        const body = await readBody(req)
+        const slot = Number(body.slot)
+        if (!Number.isInteger(slot) || slot < 0 || slot > 23) return send(res, 400, { message: 'slot must be 0–23' })
+        const saved = savePhoto(containers[idx].sku, slot, body.dataUrl)
+        if (saved.error) return send(res, 400, { message: saved.error })
+        const photos = Array.isArray(containers[idx].photos) ? [...containers[idx].photos] : []
+        while (photos.length <= slot) photos.push('')
+        photos[slot] = saved.url
+        containers[idx] = withPhotoPromotion({
+          ...containers[idx],
+          photos,
+          photoCount: photos.slice(0, PHOTO_TARGET).filter(Boolean).length,
+          inspectorName: body.inspectorName || containers[idx].inspectorName,
+          inspectedAt: new Date().toISOString(),
+        })
+        writeTable('containers', containers)
+        return send(res, 200, containers[idx])
+      }
+
+      // Remove the photo in a slot (admin review/fix).
+      if (seg.length === 4 && seg[2] === 'photos' && method === 'DELETE') {
+        if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Admin or driver access required')
+        if (idx === -1) return send(res, 404, { message: 'Container not found' })
+        const slot = Number(seg[3])
+        const photos = Array.isArray(containers[idx].photos) ? [...containers[idx].photos] : []
+        if (!Number.isInteger(slot) || slot < 0 || slot >= photos.length) return send(res, 400, { message: 'Invalid slot' })
+        photos[slot] = ''
+        while (photos.length && !photos[photos.length - 1]) photos.pop() // trim trailing blanks
+        containers[idx] = {
+          ...containers[idx],
+          photos,
+          photoCount: photos.slice(0, PHOTO_TARGET).filter(Boolean).length,
+        }
+        writeTable('containers', containers)
+        return send(res, 200, containers[idx])
       }
 
       if (seg.length === 3 && seg[2] === 'photo-upload-url' && method === 'GET') {
@@ -524,9 +707,22 @@ const server = createServer(async (req, res) => {
     if (seg[0] === 'orders') {
       const orders = readTable('orders')
 
-      if (seg.length === 1 && method === 'GET') return send(res, 200, orders)
+      if (seg.length === 1 && method === 'GET') {
+        if (!user) return denied()
+        // Admin + drivers see everything; customers only their own orders.
+        if (hasRole('admin', 'driver')) return send(res, 200, orders)
+        const mine = orders.filter(o => (o.customerEmail || '').toLowerCase() === user.email.toLowerCase())
+        return send(res, 200, mine)
+      }
 
       if (seg.length === 1 && method === 'POST') {
+        // Checkout requires a signed-in account, and customers must have
+        // completed SMS two-factor within the last 15 minutes — on the first
+        // order and on every subsequent order.
+        if (!user) return denied(401, 'Sign in to complete your order')
+        if (user.role === 'customer' && !twoFaVerified(user.id)) {
+          return send(res, 403, { message: 'Verify your mobile number to place this order', code: 'twofa_required' })
+        }
         const body = await readBody(req)
         const nums = orders.map(o => Number(String(o.orderNumber).replace('ORD-', ''))).filter(n => !Number.isNaN(n))
         const next = (nums.length ? Math.max(...nums) : 0) + 1
@@ -559,6 +755,16 @@ const server = createServer(async (req, res) => {
         }
         orders.push(record)
         writeTable('orders', orders)
+        // Confirmation email (mandatory) + text (if the customer opted in).
+        queueMessage('email', record.customerEmail,
+          `Order ${record.orderNumber} confirmed — ${record.containerSku}`,
+          `Thanks ${record.customerName || 'for your order'}! We've reserved ${record.containerSku} (${record.saleType === 'rent' ? 'rental' : 'purchase'}, $${record.amount.toLocaleString()}). Our team will confirm delivery to ${record.deliveryAddress} and finalize payment within 2 hours.`,
+          'order', record.id)
+        if (body.notifySms === true && record.customerPhone) {
+          queueMessage('sms', record.customerPhone, 'Order confirmed',
+            `SteelBox: order ${record.orderNumber} (${record.containerSku}) confirmed. We'll text delivery updates to this number.`,
+            'order', record.id)
+        }
         return send(res, 201, record)
       }
 
@@ -566,11 +772,16 @@ const server = createServer(async (req, res) => {
       const idx = orders.findIndex(o => o.id === id || o.orderNumber === id)
 
       if (seg.length === 2 && method === 'GET') {
+        if (!user) return denied()
         if (idx === -1) return send(res, 404, { message: 'Order not found' })
+        if (!hasRole('admin', 'driver') && (orders[idx].customerEmail || '').toLowerCase() !== user.email.toLowerCase()) {
+          return denied(403, 'Not your order')
+        }
         return send(res, 200, orders[idx])
       }
 
       if (seg.length === 3 && seg[2] === 'assign-driver' && method === 'POST') {
+        if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
         if (idx === -1) return send(res, 404, { message: 'Order not found' })
         const { driverId, scheduledDate } = await readBody(req)
         const drivers = readTable('drivers')
@@ -584,13 +795,29 @@ const server = createServer(async (req, res) => {
           status: 'assigned',
         }
         writeTable('orders', orders)
+        // Notify the customer their delivery is scheduled (email + opted-in SMS).
+        const o = orders[idx]
+        const when = o.scheduledDate ? ` on ${String(o.scheduledDate).slice(0, 10)}` : ''
+        queueMessage('email', o.customerEmail, `Delivery scheduled — ${o.containerSku}`,
+          `${driver.name} will deliver ${o.containerSku}${when} to ${o.deliveryAddress}. You'll get a text when the driver is on the way.`,
+          'order', o.id)
+        const cust = readTable('customers').find(c => c.id === o.customerId)
+        if (cust?.notifySms && o.customerPhone) {
+          queueMessage('sms', o.customerPhone, 'Delivery scheduled',
+            `SteelBox: ${o.containerSku} delivery scheduled${when}. Driver: ${driver.name}.`, 'order', o.id)
+        }
         return send(res, 200, orders[idx])
       }
 
       if (seg.length === 3 && seg[2] === 'delivered' && method === 'POST') {
+        if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Admin or driver access required')
         if (idx === -1) return send(res, 404, { message: 'Order not found' })
         orders[idx] = { ...orders[idx], status: 'delivered', completedAt: new Date().toISOString() }
         writeTable('orders', orders)
+        const o = orders[idx]
+        queueMessage('email', o.customerEmail, `Delivered — ${o.containerSku} · receipt`,
+          `Your container ${o.containerSku} was delivered. Amount: $${(o.amount || 0).toLocaleString()} (${o.saleType === 'rent' ? 'rental' : 'purchase'}). Thanks for choosing SteelBox!`,
+          'order', o.id)
         return send(res, 200, orders[idx])
       }
     }
@@ -598,9 +825,18 @@ const server = createServer(async (req, res) => {
     // ── Drivers ──
     if (seg[0] === 'drivers') {
       const drivers = readTable('drivers')
-      if (seg.length === 1 && method === 'GET') return send(res, 200, drivers)
+      if (seg.length === 1 && method === 'GET') {
+        // Staff see full records; customers/guests get a sanitized subset
+        // (enough for "message your driver" pickers — no wages/addresses).
+        if (hasRole('admin', 'driver')) return send(res, 200, drivers)
+        return send(res, 200, drivers.map(d => ({
+          id: d.id, driverCode: d.driverCode, name: d.name, initials: d.initials,
+          vehicle: d.vehicle, status: d.status, colorHex: d.colorHex, active: d.active,
+        })))
+      }
 
       if (seg.length === 1 && method === 'POST') {
+        if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
         const body = await readBody(req)
         if (!body.name) return send(res, 400, { message: 'name is required' })
         const nums = drivers.map(d => Number(String(d.driverCode).replace('DRV-', ''))).filter(n => !Number.isNaN(n))
@@ -632,9 +868,14 @@ const server = createServer(async (req, res) => {
       const idx = drivers.findIndex(x => x.id === id || x.driverCode === id)
 
       if (seg.length === 2 && method === 'GET') {
+        if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Staff access required')
         return idx !== -1 ? send(res, 200, drivers[idx]) : send(res, 404, { message: 'Driver not found' })
       }
       if (seg.length === 2 && method === 'PATCH') {
+        // Admin can edit anyone; a driver may only edit their own record.
+        if (!hasRole('admin') && !(hasRole('driver') && user.driverId === seg[1])) {
+          return denied(user ? 403 : 401, 'Not allowed')
+        }
         if (idx === -1) return send(res, 404, { message: 'Driver not found' })
         const body = await readBody(req)
         drivers[idx] = { ...drivers[idx], ...body, id: drivers[idx].id }
@@ -643,6 +884,7 @@ const server = createServer(async (req, res) => {
       }
       // Soft delete — keep the row (activity/order history intact), just deactivate.
       if (seg.length === 2 && method === 'DELETE') {
+        if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
         if (idx === -1) return send(res, 404, { message: 'Driver not found' })
         drivers[idx] = { ...drivers[idx], active: false, status: 'off_duty' }
         writeTable('drivers', drivers)
@@ -653,10 +895,18 @@ const server = createServer(async (req, res) => {
     // ── Customers (master list — CRUD from admin portal) ──
     if (seg[0] === 'customers') {
       const customers = readTable('customers')
-      if (seg.length === 1 && method === 'GET') return send(res, 200, customers)
+      if (seg.length === 1 && method === 'GET') {
+        if (!user) return denied()
+        // Staff see everyone; a customer sees only their own record.
+        if (hasRole('admin', 'driver')) return send(res, 200, customers)
+        return send(res, 200, customers.filter(c => (c.email || '').toLowerCase() === user.email.toLowerCase()))
+      }
 
       if (seg.length === 1 && method === 'POST') {
+        if (!user) return denied()
         const body = await readBody(req)
+        // Customers may only create their own profile (email is forced to theirs).
+        if (!hasRole('admin')) body.email = user.email
         if (!body.name) return send(res, 400, { message: 'name is required' })
         const record = {
           id: uid('cus'),
@@ -683,17 +933,28 @@ const server = createServer(async (req, res) => {
       const idx = customers.findIndex(x => x.id === id)
 
       if (seg.length === 2 && method === 'GET') {
-        return idx !== -1 ? send(res, 200, customers[idx]) : send(res, 404, { message: 'Customer not found' })
+        if (!user) return denied()
+        if (idx === -1) return send(res, 404, { message: 'Customer not found' })
+        if (!hasRole('admin', 'driver') && (customers[idx].email || '').toLowerCase() !== user.email.toLowerCase()) {
+          return denied(403, 'Not your profile')
+        }
+        return send(res, 200, customers[idx])
       }
       if (seg.length === 2 && method === 'PATCH') {
+        if (!user) return denied()
         if (idx === -1) return send(res, 404, { message: 'Customer not found' })
+        // Admin edits anyone; a customer may only edit their own record (and can't change its email).
+        const own = (customers[idx].email || '').toLowerCase() === user.email.toLowerCase()
+        if (!hasRole('admin') && !own) return denied(403, 'Not your profile')
         const body = await readBody(req)
+        if (!hasRole('admin')) delete body.email
         customers[idx] = { ...customers[idx], ...body, id: customers[idx].id, notifyEmail: true }
         writeTable('customers', customers)
         return send(res, 200, customers[idx])
       }
       // Soft delete — keep the row (order history intact), just deactivate.
       if (seg.length === 2 && method === 'DELETE') {
+        if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
         if (idx === -1) return send(res, 404, { message: 'Customer not found' })
         customers[idx] = { ...customers[idx], active: false }
         writeTable('customers', customers)
@@ -707,12 +968,19 @@ const server = createServer(async (req, res) => {
 
       // GET /messages?driverId=drv_01 → that driver's messages, newest first.
       if (seg.length === 1 && method === 'GET') {
+        if (!user) return denied()
         const driverId = url.searchParams.get('driverId')
-        const list = driverId ? messages.filter(m => m.toDriverId === driverId) : messages
+        let list = driverId ? messages.filter(m => m.toDriverId === driverId) : messages
+        // Customers only see their own conversations (by email).
+        if (!hasRole('admin', 'driver')) {
+          const em = user.email.toLowerCase()
+          list = list.filter(m => (m.toEmail || '').toLowerCase() === em || (m.fromEmail || '').toLowerCase() === em)
+        }
         return send(res, 200, [...list].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')))
       }
 
       if (seg.length === 1 && method === 'POST') {
+        if (!user) return denied()
         const body = await readBody(req)
         if (!body.toDriverId) return send(res, 400, { message: 'toDriverId is required' })
         const record = {
@@ -732,11 +1000,20 @@ const server = createServer(async (req, res) => {
         }
         messages.push(record)
         writeTable('messages', messages)
+        // Messages to customers also go out as real email/SMS (per their prefs).
+        if (record.toRole === 'customer' && record.toEmail) {
+          queueMessage('email', record.toEmail, record.subject, record.body, 'message', record.id)
+          const cust = readTable('customers').find(c => (c.email || '').toLowerCase() === record.toEmail.toLowerCase())
+          if (cust?.notifySms && cust.phone) {
+            queueMessage('sms', cust.phone, record.subject, `SteelBox (${record.fromName}): ${record.body}`.slice(0, 300), 'message', record.id)
+          }
+        }
         return send(res, 201, record)
       }
 
       // DELETE /messages?driverId=drv_01&trashed=true → empty that driver's trash.
       if (seg.length === 1 && method === 'DELETE') {
+        if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Staff access required')
         const driverId = url.searchParams.get('driverId')
         const kept = messages.filter(m => !(m.trashed && (!driverId || m.toDriverId === driverId)))
         const removed = messages.length - kept.length
@@ -748,6 +1025,7 @@ const server = createServer(async (req, res) => {
       const idx = messages.findIndex(m => m.id === id)
 
       if (seg.length === 2 && method === 'PATCH') {
+        if (!user) return denied()
         if (idx === -1) return send(res, 404, { message: 'Message not found' })
         const body = await readBody(req)
         messages[idx] = { ...messages[idx], ...body, id: messages[idx].id }
@@ -755,6 +1033,7 @@ const server = createServer(async (req, res) => {
         return send(res, 200, messages[idx])
       }
       if (seg.length === 2 && method === 'DELETE') {
+        if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Staff access required')
         if (idx === -1) return send(res, 404, { message: 'Message not found' })
         const [removed] = messages.splice(idx, 1)
         writeTable('messages', messages)
@@ -764,6 +1043,7 @@ const server = createServer(async (req, res) => {
 
     // ── Activity log (field pickups/returns + photo sessions) ──
     if (seg[0] === 'activity') {
+      if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Staff access required')
       const events = readTable('activity')
       if (seg.length === 1 && method === 'GET') {
         // Newest first.
@@ -792,9 +1072,13 @@ const server = createServer(async (req, res) => {
     if (seg[0] === 'depots') {
       const depots = readTable('depots')
 
-      if (seg.length === 1 && method === 'GET') return send(res, 200, depots)
+      if (seg.length === 1 && method === 'GET') {
+        if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Staff access required')
+        return send(res, 200, depots)
+      }
 
       if (seg.length === 1 && method === 'POST') {
+        if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
         const body = await readBody(req)
         if (!body.name) return send(res, 400, { message: 'name is required' })
         const record = {
@@ -813,6 +1097,7 @@ const server = createServer(async (req, res) => {
 
       const id = seg[1]
       const idx = depots.findIndex(d => d.id === id)
+      if (seg.length === 2 && !hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
 
       if (seg.length === 2 && method === 'PATCH') {
         if (idx === -1) return send(res, 404, { message: 'Depot not found' })
@@ -832,6 +1117,7 @@ const server = createServer(async (req, res) => {
 
     // ── Schedule (deliveries / returns / transfers) ──
     if (seg[0] === 'schedule') {
+      if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Staff access required')
       const sched = readTable('schedule')
       if (seg.length === 1 && method === 'GET') return send(res, 200, sched)
       if (seg.length === 1 && method === 'POST') {
@@ -872,6 +1158,7 @@ const server = createServer(async (req, res) => {
 
     // ── Availability (per-week driver working hours) ──
     if (seg[0] === 'availability') {
+      if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Staff access required')
       const rows = readTable('availability')
       if (seg.length === 1 && method === 'GET') return send(res, 200, rows)
       // Upsert by (driverId, weekStart).
@@ -909,7 +1196,10 @@ const server = createServer(async (req, res) => {
   }
 })
 
+ensureSeedUsers()
+
 server.listen(PORT, () => {
   console.log(`SteelBox API (CSV-backed) listening on http://localhost:${PORT}`)
   console.log(`Data directory: ${DATA_DIR}`)
+  console.log(`Default admin: tgmoore@gmail.com / test1234`)
 })

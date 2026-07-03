@@ -1,0 +1,7 @@
+id,email,passwordHash,role,name,phone,driverId,customerId,phoneVerified,active,createdAt
+usr_mr59yc5s3od,tgmoore@gmail.com,23057256ddf92254$77a43401d62f5d153a7537c4a7ac318c75135b86355e6bbec274b30cb5b2fbdf,admin,Tim Moore,,,,false,true,2026-07-03T18:36:22.696Z
+usr_mr59yc6h70l,mike@steelbox.co,53cc42d8035f5428$24ac70b4475aa85ecb5bbc688dbe46008eaf6b80ec0d3934c085f4a3b58def12,driver,Mike Torres,(504) 555-0110,drv_01,,false,true,2026-07-03T18:36:22.720Z
+usr_mr59yc74xp,dan@steelbox.co,ab6fea6b40cd7421$172b7023027802eced8579562c6e3b8171c4b62696aa5ea8e0a4e3fc75899e6e,driver,Dan Park,(504) 555-0121,drv_02,,false,true,2026-07-03T18:36:22.742Z
+usr_mr59yc7q123,luis@steelbox.co,12af5bc43219a36a$5bb09f8a3dcffa6915cb254dbb987d92721332d6124f09e5cbc33a499f7441e0,driver,Luis Mendez,(504) 555-0132,drv_03,,false,true,2026-07-03T18:36:22.764Z
+usr_mr59yc8c7lp,sara@steelbox.co,d1b8508663150937$2f8c5f1a06cc932bb46a8ebadd19d86fe039eeae58b8fcad10c33956764f0716,driver,Sara Kim,(504) 555-0143,drv_04,,false,true,2026-07-03T18:36:22.785Z
+usr_mr59yc8y2j4,justin@steelbox.co,f38e3607c3ab49da$cd9eb072eb1d4e810a57412584de9dea5edf5124e2f9211d7c2e941727df364c,driver,Justin Martin,(504) 555-0154,drv_mr2w07ddh2,,false,true,2026-07-03T18:36:22.807Z

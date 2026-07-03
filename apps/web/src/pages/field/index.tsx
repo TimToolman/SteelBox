@@ -6,12 +6,13 @@
 // ============================================================
 
 import React, { useState, useRef, useEffect } from 'react'
-import { useSnackbar } from '../../hooks'
+import { useSnackbar, useAuth } from '../../hooks'
 import { Snackbar } from '../../components/ui'
-import { activity, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, containers as containersApi, availability as availabilityApi, messages as messagesApi, customers as customersApi, orders as ordersApi, parseTrucks, parseWorkHours, encodeWorkHours, type ActivityEvent, type Depot, type Driver, type SchedJob, type DayHours, type Availability, type Message, type Customer, type Container, type Order } from '../../lib/api'
+import { activity, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, containers as containersApi, availability as availabilityApi, messages as messagesApi, customers as customersApi, orders as ordersApi, parseTrucks, parseWorkHours, encodeWorkHours, photoUrl, fileToDataUrl, type ActivityEvent, type Depot, type Driver, type SchedJob, type DayHours, type Availability, type Message, type Customer, type Container, type Order } from '../../lib/api'
 
-// The signed-in field driver (demo — fixed to one driver for now).
-const DRIVER_ID = 'drv_01'
+// Fallback driver when an admin opens the field app (admin accounts have no
+// linked driver record). Driver logins use their own drivers.csv row.
+const FALLBACK_DRIVER_ID = 'drv_01'
 const ACTOR = 'Mike Torres'
 // Company dispatch identity for driver ⇄ admin messaging (single place to change).
 const DISPATCH = { name: 'Dispatch (James R.)', email: 'ops@steelbox.co' }
@@ -142,6 +143,7 @@ interface PhotoShot {
   label: string
   required: boolean
   done: boolean
+  url?: string       // uploaded photo URL (API-relative) once captured
   tip: string
 }
 
@@ -248,8 +250,12 @@ function Stepper({ steps, title = 'Job Progress' }: { steps: StepItem[]; title?:
 // ── Main Field App ─────────────────────────────────────────
 
 export default function FieldAppPage() {
+  const { user, logout } = useAuth()
+  // The signed-in driver's record id (admins previewing the app fall back to drv_01).
+  const DRIVER_ID = user?.driverId || FALLBACK_DRIVER_ID
   const [screen, setScreen] = useState<Screen>('dashboard')
   const [shots, setShots] = useState<PhotoShot[]>(SHOT_LIST.map(s => ({ ...s })))
+  const [uploadingShot, setUploadingShot] = useState<number | null>(null)  // shot id mid-upload
   const [onDuty, setOnDuty] = useState(true)
   const [activityLog, setActivityLog] = useState<ActivityEvent[]>([])
   // Driver Inbox/Sent/Trash messaging
@@ -402,8 +408,77 @@ export default function FieldAppPage() {
     fetchActivity().catch(() => {})
   }
 
-  const toggleShot = (id: number) => {
-    setShots(prev => prev.map(s => s.id === id ? { ...s, done: !s.done } : s))
+  // ── Real photo capture ─────────────────────────────────
+  // "Take" opens the device camera (capture attr); "Upload" opens the photo
+  // library — photos may already have been taken. Files are downscaled to
+  // JPEG and uploaded into the shot's slot on the shared container record,
+  // so the marketplace 360° spinner and admin portal see them immediately.
+
+  const pickImage = (useCamera: boolean): Promise<File | null> => new Promise(resolve => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    if (useCamera) input.setAttribute('capture', 'environment')
+    input.onchange = () => resolve(input.files?.[0] ?? null)
+    // If the user cancels, no change event fires — fall back to reading the
+    // input shortly after focus returns (first resolve wins on double-fire).
+    window.addEventListener('focus', () => setTimeout(() => resolve(input.files?.[0] ?? null), 700), { once: true })
+    input.click()
+  })
+
+  const captureShot = async (shot: PhotoShot, useCamera: boolean) => {
+    const job = activeJob
+    if (!job || uploadingShot) return
+    const target = job.containerId || job.sku
+    if (!target) { toast('No container record linked to this job'); return }
+    const file = await pickImage(useCamera)
+    if (!file) return
+    setUploadingShot(shot.id)
+    try {
+      const dataUrl = await fileToDataUrl(file)
+      const updated = await containersApi.uploadPhoto(target, {
+        slot: shot.id - 1, label: shot.label, dataUrl, inspectorName: me?.name ?? ACTOR,
+      })
+      setShots(prev => prev.map(s => s.id === shot.id ? { ...s, done: true, url: updated.photos[shot.id - 1] } : s))
+      setContainerList(prev => prev.map(c => c.id === updated.id ? updated : c))
+      if (shots.filter(s => s.done).length === 0) logActivity(job, 'photos_started', `Photo session started (${shot.label})`)
+      toast(`${shot.label} ✓ uploaded`)
+    } catch (e) {
+      toast(`Upload failed — ${e instanceof Error ? e.message : 'check connection and retry'}`)
+    } finally {
+      setUploadingShot(null)
+    }
+  }
+
+  // Hydrate the checklist from photos already on the container (resume a
+  // partially documented unit; also lets admins see what's been shot).
+  const hydrateShots = (job: Job) => {
+    const cont = containerList.find(c => c.id === job.containerId || c.sku === job.sku)
+    const photos = cont?.photos ?? []
+    setShots(SHOT_LIST.map(s => ({ ...s, done: !!photos[s.id - 1], url: photos[s.id - 1] || undefined })))
+  }
+
+  // Single proof photo (delivery proof / return condition) — a real capture,
+  // stored after the 12 documentation slots so the spinner stays aligned.
+  const capturePhoto1 = async (job: Job) => {
+    if (uploadingShot) return
+    const file = await pickImage(true)
+    if (!file) return
+    setUploadingShot(-1)
+    try {
+      const dataUrl = await fileToDataUrl(file)
+      const target = job.containerId || job.sku
+      const label = job.kind === 'return' ? 'Return condition' : 'Proof of delivery'
+      if (target) await containersApi.uploadPhoto(target, { slot: 12, label, dataUrl, inspectorName: me?.name ?? ACTOR })
+      setReturnPhoto(true)
+      logActivity(job, 'photos_submitted', `${label} photo captured`)
+      toast(`${label} photo uploaded`)
+      setStepIndex(i => i + 1)
+    } catch (e) {
+      toast(`Photo upload failed — ${e instanceof Error ? e.message : 'try again'}`)
+    } finally {
+      setUploadingShot(null)
+    }
   }
 
   const scrollTop = () => window.scrollTo({ top: 0 })
@@ -417,7 +492,7 @@ export default function FieldAppPage() {
     setReturnPhoto(false)
     setCondScore(0)
     setInspectorNotes('')
-    if (job.kind === 'pickup') setShots(SHOT_LIST.map(s => ({ ...s })))
+    if (job.kind === 'pickup') hydrateShots(job)
     goTo('flow')
   }
 
@@ -469,8 +544,8 @@ export default function FieldAppPage() {
     switch (step.key) {
       case 'arrive':    logActivity(job, 'arrived', 'Arrived on site'); toast(`Arrival recorded · ${nowT}`); break
       case 'sms':       logActivity(job, 'sms_sent', `ETA text sent to ${job.customer}`); toast('ETA text sent to customer'); break
-      case 'photos12':  if (doneCount < PHOTO_TARGET) { goTo('camera'); return } break // photos_submitted logged on submit
-      case 'photo1':    setReturnPhoto(true); logActivity(job, 'photos_submitted', job.kind === 'return' ? 'Return condition photo captured' : 'Proof-of-delivery photo captured'); toast(job.kind === 'return' ? 'Return photo captured' : 'Delivery photo captured'); break
+      case 'photos12':  if (doneCount < PHOTO_TARGET) { hydrateShots(job); goTo('camera'); return } break // photos_submitted logged on submit
+      case 'photo1':    capturePhoto1(job); return // advances after the photo uploads
       case 'score':
         containersApi.update(job.containerId || job.sku, { conditionScore: condScore })
           .then(() => fetchContainers().catch(() => {}))
@@ -593,6 +668,10 @@ export default function FieldAppPage() {
             <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: onDuty ? '#4DFFB4' : 'rgba(255,255,255,.5)', flexShrink: 0 }} />
             <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>{onDuty ? 'On Duty' : 'Off Duty'}</span>
           </button>
+          <button onClick={logout} title={`Sign out (${user?.email ?? ''})`}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', borderRadius: '50%', background: 'rgba(255,255,255,.12)', border: '1px solid rgba(255,255,255,.25)', cursor: 'pointer', flexShrink: 0 }}>
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M8 17H4a1 1 0 01-1-1V4a1 1 0 011-1h4" /><polyline points="13,6 17,10 13,14" /><line x1="17" y1="10" x2="7" y2="10" /></svg>
+          </button>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '10px', marginTop: '10px' }}>
           <div style={{ minWidth: 0 }}>
@@ -660,8 +739,10 @@ export default function FieldAppPage() {
         const step = steps[stepIndex]
         const depot = depotById(job.depotId)
         const isCustomer = job.dest === 'customer' || job.kind === 'return'
-        // Whether the current step's action is satisfied and can advance.
-        const stepReady = step?.key === 'signature' ? signed : step?.key === 'photo1' ? returnPhoto : step?.key === 'photos12' ? doneCount >= PHOTO_TARGET : step?.key === 'score' ? condScore > 0 : true
+        // Whether the current step's action can run. Photo steps are always
+        // actionable — their button opens the camera / photo session (they
+        // used to gate on photos already existing, which dead-locked the flow).
+        const stepReady = step?.key === 'signature' ? signed : step?.key === 'score' ? condScore > 0 : true
         const photoCta = step?.key === 'photos12' && doneCount >= PHOTO_TARGET ? 'Continue' : step?.cta
 
         return (
@@ -837,47 +918,67 @@ export default function FieldAppPage() {
           <div style={{ padding: '12px 16px 6px', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: '#44475A' }}>
             {group === 'exterior' ? 'Exterior — Required' : 'Interior — Required'}
           </div>
-          {shots.filter(s => s.group === group).map(shot => (
-            <div
-              key={shot.id}
-              onClick={() => toggleShot(shot.id)}
-              style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '0 12px 6px', padding: '10px 12px', background: '#fff', borderRadius: '12px', border: '1px solid #E1E2EC', cursor: 'pointer' }}
-            >
-              <span style={{ fontFamily: 'monospace', fontSize: '10px', color: '#44475A', width: '20px', textAlign: 'right', flexShrink: 0 }}>{shot.id}</span>
-              <span style={{ flex: 1, fontSize: '13px', fontWeight: 500 }}>
-                {shot.label}
-                {shot.required && <span style={{ color: '#E65100', fontWeight: 700 }}> *</span>}
-              </span>
-              <div style={{ width: '38px', height: '30px', borderRadius: '6px', background: shot.done ? '#B7F0DA' : '#EEF2FF', border: `1.5px solid ${shot.done ? '#1B7A5A' : '#E1E2EC'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {shot.done
-                  ? <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="#1B7A5A" strokeWidth="2.2" strokeLinecap="round"><polyline points="3,10.5 8,16 17,5" /></svg>
-                  : <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#44475A" strokeWidth="1.4" strokeLinecap="round"><path d="M2 7h2.5L6 5h8l1.5 2H18a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V8a1 1 0 011-1z" /><circle cx="10" cy="11" r="3" /></svg>
-                }
+          {shots.filter(s => s.group === group).map(shot => {
+            const busy = uploadingShot === shot.id
+            return (
+              <div
+                key={shot.id}
+                style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '0 12px 6px', padding: '8px 12px', background: '#fff', borderRadius: '12px', border: `1px solid ${shot.done ? '#1B7A5A' : '#E1E2EC'}` }}
+              >
+                <span style={{ fontFamily: 'monospace', fontSize: '10px', color: '#44475A', width: '20px', textAlign: 'right', flexShrink: 0 }}>{shot.id}</span>
+                {/* Thumbnail — the uploaded shot, or an empty slot */}
+                <div style={{ width: '46px', height: '36px', borderRadius: '6px', overflow: 'hidden', background: shot.done ? '#B7F0DA' : '#EEF2FF', border: `1.5px solid ${shot.done ? '#1B7A5A' : '#E1E2EC'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {busy
+                    ? <span style={{ fontSize: '9px', color: '#0057B8', fontWeight: 700 }}>…</span>
+                    : shot.url
+                      ? <img src={photoUrl(shot.url)} alt={shot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="#44475A" strokeWidth="1.4" strokeLinecap="round"><path d="M2 7h2.5L6 5h8l1.5 2H18a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V8a1 1 0 011-1z" /><circle cx="10" cy="11" r="3" /></svg>}
+                </div>
+                <span style={{ flex: 1, fontSize: '12px', fontWeight: 500, minWidth: 0 }}>
+                  {shot.label}
+                  {shot.required && !shot.done && <span style={{ color: '#E65100', fontWeight: 700 }}> *</span>}
+                  {shot.done && <span style={{ display: 'block', fontSize: '10px', color: '#1B7A5A', fontWeight: 700 }}>✓ uploaded · retake anytime</span>}
+                </span>
+                {/* Take with camera / upload from library */}
+                <button onClick={() => captureShot(shot, true)} disabled={busy} title="Take photo with camera"
+                  style={{ width: '38px', height: '34px', borderRadius: '9px', border: 'none', background: busy ? '#C4C6D0' : '#0057B8', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: busy ? 'wait' : 'pointer', flexShrink: 0 }}>
+                  <Icon name="camera" size={16} color="#fff" sw={1.7} />
+                </button>
+                <button onClick={() => captureShot(shot, false)} disabled={busy} title="Upload an existing photo"
+                  style={{ width: '38px', height: '34px', borderRadius: '9px', border: '1.5px solid #0057B8', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: busy ? 'wait' : 'pointer', flexShrink: 0 }}>
+                  <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#0057B8" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13V3" /><polyline points="6,7 10,3 14,7" /><path d="M3 13v3a1 1 0 001 1h12a1 1 0 001-1v-3" /></svg>
+                </button>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       ))}
 
-      <button onClick={() => goTo('review')} style={{ margin: '12px', width: 'calc(100% - 24px)', background: '#0057B8', color: '#fff', border: 'none', borderRadius: '16px', padding: '16px', fontFamily: "'Google Sans', sans-serif", fontSize: '15px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(0,87,184,.3)' }}>
-        <Icon name="camera" size={17} color="#fff" /> Open Camera
+      <button
+        onClick={() => {
+          const next = shots.find(s => !s.done)
+          if (next) captureShot(next, true)
+          else goTo('review')
+        }}
+        style={{ margin: '12px', width: 'calc(100% - 24px)', background: doneCount >= PHOTO_TARGET ? '#1B7A5A' : '#0057B8', color: '#fff', border: 'none', borderRadius: '16px', padding: '16px', fontFamily: "'Google Sans', sans-serif", fontSize: '15px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(0,87,184,.3)' }}>
+        <Icon name="camera" size={17} color="#fff" /> {doneCount >= PHOTO_TARGET ? 'All shots done — Review & Submit' : `Take Next Shot (${(shots.find(s => !s.done)?.id) ?? 1} of ${PHOTO_TARGET})`}
       </button>
-      <div style={{ textAlign: 'center', padding: '4px 12px 10px', fontSize: '11px', color: '#44475A' }}>Tap any row to toggle done · Open Camera captures next required shot</div>
+      <div style={{ textAlign: 'center', padding: '4px 12px 10px', fontSize: '11px', color: '#44475A' }}>📷 takes a new photo · ⬆ uploads one already taken · each shot uploads instantly</div>
     </div>
     )
   }
 
   // ── Review & Submit ────────────────────────────────────
 
-  // Persist the photo session to the shared container record — photoCount >= 12
-  // auto-promotes a draft to `available` on the marketplace (server-side rule).
+  // Finalize the photo session. Each shot already uploaded on capture (the
+  // server counts real photos and auto-promotes a draft at 12) — this records
+  // the inspector + notes and notifies the admin portal via the activity log.
   const submitPhotos = async () => {
     const job = activeJob
     const note = `${doneCount}/${PHOTO_TARGET} photos uploaded${inspectorNotes.trim() ? ` — ${inspectorNotes.trim()}` : ''}`
     if (job) {
       try {
         await containersApi.update(job.containerId || job.sku, {
-          photoCount: doneCount,
           inspectorName: me?.name ?? ACTOR,
           inspectedAt: new Date().toISOString(),
         })
@@ -907,12 +1008,14 @@ export default function FieldAppPage() {
         All {PHOTO_TARGET} required shots {doneCount >= PHOTO_TARGET ? 'complete' : `— ${PHOTO_TARGET - Math.min(doneCount, PHOTO_TARGET)} remaining`}
       </div>
 
-      {/* Photo grid */}
+      {/* Photo grid — the actual uploaded shots, slot-aligned with the marketplace spinner */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '5px', padding: '0 12px', marginBottom: '12px' }}>
         {shots.map(shot => (
-          <div key={shot.id} style={{ aspectRatio: '1', borderRadius: '8px', border: `2px solid ${shot.done ? '#1B7A5A' : '#E1E2EC'}`, background: shot.done ? 'linear-gradient(135deg,#D1FAE5,#ECFDF5)' : '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', position: 'relative' }}>
-            {shot.done ? '✓' : shot.id}
-            {shot.done && <div style={{ position: 'absolute', top: '3px', right: '3px', width: '10px', height: '10px', borderRadius: '50%', background: '#1B7A5A' }} />}
+          <div key={shot.id} title={shot.label} style={{ aspectRatio: '1', borderRadius: '8px', overflow: 'hidden', border: `2px solid ${shot.done ? '#1B7A5A' : '#E1E2EC'}`, background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', position: 'relative' }}>
+            {shot.url
+              ? <img src={photoUrl(shot.url)} alt={shot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <span style={{ color: '#9498A6' }}>{shot.id}</span>}
+            {shot.done && <div style={{ position: 'absolute', top: '3px', right: '3px', width: '12px', height: '12px', borderRadius: '50%', background: '#1B7A5A', display: 'grid', placeItems: 'center' }}><svg width="7" height="7" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="3,10.5 8,16 17,5" /></svg></div>}
           </div>
         ))}
       </div>
@@ -943,8 +1046,8 @@ export default function FieldAppPage() {
         <textarea value={inspectorNotes} onChange={e => setInspectorNotes(e.target.value)} placeholder="Condition observations, location notes, damage details…" rows={3} style={{ width: '100%', background: '#fff', border: '1.5px solid #C4C6D0', borderRadius: '12px', padding: '12px', color: '#1A1C2E', fontFamily: "'Roboto', sans-serif", fontSize: '13px', resize: 'none', height: '64px', outline: 'none' }} />
       </div>
 
-      <button onClick={submitPhotos} style={{ margin: '0 12px 12px', width: 'calc(100% - 24px)', background: '#0057B8', color: '#fff', border: 'none', borderRadius: '16px', padding: '16px', fontFamily: "'Google Sans', sans-serif", fontSize: '15px', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 14px rgba(0,87,184,.3)' }}>
-        Submit to Admin Portal →
+      <button onClick={submitPhotos} disabled={doneCount < PHOTO_TARGET} style={{ margin: '0 12px 12px', width: 'calc(100% - 24px)', background: doneCount >= PHOTO_TARGET ? '#0057B8' : '#C4C6D0', color: '#fff', border: 'none', borderRadius: '16px', padding: '16px', fontFamily: "'Google Sans', sans-serif", fontSize: '15px', fontWeight: 700, cursor: doneCount >= PHOTO_TARGET ? 'pointer' : 'not-allowed', boxShadow: doneCount >= PHOTO_TARGET ? '0 4px 14px rgba(0,87,184,.3)' : 'none' }}>
+        {doneCount >= PHOTO_TARGET ? 'Submit to Admin Portal →' : `${PHOTO_TARGET - doneCount} shot${PHOTO_TARGET - doneCount > 1 ? 's' : ''} still needed`}
       </button>
       <div style={{ textAlign: 'center', padding: '0 12px 12px', fontSize: '11px', color: '#44475A' }}>Uploads via WiFi or LTE · Admin notified instantly</div>
     </div>

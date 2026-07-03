@@ -30,14 +30,25 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 // ── Auth ──────────────────────────────────────────────────
 
+export type Role = 'customer' | 'driver' | 'admin'
+
+export interface AuthUser {
+  id: string
+  email: string
+  role: Role
+  name: string
+  phone: string
+  driverId: string      // links a driver login to drivers.csv
+  customerId: string    // links a customer login to customers.csv
+  phoneVerified: boolean
+  active: boolean
+  createdAt: string
+  twoFaVerified?: boolean  // true if SMS 2FA completed recently (per session)
+}
+
 export interface AuthPayload {
   token: string
-  user: {
-    id: string
-    email: string
-    role: 'customer' | 'employee' | 'driver' | 'admin'
-    name: string
-  }
+  user: AuthUser
 }
 
 export const auth = {
@@ -46,7 +57,45 @@ export const auth = {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
-  me: () => request<AuthPayload['user']>('/auth/me'),
+  register: (data: { name: string; email: string; password: string; phone?: string }) =>
+    request<AuthPayload>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
+  me: () => request<AuthUser>('/auth/me'),
+  // SMS two-factor: send a 6-digit code to a mobile number, then verify it.
+  // Required before every order. devCode is returned in dev (no SMS gateway).
+  twoFaSend: (phone: string) =>
+    request<{ sent: true; devCode?: string }>('/auth/2fa/send', { method: 'POST', body: JSON.stringify({ phone }) }),
+  twoFaVerify: (code: string) =>
+    request<{ verified: true }>('/auth/2fa/verify', { method: 'POST', body: JSON.stringify({ code }) }),
+}
+
+// ── Users (admin-managed accounts) ────────────────────────
+
+export const users = {
+  list: () => request<AuthUser[]>('/users'),
+  create: (data: { email: string; password: string; role: Role; name?: string; phone?: string; driverId?: string }) =>
+    request<AuthUser>('/users', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<AuthUser> & { password?: string }) =>
+    request<AuthUser>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  remove: (id: string) =>
+    request<{ id: string; archived: true }>(`/users/${id}`, { method: 'DELETE' }),
+}
+
+// ── Outbox (sent email/SMS log — admin only) ──────────────
+
+export interface OutboxMessage {
+  id: string
+  channel: 'email' | 'sms'
+  to: string
+  subject: string
+  body: string
+  relatedType: string
+  relatedId: string
+  status: string
+  createdAt: string
+}
+
+export const outbox = {
+  list: () => request<OutboxMessage[]>('/outbox'),
 }
 
 // ── Containers ────────────────────────────────────────────
@@ -125,6 +174,48 @@ export const containers = {
     request<{ uploadUrl: string; publicUrl: string }>(
       `/containers/${id}/photo-upload-url?filename=${filename}`
     ),
+  // Upload one shot into a photo slot (0–11 = the 12-shot standard). The API
+  // stores the file under data/photos and records /photos/<file> in that slot.
+  uploadPhoto: (id: string, data: { slot: number; label?: string; dataUrl: string; inspectorName?: string }) =>
+    request<Container>(`/containers/${id}/photos`, { method: 'POST', body: JSON.stringify(data) }),
+  deletePhoto: (id: string, slot: number) =>
+    request<Container>(`/containers/${id}/photos/${slot}`, { method: 'DELETE' }),
+}
+
+// Photo URLs in CSV are API-relative (/photos/x.jpg) — resolve against the API host.
+export function photoUrl(p: string | undefined | null): string {
+  if (!p) return ''
+  return /^https?:|^data:/.test(p) ? p : `${BASE}${p}`
+}
+
+// The 12-shot documentation standard — one slot per labelled shot. Shared by
+// the field app (capture), marketplace (360° spinner frames), and admin
+// portal (review/fix) so slot i always means the same photo everywhere.
+// Slots 5 and 11 are the stock-number (SKU sticker) shots.
+export const SHOT_LABELS = [
+  'Front doors closed', 'Front doors open', 'Right side', 'Back', 'Left side', 'SKU sticker · outside',
+  'Inside back', 'Inside right', 'Inside left', 'Inside ceiling', 'Inside floor', 'SKU sticker · inside',
+] as const
+
+// Downscale a camera/library image file to a JPEG data URL ready to upload.
+export function fileToDataUrl(file: File, maxDim = 1400, quality = 0.78): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(img.width * scale))
+      canvas.height = Math.max(1, Math.round(img.height * scale))
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return reject(new Error('Canvas unavailable'))
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      resolve(canvas.toDataURL('image/jpeg', quality))
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read that image')) }
+    img.src = url
+  })
 }
 
 // ── Orders ────────────────────────────────────────────────
