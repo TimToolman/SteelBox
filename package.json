@@ -10,5 +10,5 @@
     "dev:web": "npm --prefix apps/web run dev",
     "build": "npm --prefix apps/web run build",
     "install:web": "npm --prefix apps/web install"
-  },
+  }
 }
