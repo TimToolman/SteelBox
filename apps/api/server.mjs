@@ -271,6 +271,117 @@ function estimateRent(buyPrice) {
   return Math.round((buyPrice * 0.038) / 5) * 5
 }
 
+// ── Auth (users.csv + stateless HMAC tokens) ──────────────
+
+const AUTH_SECRET = process.env.SBX_SECRET || 'sbx-dev-secret'
+const TOKEN_TTL_MS = 12 * 60 * 60 * 1000 // 12h sessions
+
+function hashPassword(pw) {
+  const salt = randomBytes(8).toString('hex')
+  return `${salt}$${scryptSync(String(pw), salt, 32).toString('hex')}`
+}
+function checkPassword(pw, stored) {
+  const [salt, hash] = String(stored || '').split('$')
+  if (!salt || !hash) return false
+  const test = scryptSync(String(pw), salt, 32).toString('hex')
+  return test.length === hash.length && timingSafeEqual(Buffer.from(test), Buffer.from(hash))
+}
+function signToken(userId) {
+  const exp = Date.now() + TOKEN_TTL_MS
+  const payload = `${userId}.${exp}`
+  const sig = createHmac('sha256', AUTH_SECRET).update(payload).digest('hex').slice(0, 32)
+  return `${payload}.${sig}`
+}
+function verifyToken(token) {
+  const parts = String(token || '').split('.')
+  if (parts.length !== 3) return null
+  const [id, exp, sig] = parts
+  const expect = createHmac('sha256', AUTH_SECRET).update(`${id}.${exp}`).digest('hex').slice(0, 32)
+  if (sig !== expect || Number(exp) < Date.now()) return null
+  return id
+}
+function publicUser(u) {
+  const { passwordHash, ...rest } = u
+  return rest
+}
+function currentUser(req) {
+  const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')
+  const id = verifyToken(token)
+  if (!id) return null
+  const u = readTable('users').find(x => x.id === id && x.active !== false)
+  return u || null
+}
+
+// Seed accounts on boot: the default admin plus one login per active driver
+// (password "test1234" for all seeded accounts — dev only).
+function ensureSeedUsers() {
+  const users = readTable('users')
+  let changed = false
+  const ensure = (email, fields) => {
+    if (users.some(u => (u.email || '').toLowerCase() === email)) return
+    users.push({
+      id: uid('usr'), email, passwordHash: hashPassword('test1234'),
+      phone: '', driverId: '', customerId: '', phoneVerified: false, active: true,
+      createdAt: new Date().toISOString(), ...fields,
+    })
+    changed = true
+    console.log(`Seeded ${fields.role} account: ${email} / test1234`)
+  }
+  ensure('tgmoore@gmail.com', { role: 'admin', name: 'Tim Moore' })
+  for (const d of readTable('drivers')) {
+    if (d.active === false) continue
+    const first = (d.name || 'driver').trim().split(/\s+/)[0].toLowerCase()
+    ensure(`${first}@steelbox.co`, { role: 'driver', name: d.name, driverId: d.id, phone: d.cellPhone || '' })
+  }
+  if (changed) writeTable('users', users)
+}
+
+// ── Two-factor codes (SMS) ────────────────────────────────
+// Codes live in memory (10-min expiry); the "text" itself is logged to
+// outbox.csv. Orders require a verification completed in the last 15 min —
+// on the first order AND every subsequent order.
+
+const twoFactor = new Map() // userId → { code, phone, expires, verifiedAt }
+const TWOFA_CODE_TTL = 10 * 60 * 1000
+const TWOFA_VALID_FOR = 15 * 60 * 1000
+
+function twoFaVerified(userId) {
+  const rec = twoFactor.get(userId)
+  return !!rec?.verifiedAt && (Date.now() - rec.verifiedAt) < TWOFA_VALID_FOR
+}
+
+// ── Outbound email / SMS (logged to outbox.csv) ───────────
+
+function queueMessage(channel, to, subject, body, relatedType = '', relatedId = '') {
+  if (!to) return
+  const rows = readTable('outbox')
+  rows.push({
+    id: uid('out'), channel, to, subject, body,
+    relatedType, relatedId, status: 'sent', createdAt: new Date().toISOString(),
+  })
+  writeTable('outbox', rows)
+}
+
+// ── Photo storage ─────────────────────────────────────────
+// Real image files live under data/photos and are served at /photos/<file>.
+// containers.csv `photos` keeps one slot per shot (index 0–11 = the 12-shot
+// standard), so field app, marketplace spinner, and admin stay aligned.
+
+const PHOTO_DIR = join(DATA_DIR, 'photos')
+const PHOTO_MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' }
+
+function savePhoto(sku, slot, dataUrl) {
+  const m = /^data:image\/(jpeg|png|webp);base64,(.+)$/.exec(String(dataUrl || ''))
+  if (!m) return { error: 'dataUrl must be a base64 image/jpeg, image/png, or image/webp' }
+  const buf = Buffer.from(m[2], 'base64')
+  if (buf.length > 8 * 1024 * 1024) return { error: 'Photo too large (8 MB max)' }
+  mkdirSync(PHOTO_DIR, { recursive: true })
+  const ext = m[1] === 'jpeg' ? 'jpg' : m[1]
+  const fname = `${sku}-${String(slot + 1).padStart(2, '0')}-${Date.now().toString(36)}.${ext}`
+  writeFileSync(join(PHOTO_DIR, fname), buf)
+  return { url: `/photos/${fname}` }
+}
+
 // ── HTTP plumbing ─────────────────────────────────────────
 
 function send(res, status, body) {
