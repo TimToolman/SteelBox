@@ -5,9 +5,10 @@
 // ============================================================
 
 import { createServer } from 'node:http'
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+import { dirname, join, basename } from 'node:path'
+import { createHmac, randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = join(__dirname, 'data')
@@ -138,6 +139,20 @@ const SCHEMAS = {
     file: 'messages.csv',
     headers: ['id','fromRole','fromName','fromEmail','toDriverId','toRole','toName','toEmail','subject','body','createdAt','read','trashed'],
     types: { read: 'boolean', trashed: 'boolean' },
+  },
+  // Login accounts (RBAC): admin / driver / customer. passwordHash is scrypt "salt$hash";
+  // driverId links driver accounts to drivers.csv, customerId links buyers to customers.csv.
+  users: {
+    file: 'users.csv',
+    headers: ['id','email','passwordHash','role','name','phone','driverId','customerId','phoneVerified','active','createdAt'],
+    types: { phoneVerified: 'boolean', active: 'boolean' },
+  },
+  // Outbound email + SMS log. In dev nothing actually leaves the machine —
+  // every message the system "sends" is recorded here (admin portal shows it).
+  outbox: {
+    file: 'outbox.csv',
+    headers: ['id','channel','to','subject','body','relatedType','relatedId','status','createdAt'],
+    types: {},
   },
 }
 
