@@ -176,12 +176,12 @@ export function RequireRole({ roles, title, children }: {
             <button onClick={logout} style={{ width: '100%', padding: '12px', borderRadius: '999px', background: '#0057B8', color: '#fff', fontSize: '14px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
               Sign in with a different account
             </button>
-            <a href="/" style={{ display: 'block', textAlign: 'center', marginTop: '12px', fontSize: '12px', color: '#0057B8', fontWeight: 600, textDecoration: 'none' }}>← Back to marketplace</a>
+            <a href={import.meta.env.BASE_URL} style={{ display: 'block', textAlign: 'center', marginTop: '12px', fontSize: '12px', color: '#0057B8', fontWeight: 600, textDecoration: 'none' }}>← Back to marketplace</a>
           </div>
         ) : (
           <div style={{ marginTop: '6px' }}>
             <LoginForm subtitle={`Sign in with your ${roles.includes('admin') && roles.length === 1 ? 'administrator' : 'staff'} account to continue.`} />
-            <a href="/" style={{ display: 'block', textAlign: 'center', marginTop: '14px', fontSize: '12px', color: '#0057B8', fontWeight: 600, textDecoration: 'none' }}>← Back to marketplace</a>
+            <a href={import.meta.env.BASE_URL} style={{ display: 'block', textAlign: 'center', marginTop: '14px', fontSize: '12px', color: '#0057B8', fontWeight: 600, textDecoration: 'none' }}>← Back to marketplace</a>
           </div>
         )}
       </div>

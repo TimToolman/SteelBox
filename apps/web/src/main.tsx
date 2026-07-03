@@ -10,7 +10,9 @@ import { AuthProvider, RequireRole } from './lib/auth'
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <AuthProvider>
-      <BrowserRouter>
+      {/* basename follows vite's base (/ in dev, /SteelBox/ on GitHub Pages)
+          so /admin and /field resolve at both origins */}
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
         <Routes>
           {/* Public — guests can search & view every listed container */}
           <Route path="/" element={<MarketplacePage />} />

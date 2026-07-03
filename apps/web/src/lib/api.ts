@@ -3,7 +3,8 @@
 // Wraps all fetch calls to the Railway-hosted Express API
 // ============================================================
 
-const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:4000'
+// `||` (not ??) so an empty build-time var still falls back to localhost.
+const BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000'
 
 function getToken(): string | null {
   return localStorage.getItem('sbx_token')

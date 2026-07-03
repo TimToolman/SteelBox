@@ -1760,49 +1760,96 @@ export default function AdminPage() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                 <div>
                   <div style={{ fontSize: '15px', fontWeight: 700 }}>All Containers</div>
-                  <div style={{ fontSize: '12px', color: 'var(--ink3)', marginTop: '2px' }}>{containerList.length} units · SKU · Stock · Photo status</div>
+                  <div style={{ fontSize: '12px', color: 'var(--ink3)', marginTop: '2px' }}>{containerList.length} units · grouped by where they are in the pipeline</div>
                 </div>
                 <Button variant="primary" size="md" onClick={() => setAddContainerOpen(true)} icon={<span>+</span>}>Add Container</Button>
               </div>
-              <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', overflow: 'hidden' }}>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '860px' }}>
-                    <thead><tr><Th>SKU</Th><Th>Size</Th><Th>Grade</Th><Th>Listing</Th><Th>Photos</Th><Th>Inspector</Th><Th>Depot</Th><Th>Cost</Th><Th>Price</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
-                    <tbody>
-                      {containerList.map(c => (
-                        <tr key={c.id}>
-                          <Td mono>{c.sku}</Td>
-                          <Td>{c.size}</Td>
-                          <Td><GradeBadge grade={c.grade as any} showLabel /></Td>
-                          <Td><ListingBadge listingType={c.listingType} /></Td>
-                          <Td>
-                            <div onClick={() => setPhotosFor(c)} title="Review & fix photos" style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                              {c.photos?.filter(Boolean)[0]
-                                ? <img src={photoUrl(c.photos.filter(Boolean)[0])} alt="" style={{ width: '34px', height: '26px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0, border: '1px solid var(--div)' }} />
-                                : <div style={{ width: '34px', height: '26px', borderRadius: '4px', background: 'var(--surf1)', border: '1px dashed var(--div)', flexShrink: 0 }} />}
-                              <div style={{ flex: 1, height: '4px', background: 'var(--div)', borderRadius: '2px', minWidth: '48px' }}>
-                                <div style={{ height: '100%', borderRadius: '2px', background: c.photoCount >= 12 ? 'var(--green)' : c.photoCount > 0 ? 'var(--amber)' : 'var(--div)', width: `${Math.min(100, (c.photoCount / 12) * 100)}%` }} />
-                              </div>
-                              <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--primary)', fontWeight: 700 }}>{c.photoCount}/12</span>
-                            </div>
-                          </Td>
-                          <Td>{c.inspectorName || '—'}</Td>
-                          <Td>{c.depotLocation || '—'}</Td>
-                          <Td><span style={{ fontFamily: 'var(--mono)', color: 'var(--ink3)' }}>${(c.purchaseCost ?? 0).toLocaleString()}</span></Td>
-                          <Td><span style={{ fontFamily: 'var(--mono)', fontWeight: 700 }}>${c.buyPrice.toLocaleString()}</span></Td>
-                          <Td><StatusBadge status={c.status as any} /></Td>
-                          <Td>
-                            <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-                              <TblBtn iconOnly title="Edit" onClick={() => setEditContainer(c)}>{EditIcon}</TblBtn>
-                              {c.status !== 'sale_in_progress' && <TblBtn iconOnly variant="danger" title="Delete" onClick={() => handleDelete(c)}>{deletingId === c.id ? Spinner : DeleteIcon}</TblBtn>}
-                            </div>
-                          </Td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+
+              {(() => {
+                // A delivered container is "Rented" if its most recent order was a
+                // rental (it comes back and relists); otherwise it was purchased.
+                // With no order on record, a rent-only listing that's out with a
+                // customer can only be a rental.
+                const latestOrderFor = (c: Container) => orderList
+                  .filter(o => o.containerId === c.id || o.containerSku === c.sku)
+                  .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))[0]
+                const isRented = (c: Container) => c.status === 'delivered' &&
+                  (latestOrderFor(c) ? latestOrderFor(c).saleType === 'rent' : c.listingType === 'rent')
+                const sections: { key: string; title: string; desc: string; color: string; items: Container[] }[] = [
+                  {
+                    key: 'market', title: 'Marketplace', color: 'var(--primary)',
+                    desc: 'Listed or moving through a sale — available, reserved, approved, assigned, in transit',
+                    items: containerList.filter(c => ['available', 'sale_in_progress', 'sold', 'assigned', 'in_transit'].includes(c.status)),
+                  },
+                  {
+                    key: 'photos', title: 'Awaiting Photos', color: 'var(--amber)',
+                    desc: 'Drafts — hidden from shoppers until the 12-shot photo set is complete, then they list automatically',
+                    items: containerList.filter(c => c.status === 'draft'),
+                  },
+                  {
+                    key: 'rented', title: 'Rented', color: '#6D28D9',
+                    desc: 'Out with customers on rental — relist automatically when the return workflow completes',
+                    items: containerList.filter(isRented),
+                  },
+                  {
+                    key: 'delivered', title: 'Delivered', color: 'var(--green)',
+                    desc: 'Purchased and delivered to the customer',
+                    items: containerList.filter(c => c.status === 'delivered' && !isRented(c)),
+                  },
+                ]
+                const row = (c: Container) => (
+                  <tr key={c.id}>
+                    <Td mono>{c.sku}</Td>
+                    <Td>{c.size}</Td>
+                    <Td><GradeBadge grade={c.grade as any} showLabel /></Td>
+                    <Td><ListingBadge listingType={c.listingType} /></Td>
+                    <Td>
+                      <div onClick={() => setPhotosFor(c)} title="Review & fix photos" style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        {c.photos?.filter(Boolean)[0]
+                          ? <img src={photoUrl(c.photos.filter(Boolean)[0])} alt="" style={{ width: '34px', height: '26px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0, border: '1px solid var(--div)' }} />
+                          : <div style={{ width: '34px', height: '26px', borderRadius: '4px', background: 'var(--surf1)', border: '1px dashed var(--div)', flexShrink: 0 }} />}
+                        <div style={{ flex: 1, height: '4px', background: 'var(--div)', borderRadius: '2px', minWidth: '48px' }}>
+                          <div style={{ height: '100%', borderRadius: '2px', background: c.photoCount >= 12 ? 'var(--green)' : c.photoCount > 0 ? 'var(--amber)' : 'var(--div)', width: `${Math.min(100, (c.photoCount / 12) * 100)}%` }} />
+                        </div>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--primary)', fontWeight: 700 }}>{c.photoCount}/12</span>
+                      </div>
+                    </Td>
+                    <Td>{c.inspectorName || '—'}</Td>
+                    <Td>{c.depotLocation || '—'}</Td>
+                    <Td><span style={{ fontFamily: 'var(--mono)', color: 'var(--ink3)' }}>${(c.purchaseCost ?? 0).toLocaleString()}</span></Td>
+                    <Td><span style={{ fontFamily: 'var(--mono)', fontWeight: 700 }}>${c.buyPrice.toLocaleString()}</span></Td>
+                    <Td><StatusBadge status={c.status as any} /></Td>
+                    <Td>
+                      <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+                        <TblBtn iconOnly title="Edit" onClick={() => setEditContainer(c)}>{EditIcon}</TblBtn>
+                        {c.status !== 'sale_in_progress' && <TblBtn iconOnly variant="danger" title="Delete" onClick={() => handleDelete(c)}>{deletingId === c.id ? Spinner : DeleteIcon}</TblBtn>}
+                      </div>
+                    </Td>
+                  </tr>
+                )
+                return sections.map(s => (
+                  <div key={s.key} style={{ marginBottom: '22px' }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '8px' }}>
+                      <span style={{ width: '9px', height: '9px', borderRadius: '3px', background: s.color, flexShrink: 0, alignSelf: 'center' }} />
+                      <span style={{ fontSize: '14px', fontWeight: 700 }}>{s.title}</span>
+                      <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, color: s.color, background: 'var(--surf1)', border: '1px solid var(--div)', borderRadius: 'var(--pill)', padding: '1px 9px' }}>{s.items.length}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--ink3)' }}>{s.desc}</span>
+                    </div>
+                    {s.items.length === 0 ? (
+                      <div style={{ background: 'var(--surf-w)', border: '1px dashed var(--div)', borderRadius: 'var(--r12)', padding: '14px 16px', fontSize: '12px', color: 'var(--ink3)' }}>None right now.</div>
+                    ) : (
+                      <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', overflow: 'hidden' }}>
+                        <div style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '860px' }}>
+                            <thead><tr><Th>SKU</Th><Th>Size</Th><Th>Grade</Th><Th>Listing</Th><Th>Photos</Th><Th>Inspector</Th><Th>Depot</Th><Th>Cost</Th><Th>Price</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
+                            <tbody>{s.items.map(row)}</tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
+              })()}
             </div>
           )}
 
