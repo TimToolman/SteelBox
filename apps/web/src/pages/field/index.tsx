@@ -198,7 +198,9 @@ function BottomNav({ active, onNav, unread = 0 }: { active: Screen; onNav: (s: S
     { id: 'inbox',     label: 'Inbox', icon: 'inbox', badge: unread },
   ]
   return (
-    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, height: '72px', background: '#fff', borderTop: '1px solid #E1E2EC', display: 'flex', alignItems: 'center', padding: '0 4px 8px', boxShadow: '0 -3px 16px rgba(26,28,46,.07)', zIndex: 20 }}>
+    // Pinned to the same 600px column as the app content, so on desktop and
+    // tablet the nav hugs the app instead of stretching across the window.
+    <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '600px', boxSizing: 'border-box', height: '72px', background: '#fff', borderTop: '1px solid #E1E2EC', borderLeft: '1px solid #E1E2EC', borderRight: '1px solid #E1E2EC', display: 'flex', alignItems: 'center', padding: '0 4px 8px', boxShadow: '0 -3px 16px rgba(26,28,46,.07)', zIndex: 20 }}>
       {items.map(item => (
         <button
           key={item.id}
@@ -578,22 +580,53 @@ export default function FieldAppPage() {
     return () => { document.head.removeChild(link) }
   }, [])
 
-  // Responsive column — full width on phones, capped/centered on tablet.
-  const base: React.CSSProperties = {
+  // Responsive: full-bleed on phones; on tablet/desktop the app renders as a
+  // centered 600px column framed like a device, on a neutral page background.
+  const page: React.CSSProperties = {
     fontFamily: "'Roboto', system-ui, sans-serif",
+    minHeight: '100vh',
+    background: '#E9EDF5',
+    color: '#1A1C2E',
+  }
+  const base: React.CSSProperties = {
     background: '#F8F9FF',
     minHeight: '100vh',
-    color: '#1A1C2E',
     paddingBottom: '88px',
     width: '100%',
     maxWidth: '600px',
     margin: '0 auto',
+    boxSizing: 'border-box',
+    borderLeft: '1px solid #DDE2EC',
+    borderRight: '1px solid #DDE2EC',
+    boxShadow: '0 0 44px rgba(26,28,46,.10)',
   }
   // The driver's primary vehicle string, from their record.
   const myVehicle = me ? (parseTrucks(me.trucks || '')[0]?.name || me.vehicle || '—') : '—'
 
   const secLabel = (text: string) => (
     <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '11px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase' as const, color: '#44475A', padding: '14px 16px 6px' }}>{text}</div>
+  )
+
+  // Compact branded top bar for the non-dashboard tabs (Pickups & Returns,
+  // Schedule, Inbox) — logo, duty toggle, and the driver's avatar (tap = sign out).
+  const topBar = (
+    <div style={{ background: 'linear-gradient(135deg,#0057B8,#003882)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div style={{ width: '20px', height: '20px', borderRadius: '5px', background: 'rgba(255,255,255,.15)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+        <Icon name="box" size={12} color="#fff" />
+      </div>
+      <span style={{ fontSize: '14px', fontWeight: 700 }}><span style={{ color: '#90C4FF' }}>Steel</span><span style={{ color: '#E65100' }}>Box</span></span>
+      <button
+        onClick={() => setOnDuty(d => !d)}
+        style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '7px', background: onDuty ? 'rgba(61,255,160,.15)' : 'rgba(255,255,255,.15)', border: `1.5px solid ${onDuty ? 'rgba(61,255,160,.4)' : 'rgba(255,255,255,.3)'}`, borderRadius: '999px', padding: '5px 12px', cursor: 'pointer' }}
+      >
+        <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: onDuty ? '#4DFFB4' : 'rgba(255,255,255,.5)', flexShrink: 0 }} />
+        <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>{onDuty ? 'On Duty' : 'Off Duty'}</span>
+      </button>
+      <button onClick={logout} title={`Sign out (${user?.email ?? ''})`}
+        style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(255,255,255,.9)', border: 'none', color: '#0057B8', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+        {me?.initials || (me?.name ?? ACTOR).split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()}
+      </button>
+    </div>
   )
 
   const card = (children: React.ReactNode, style: React.CSSProperties = {}) => (
@@ -883,6 +916,7 @@ export default function FieldAppPage() {
     const groups = groupByDay(mySchedule)
     return (
       <div>
+        {topBar}
         <div style={{ background: '#fff', borderBottom: '1px solid #E1E2EC', padding: '18px 16px 14px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
           <div>
             <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '20px', fontWeight: 700, marginBottom: '2px' }}>Pickups, Deliveries &amp; Returns</div>
@@ -1127,6 +1161,7 @@ export default function FieldAppPage() {
     const dirty = !!weekEdits[weekStart]
     return (
       <div>
+        {topBar}
         <div style={{ background: '#fff', borderBottom: '1px solid #E1E2EC', padding: '18px 16px 12px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
           <div>
             <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '20px', fontWeight: 700, marginBottom: '2px' }}>My Working Hours</div>
@@ -1232,6 +1267,7 @@ export default function FieldAppPage() {
     const tabs: ('inbox' | 'sent' | 'trash')[] = ['inbox', 'sent', 'trash']
     return (
       <div style={{ paddingBottom: '84px' }}>
+        {topBar}
         <div style={{ background: '#fff', borderBottom: '1px solid #E1E2EC', padding: '18px 16px 0', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px' }}>
             <div>
@@ -1309,8 +1345,8 @@ export default function FieldAppPage() {
         )}
 
         {compose && (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 40, background: 'rgba(11,22,41,.45)', display: 'flex', alignItems: 'flex-end' }} onClick={() => setCompose(null)}>
-            <div onClick={e => e.stopPropagation()} style={{ width: '100%', background: '#fff', borderRadius: '18px 18px 0 0', padding: '18px 16px calc(18px + env(safe-area-inset-bottom))', maxHeight: '88vh', overflowY: 'auto' }}>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 40, background: 'rgba(11,22,41,.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={() => setCompose(null)}>
+            <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: '600px', boxSizing: 'border-box', background: '#fff', borderRadius: '18px 18px 0 0', padding: '18px 16px calc(18px + env(safe-area-inset-bottom))', maxHeight: '88vh', overflowY: 'auto' }}>
               <div style={{ fontFamily: "'Google Sans', sans-serif", fontSize: '18px', fontWeight: 700, marginBottom: '12px' }}>New message</div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.5px', color: '#44475A', marginBottom: '5px' }}>To</label>
               <select
@@ -1349,8 +1385,10 @@ export default function FieldAppPage() {
   const navActive: Screen = ['review', 'success', 'flow', 'camera'].includes(screen) ? 'jobs' : screen
 
   return (
-    <div style={base}>
-      {screens[screen]}
+    <div style={page}>
+      <div style={base}>
+        {screens[screen]}
+      </div>
       <BottomNav active={navActive} onNav={goTo} unread={unreadCount} />
       <Snackbar message={message} open={snackOpen} onClose={snackClose} />
     </div>
