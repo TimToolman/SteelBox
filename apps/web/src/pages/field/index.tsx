@@ -82,12 +82,14 @@ type StepKey = 'travel' | 'arrive' | 'load' | 'photos12' | 'unload' | 'drop' | '
 interface FlowStep { key: StepKey; label: string; detail?: string; cta: string }
 
 function stepsFor(job: Job): FlowStep[] {
+  // Photos + condition score come BEFORE loading — you can't shoot the sides,
+  // underside, or interior once the unit is strapped on the trailer.
   if (job.kind === 'pickup') return [
     { key: 'travel',   label: 'Travel to depot',        detail: 'Check in with the lot attendant', cta: 'On my way' },
     { key: 'arrive',   label: 'Arrived at depot',       cta: 'Arrived' },
-    { key: 'load',     label: 'Load container',         detail: 'Secure the unit on the trailer', cta: 'Loaded' },
-    { key: 'photos12', label: 'Photo documentation',    detail: `${PHOTO_TARGET} photos required`, cta: 'Open Photo Session' },
+    { key: 'photos12', label: 'Photo documentation',    detail: `${PHOTO_TARGET} photos, before loading`, cta: 'Open Photo Session' },
     { key: 'score',    label: 'Score condition',        detail: 'Rate the unit 1–5', cta: 'Save Score' },
+    { key: 'load',     label: 'Load container',         detail: 'Secure the unit on the trailer', cta: 'Loaded' },
     { key: 'complete', label: 'Pickup complete',        cta: 'Finish Pickup' },
   ]
   if (job.kind === 'delivery' && job.dest === 'depot') return [
@@ -281,6 +283,9 @@ export default function FieldAppPage() {
   // Active workflow state
   const [activeJob, setActiveJob] = useState<Job | null>(null)
   const [stepIndex, setStepIndex] = useState(0)
+  // Location/contact details start collapsed — regulars know the route; the
+  // chevron opens address + attendant info when it's actually needed.
+  const [locOpen, setLocOpen] = useState(false)
   const [signed, setSigned] = useState(false)
   const [returnPhoto, setReturnPhoto] = useState(false)
   const [condScore, setCondScore] = useState(0)  // driver's 1–5 condition score for the active job
@@ -488,6 +493,7 @@ export default function FieldAppPage() {
   const startJob = (job: Job) => {
     setActiveJob(job)
     setStepIndex(0)
+    setLocOpen(false)
     setSigned(false)
     setReturnPhoto(false)
     setCondScore(0)
@@ -758,49 +764,30 @@ export default function FieldAppPage() {
               </div>
             </div>
 
-            {/* Location / contact card */}
-            {card(
-              <>
-                <div style={{ background: m.bg, padding: '10px 16px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', color: m.color, borderBottom: '1px solid #E1E2EC' }}>
-                  {job.kind === 'pickup' ? 'Pickup Depot' : job.dest === 'depot' ? 'Drop-off Depot' : 'Customer'}
-                </div>
-                {(job.kind === 'pickup'
-                  ? [
-                    { icon: 'box', label: 'Depot', val: depot?.name ?? '—' },
-                    { icon: 'pin', label: 'Address', val: depot?.address ?? '—' },
-                    { icon: 'user', label: 'Lot Attendant', val: depot?.attendantName ?? '—' },
-                    { icon: 'phone', label: 'Attendant Cell', val: depot?.attendantCell ?? '—', blue: true, onClick: () => toast(`Calling ${depot?.attendantName ?? 'attendant'}…`) },
-                  ]
-                  : job.dest === 'depot'
-                    ? [
-                      { icon: 'truck', label: 'Origin', val: depotById(job.originDepotId)?.name ?? '—' },
-                      { icon: 'box', label: 'Destination', val: depot?.name ?? '—' },
-                      { icon: 'pin', label: 'Address', val: depot?.address ?? '—' },
-                    ]
-                    : [
-                      { icon: 'user', label: 'Customer', val: job.customer ?? '—' },
-                      { icon: 'pin', label: 'Address', val: job.address ?? '—' },
-                      { icon: 'phone', label: 'Site Contact', val: job.contact ?? '—', blue: true, onClick: () => toast(`Calling ${job.contact}…`) },
-                    ]
-                ).map((row: any, i: number) => (
-                  <div key={i} onClick={row.onClick} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '11px 16px', borderBottom: '1px solid #E1E2EC', fontSize: '13px', cursor: row.onClick ? 'pointer' : 'default' }}>
-                    <span style={{ width: '20px', flexShrink: 0, marginTop: '1px', color: '#44475A' }}><Icon name={row.icon} size={16} color="#44475A" /></span>
-                    <div>
-                      <div style={{ fontSize: '11px', color: '#44475A', marginBottom: '1px' }}>{row.label}</div>
-                      <div style={{ fontWeight: 600, color: row.blue ? '#0057B8' : '#1A1C2E', textDecoration: row.blue ? 'underline' : 'none' }}>{row.val}</div>
-                    </div>
-                  </div>
-                ))}
-              </>,
-              { marginBottom: '10px' }
+            {/* Primary step action — first thing on screen, no scrolling to act */}
+            {step && (
+              <div style={{ padding: '12px 12px 4px' }}>
+                <button
+                  onClick={advanceStep}
+                  disabled={!stepReady}
+                  style={{ width: '100%', padding: '15px', background: !stepReady ? '#C4C6D0' : step.key === 'complete' ? '#1B7A5A' : '#0057B8', color: '#fff', border: 'none', borderRadius: '999px', fontFamily: "'Google Sans', sans-serif", fontSize: '15px', fontWeight: 700, cursor: stepReady ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: stepReady ? '0 4px 14px rgba(0,87,184,.25)' : 'none' }}
+                >
+                  {step.key === 'photos12' && <Icon name="camera" size={17} color="#fff" />}
+                  {step.key === 'complete' && <Icon name="check" size={17} color="#fff" sw={2.2} />}
+                  {step.key === 'receipt' && <Icon name="receipt" size={17} color="#fff" />}
+                  {step.key === 'sms' && <Icon name="sms" size={17} color="#fff" />}
+                  {photoCta}
+                </button>
+                {step.key === 'signature' && !signed && <div style={{ textAlign: 'center', fontSize: '11px', color: '#44475A', marginTop: '8px' }}>Capture the signature below to continue</div>}
+                {step.key === 'score' && condScore === 0 && <div style={{ textAlign: 'center', fontSize: '11px', color: '#44475A', marginTop: '8px' }}>Rate the container below to continue</div>}
+                {isCustomer && step.key === 'sms' && (
+                  <div style={{ fontSize: '11px', color: '#44475A', textAlign: 'center', marginTop: '8px' }}>Customer delivery — notify, arrive, unload, sign, receipt.</div>
+                )}
+                {job.dest === 'depot' && stepIndex === 0 && (
+                  <div style={{ fontSize: '11px', color: '#44475A', textAlign: 'center', marginTop: '8px' }}>Depot-to-depot storage transfer — no customer contact.</div>
+                )}
+              </div>
             )}
-
-            {/* Step process */}
-            <Stepper title={`${m.label} Steps`} steps={steps.map((s, i) => ({
-              label: s.label,
-              detail: s.detail,
-              status: i < stepIndex ? 'done' : i === stepIndex ? 'active' : 'pending',
-            }))} />
 
             {/* Condition scorer — 1–5 stars, shown when the active step needs it */}
             {step?.key === 'score' && (
@@ -826,29 +813,64 @@ export default function FieldAppPage() {
               </div>
             )}
 
-            {/* Primary step action */}
-            {step && (
-              <div style={{ padding: '2px 12px 6px' }}>
-                {isCustomer && step.key === 'sms' && (
-                  <div style={{ fontSize: '11px', color: '#44475A', textAlign: 'center', marginBottom: '8px' }}>Customer delivery — notify, arrive, unload, sign, receipt.</div>
-                )}
-                {job.dest === 'depot' && stepIndex === 0 && (
-                  <div style={{ fontSize: '11px', color: '#44475A', textAlign: 'center', marginBottom: '8px' }}>Depot-to-depot storage transfer — no customer contact.</div>
-                )}
+            {/* Location / contact — collapsed behind a chevron. Regular routes
+                don't need the address & attendant repeated every job. */}
+            {card(
+              <>
                 <button
-                  onClick={advanceStep}
-                  disabled={!stepReady}
-                  style={{ width: '100%', padding: '15px', background: !stepReady ? '#C4C6D0' : step.key === 'complete' ? '#1B7A5A' : '#0057B8', color: '#fff', border: 'none', borderRadius: '999px', fontFamily: "'Google Sans', sans-serif", fontSize: '15px', fontWeight: 700, cursor: stepReady ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: stepReady ? '0 4px 14px rgba(0,87,184,.25)' : 'none' }}
+                  onClick={() => setLocOpen(o => !o)}
+                  aria-expanded={locOpen}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', background: m.bg, padding: '11px 16px', border: 'none', cursor: 'pointer', textAlign: 'left', borderBottom: locOpen ? '1px solid #E1E2EC' : 'none' }}
                 >
-                  {step.key === 'photos12' && <Icon name="camera" size={17} color="#fff" />}
-                  {step.key === 'complete' && <Icon name="check" size={17} color="#fff" sw={2.2} />}
-                  {step.key === 'receipt' && <Icon name="receipt" size={17} color="#fff" />}
-                  {step.key === 'sms' && <Icon name="sms" size={17} color="#fff" />}
-                  {photoCta}
+                  <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', color: m.color, flexShrink: 0 }}>
+                    {job.kind === 'pickup' ? 'Pickup Depot' : job.dest === 'depot' ? 'Drop-off Depot' : 'Customer'}
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: '12px', fontWeight: 600, color: '#1A1C2E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {job.kind === 'pickup' ? (depot?.name ?? '—')
+                      : job.dest === 'depot' ? `${depotById(job.originDepotId)?.name ?? '—'} → ${depot?.name ?? '—'}`
+                      : (job.customer || '—')}
+                  </span>
+                  <span style={{ flexShrink: 0, display: 'flex', transition: 'transform .15s', transform: locOpen ? 'rotate(90deg)' : 'none', color: m.color }}>
+                    <Icon name="arrow" size={16} sw={2} />
+                  </span>
                 </button>
-                {step.key === 'signature' && !signed && <div style={{ textAlign: 'center', fontSize: '11px', color: '#44475A', marginTop: '8px' }}>Capture the signature above to continue</div>}
-              </div>
+                {locOpen && (job.kind === 'pickup'
+                  ? [
+                    { icon: 'box', label: 'Depot', val: depot?.name ?? '—' },
+                    { icon: 'pin', label: 'Address', val: depot?.address ?? '—' },
+                    { icon: 'user', label: 'Lot Attendant', val: depot?.attendantName ?? '—' },
+                    { icon: 'phone', label: 'Attendant Cell', val: depot?.attendantCell ?? '—', blue: true, onClick: () => toast(`Calling ${depot?.attendantName ?? 'attendant'}…`) },
+                  ]
+                  : job.dest === 'depot'
+                    ? [
+                      { icon: 'truck', label: 'Origin', val: depotById(job.originDepotId)?.name ?? '—' },
+                      { icon: 'box', label: 'Destination', val: depot?.name ?? '—' },
+                      { icon: 'pin', label: 'Address', val: depot?.address ?? '—' },
+                    ]
+                    : [
+                      { icon: 'user', label: 'Customer', val: job.customer ?? '—' },
+                      { icon: 'pin', label: 'Address', val: job.address ?? '—' },
+                      { icon: 'phone', label: 'Site Contact', val: job.contact ?? '—', blue: true, onClick: () => toast(`Calling ${job.contact}…`) },
+                    ]
+                ).map((row: any, i: number, rows: any[]) => (
+                  <div key={i} onClick={row.onClick} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '11px 16px', borderBottom: i < rows.length - 1 ? '1px solid #E1E2EC' : 'none', fontSize: '13px', cursor: row.onClick ? 'pointer' : 'default' }}>
+                    <span style={{ width: '20px', flexShrink: 0, marginTop: '1px', color: '#44475A' }}><Icon name={row.icon} size={16} color="#44475A" /></span>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#44475A', marginBottom: '1px' }}>{row.label}</div>
+                      <div style={{ fontWeight: 600, color: row.blue ? '#0057B8' : '#1A1C2E', textDecoration: row.blue ? 'underline' : 'none' }}>{row.val}</div>
+                    </div>
+                  </div>
+                ))}
+              </>,
+              { marginBottom: '10px', marginTop: '6px' }
             )}
+
+            {/* Step process */}
+            <Stepper title={`${m.label} Steps`} steps={steps.map((s, i) => ({
+              label: s.label,
+              detail: s.detail,
+              status: i < stepIndex ? 'done' : i === stepIndex ? 'active' : 'pending',
+            }))} />
           </>
         )
       })()}
