@@ -7,7 +7,7 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { GradeBadge, StatusBadge, Button, Modal, Snackbar, BuildClipart } from '../../components/ui'
 import { ShowPasswordButton } from '../../lib/auth'
-import { useContainers, useOrders, useDrivers, useSnackbar, useAuth, useFavicon } from '../../hooks'
+import { useContainers, useOrders, useDrivers, useSnackbar, useAuth, useFavicon, useIsMobile } from '../../hooks'
 import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, customBuilds as customBuildsApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, SHOT_LABELS, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role, type CustomBuild, CUSTOM_STAGES } from '../../lib/api'
 
 // Container sizes a truck can be certified to pull.
@@ -1290,6 +1290,10 @@ export default function AdminPage() {
   useFavicon('favicon-admin.svg', 'SteelBox Admin Portal')
   const { user: adminUser, logout } = useAuth()
   const [view, setView] = useState<AdminView>('dashboard')
+  const isMobile = useIsMobile()
+  // Phones: the left nav becomes an off-canvas drawer behind a hamburger.
+  const [navOpen, setNavOpen] = useState(false)
+  const go = (v: AdminView) => { setView(v); setNavOpen(false) }
   const [assignOpen, setAssignOpen] = useState(false)
   const [assignDriverId, setAssignDriverId] = useState<string | undefined>(undefined)
   const [composeOpen, setComposeOpen] = useState(false)
@@ -1689,8 +1693,14 @@ export default function AdminPage() {
   return (
     <div style={{ display: 'flex', height: '100vh', width: '100%', overflow: 'hidden', fontFamily: 'var(--sans)', background: 'var(--surf)' }}>
 
-      {/* ── Left nav ── */}
-      <nav style={{ width: 'var(--admin-nav-w)', flexShrink: 0, background: 'var(--surf-w)', borderRight: '1px solid var(--div)', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+      {/* ── Left nav — on phones it slides in as a drawer over the content ── */}
+      {isMobile && navOpen && (
+        <div onClick={() => setNavOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 490 }} />
+      )}
+      <nav style={{
+        width: 'var(--admin-nav-w)', flexShrink: 0, background: 'var(--surf-w)', borderRight: '1px solid var(--div)', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden',
+        ...(isMobile ? { position: 'fixed', top: 0, left: 0, zIndex: 500, transform: navOpen ? 'none' : 'translateX(-105%)', transition: 'transform .22s ease', boxShadow: navOpen ? 'var(--sh3)' : 'none' } : {}),
+      }}>
         <div style={{ padding: '0 18px', height: 'var(--admin-top-h)', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid var(--div)', flexShrink: 0 }}>
           <div style={{ width: '32px', height: '32px', borderRadius: 'var(--r8)', background: 'var(--primary)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><rect x="1" y="6" width="22" height="14" rx="2" /><line x1="6" y1="6" x2="6" y2="20" /><line x1="11" y1="6" x2="11" y2="20" /><line x1="16" y1="6" x2="16" y2="20" /></svg>
@@ -1701,19 +1711,19 @@ export default function AdminPage() {
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '10px 0' }}>
           <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', padding: '8px 18px 3px' }}>Operations</div>
-          <NavItem active={view === 'dashboard'} onClick={() => setView('dashboard')} label="Dashboard" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="2" y="2" width="7" height="7" rx="1.5" /><rect x="11" y="2" width="7" height="7" rx="1.5" /><rect x="2" y="11" width="7" height="7" rx="1.5" /><rect x="11" y="11" width="7" height="7" rx="1.5" /></svg>} />
-          <NavItem active={view === 'orders'} onClick={() => setView('orders')} label="Orders" badge={reserved.length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="4" y="2" width="12" height="16" rx="1.5" /><line x1="7" y1="7" x2="13" y2="7" /><line x1="7" y1="10" x2="13" y2="10" /><line x1="7" y1="13" x2="11" y2="13" /></svg>} />
-          <NavItem active={view === 'inventory'} onClick={() => setView('inventory')} label="Inventory" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="5" width="18" height="12" rx="1.5" /><line x1="5" y1="5" x2="5" y2="17" /><line x1="9" y1="5" x2="9" y2="17" /><line x1="13" y1="5" x2="13" y2="17" /></svg>} />
-          <NavItem active={view === 'schedule'} onClick={() => setView('schedule')} label="Schedule" badge={scheduleEvents.length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="2" y="4" width="16" height="14" rx="2" /><line x1="2" y1="8.5" x2="18" y2="8.5" /><line x1="7" y1="2" x2="7" y2="6" /><line x1="13" y1="2" x2="13" y2="6" /></svg>} />
-          <NavItem active={view === 'activity'} onClick={() => setView('activity')} label="Activity Log" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="10" r="7.5" /><path d="M10 5.5V10l3 2" /></svg>} />
+          <NavItem active={view === 'dashboard'} onClick={() => go('dashboard')} label="Dashboard" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="2" y="2" width="7" height="7" rx="1.5" /><rect x="11" y="2" width="7" height="7" rx="1.5" /><rect x="2" y="11" width="7" height="7" rx="1.5" /><rect x="11" y="11" width="7" height="7" rx="1.5" /></svg>} />
+          <NavItem active={view === 'orders'} onClick={() => go('orders')} label="Orders" badge={reserved.length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="4" y="2" width="12" height="16" rx="1.5" /><line x1="7" y1="7" x2="13" y2="7" /><line x1="7" y1="10" x2="13" y2="10" /><line x1="7" y1="13" x2="11" y2="13" /></svg>} />
+          <NavItem active={view === 'inventory'} onClick={() => go('inventory')} label="Inventory" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="5" width="18" height="12" rx="1.5" /><line x1="5" y1="5" x2="5" y2="17" /><line x1="9" y1="5" x2="9" y2="17" /><line x1="13" y1="5" x2="13" y2="17" /></svg>} />
+          <NavItem active={view === 'schedule'} onClick={() => go('schedule')} label="Schedule" badge={scheduleEvents.length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="2" y="4" width="16" height="14" rx="2" /><line x1="2" y1="8.5" x2="18" y2="8.5" /><line x1="7" y1="2" x2="7" y2="6" /><line x1="13" y1="2" x2="13" y2="6" /></svg>} />
+          <NavItem active={view === 'activity'} onClick={() => go('activity')} label="Activity Log" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="10" r="7.5" /><path d="M10 5.5V10l3 2" /></svg>} />
           <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', padding: '16px 18px 3px' }}>People</div>
-          <NavItem active={view === 'drivers'} onClick={() => setView('drivers')} label="Drivers" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="10" cy="6.5" r="3" /><path d="M3 18A7 7 0 0 1 17 18" /></svg>} />
-          <NavItem active={view === 'customers'} onClick={() => setView('customers')} label="Customers" badge={customerList.filter(c => c.active !== false).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="7" cy="7" r="2.6" /><path d="M2 16.5A5 5 0 0 1 12 16.5" /><path d="M13 4.6a2.6 2.6 0 0 1 0 4.8" /><path d="M14.5 16.5a5 5 0 0 0-2.2-4.1" /></svg>} />
-          <NavItem active={view === 'users'} onClick={() => setView('users')} label="Users & Access" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6" r="2.6" /><path d="M4.5 17a5.5 5.5 0 0 1 11 0" /><path d="M14.5 8.5l1 1 2-2" /></svg>} />
+          <NavItem active={view === 'drivers'} onClick={() => go('drivers')} label="Drivers" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="10" cy="6.5" r="3" /><path d="M3 18A7 7 0 0 1 17 18" /></svg>} />
+          <NavItem active={view === 'customers'} onClick={() => go('customers')} label="Customers" badge={customerList.filter(c => c.active !== false).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="7" cy="7" r="2.6" /><path d="M2 16.5A5 5 0 0 1 12 16.5" /><path d="M13 4.6a2.6 2.6 0 0 1 0 4.8" /><path d="M14.5 16.5a5 5 0 0 0-2.2-4.1" /></svg>} />
+          <NavItem active={view === 'users'} onClick={() => go('users')} label="Users & Access" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6" r="2.6" /><path d="M4.5 17a5.5 5.5 0 0 1 11 0" /><path d="M14.5 8.5l1 1 2-2" /></svg>} />
           <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', padding: '16px 18px 3px' }}>System</div>
-          <NavItem active={view === 'notifications'} onClick={() => setView('notifications')} label="Alerts" badge={reserved.length + orderList.filter(o => !o.driverId && o.status !== 'delivered').length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M4 8A6 6 0 0 1 16 8L16 12L18 14L2 14L4 12Z" /><path d="M8 16a2 2 0 004 0" /></svg>} />
-          <NavItem active={view === 'depots'} onClick={() => setView('depots')} label="Depots" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2a5.5 5.5 0 0 0-5.5 5.5c0 4 5.5 10 5.5 10s5.5-6 5.5-10A5.5 5.5 0 0 0 10 2z" /><circle cx="10" cy="7.5" r="1.8" /></svg>} />
-          <NavItem active={view === 'builds'} onClick={() => setView('builds')} label="Custom Builds" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5.5l2 2L7 15H5v-2z" /><path d="M11 7l2 2" /><rect x="2" y="4" width="16" height="13" rx="1.5" /></svg>} />
+          <NavItem active={view === 'notifications'} onClick={() => go('notifications')} label="Alerts" badge={reserved.length + orderList.filter(o => !o.driverId && o.status !== 'delivered').length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M4 8A6 6 0 0 1 16 8L16 12L18 14L2 14L4 12Z" /><path d="M8 16a2 2 0 004 0" /></svg>} />
+          <NavItem active={view === 'depots'} onClick={() => go('depots')} label="Depots" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2a5.5 5.5 0 0 0-5.5 5.5c0 4 5.5 10 5.5 10s5.5-6 5.5-10A5.5 5.5 0 0 0 10 2z" /><circle cx="10" cy="7.5" r="1.8" /></svg>} />
+          <NavItem active={view === 'builds'} onClick={() => go('builds')} label="Custom Builds" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5.5l2 2L7 15H5v-2z" /><path d="M11 7l2 2" /><rect x="2" y="4" width="16" height="13" rx="1.5" /></svg>} />
         </div>
 
         <div style={{ padding: '10px', borderTop: '1px solid var(--div)', flexShrink: 0 }}>
@@ -1735,15 +1745,20 @@ export default function AdminPage() {
       {/* ── Main ── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
         {/* Topbar */}
-        <div style={{ height: 'var(--admin-top-h)', flexShrink: 0, background: 'var(--surf-w)', borderBottom: '1px solid var(--div)', display: 'flex', alignItems: 'center', padding: '0 22px', gap: '14px', boxShadow: 'var(--sh1)' }}>
-          <div>
-            <div style={{ fontSize: '16px', fontWeight: 700 }}>{VIEW_TITLES[view]}</div>
+        <div style={{ height: 'var(--admin-top-h)', flexShrink: 0, background: 'var(--surf-w)', borderBottom: '1px solid var(--div)', display: 'flex', alignItems: 'center', padding: isMobile ? '0 12px' : '0 22px', gap: isMobile ? '10px' : '14px', boxShadow: 'var(--sh1)' }}>
+          {isMobile && (
+            <button onClick={() => setNavOpen(true)} aria-label="Open menu" style={{ width: '38px', height: '38px', borderRadius: 'var(--r8)', border: '1.5px solid var(--div)', background: 'transparent', cursor: 'pointer', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+            </button>
+          )}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: '16px', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{VIEW_TITLES[view]}</div>
             <div style={{ fontSize: '11px', color: 'var(--ink3)', fontFamily: 'var(--mono)' }}>
               {view === 'dashboard' ? `Overview · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : `SteelBox · Gulf Coast`}
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto', alignItems: 'center' }}>
-            <Button variant="ghost" size="sm" onClick={() => setComposeOpen(true)} icon={<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 5.5A1.5 1.5 0 0 1 4 4h12a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5z" /><polyline points="3 5.5 10 11 17 5.5" /></svg>}>Message a driver</Button>
+            <Button variant="ghost" size="sm" onClick={() => setComposeOpen(true)} icon={<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 5.5A1.5 1.5 0 0 1 4 4h12a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5z" /><polyline points="3 5.5 10 11 17 5.5" /></svg>}>{isMobile ? 'Message' : 'Message a driver'}</Button>
             <button onClick={refreshAll} style={{ width: '36px', height: '36px', borderRadius: '50%', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M17 10A7 7 0 113 10" /><polyline points="17,6 17,10 13,10" /></svg>
             </button>
@@ -1751,12 +1766,12 @@ export default function AdminPage() {
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '22px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '14px' : '22px' }}>
 
           {/* ── Dashboard ── */}
           {view === 'dashboard' && (
             <div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '14px', marginBottom: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4,1fr)', gap: isMobile ? '10px' : '14px', marginBottom: '24px' }}>
                 <KpiCard label="Available Units" value={available.length} color="var(--primary)" bgColor="var(--primary-cont)" delta="Active in marketplace" icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="5" width="18" height="12" rx="1.5" /><line x1="5" y1="5" x2="5" y2="17" /><line x1="9" y1="5" x2="9" y2="17" /><line x1="13" y1="5" x2="13" y2="17" /></svg>} />
                 <KpiCard label="Purchase in Progress" value={reserved.length} color="var(--cta)" bgColor="var(--cta-cont)" delta="Awaiting driver assignment" deltaType="warn" icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--cta)" strokeWidth="1.5" strokeLinecap="round"><path d="M1 2H3.5L5.5 11H14.5L16.5 4H5" /><circle cx="8" cy="17.5" r="1.5" fill="currentColor" stroke="none" /><circle cx="13" cy="17.5" r="1.5" fill="currentColor" stroke="none" /></svg>} />
                 <KpiCard label="Deliveries Scheduled" value={scheduleEvents.filter(e => e.type === 'delivery').length} color="var(--green)" bgColor="var(--green-cont)" delta={nextDeliveryOffset !== null ? `Next: ${dayDate(nextDeliveryOffset).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : 'None scheduled'} icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--green)" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="8" width="11" height="8" rx="1.5" /><path d="M12 10H16L19 13V16H12Z" /></svg>} />
