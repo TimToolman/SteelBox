@@ -5,13 +5,22 @@
 // ============================================================
 
 import { createServer } from 'node:http'
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, cpSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, basename } from 'node:path'
 import { createHmac, randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const DATA_DIR = join(__dirname, 'data')
+// In the cloud, DATA_DIR points at a persistent volume (e.g. /data on
+// Railway) so CSVs survive redeploys. First boot seeds it from the repo's
+// bundled data; local dev keeps reading ./data directly.
+const SEED_DIR = join(__dirname, 'data')
+const DATA_DIR = process.env.DATA_DIR || SEED_DIR
+if (DATA_DIR !== SEED_DIR && !existsSync(join(DATA_DIR, 'users.csv'))) {
+  mkdirSync(DATA_DIR, { recursive: true })
+  cpSync(SEED_DIR, DATA_DIR, { recursive: true })
+  console.log(`Seeded data volume ${DATA_DIR} from ${SEED_DIR}`)
+}
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000
 
 // A container stays in `draft` until its full photo set is uploaded,
@@ -445,6 +454,9 @@ async function handleRequest(req, res) {
   const seg = path.split('/').filter(Boolean) // e.g. ['containers','ctr_1','reserve']
 
   if (method === 'OPTIONS') return send(res, 204, {})
+
+  // Uptime probe for the hosting platform — no auth, no data access.
+  if (path === '/health' && method === 'GET') return send(res, 200, { ok: true })
 
   try {
     // ── Static photo files (public — marketplace guests see listings) ──

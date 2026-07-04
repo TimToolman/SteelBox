@@ -3,6 +3,8 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+  # Manual re-run — e.g. after changing the VITE_API_URL repository variable.
+  workflow_dispatch:
 
 permissions:
   contents: read
