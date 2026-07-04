@@ -6,6 +6,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react'
 import { GradeBadge, StatusBadge, Button, Modal, Snackbar, BuildClipart } from '../../components/ui'
+import { ShowPasswordButton } from '../../lib/auth'
 import { useContainers, useOrders, useDrivers, useSnackbar, useAuth, useFavicon } from '../../hooks'
 import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, customBuilds as customBuildsApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, SHOT_LABELS, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role, type CustomBuild, CUSTOM_STAGES } from '../../lib/api'
 
@@ -630,6 +631,7 @@ function UserModal({ target, drivers, onClose, onSaved }: {
   const [form, setForm] = useState({ name: '', email: '', role: 'customer' as Role, phone: '', driverId: '', password: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [showPw, setShowPw] = useState(false)
 
   useEffect(() => {
     if (!target) return
@@ -695,7 +697,10 @@ function UserModal({ target, drivers, onClose, onSaved }: {
       <label style={lbl}>Mobile phone</label>
       <input style={inp} type="tel" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="(504) 555-0000" />
       <label style={lbl}>{isNew ? 'Password' : 'Reset password (leave blank to keep)'}</label>
-      <input style={inp} type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="At least 8 characters" />
+      <div style={{ position: 'relative', marginBottom: '12px' }}>
+        <input style={{ ...inp, paddingRight: '44px', marginBottom: 0 }} type={showPw ? 'text' : 'password'} value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="At least 8 characters" />
+        <ShowPasswordButton shown={showPw} onToggle={() => setShowPw(s => !s)} />
+      </div>
       {error && <div style={{ background: '#FDECEA', border: '1px solid #F5C6C0', color: '#B3261E', borderRadius: 'var(--r8)', padding: '9px 12px', fontSize: '12px', marginBottom: '10px' }}>{error}</div>}
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '8px' }}>
         <Button variant="ghost" onClick={onClose}>Cancel</Button>

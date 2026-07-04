@@ -12,14 +12,25 @@ function getToken(): string | null {
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
-  const res = await fetch(`${BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  })
+  let res: Response
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+    })
+  } catch {
+    // fetch() itself failed — the API host is unreachable from this device.
+    // A deployed site still pointing at localhost means VITE_API_URL was
+    // never set at build time; say so instead of the cryptic "Failed to fetch".
+    const deployedButLocal = BASE.includes('localhost') && !['localhost', '127.0.0.1'].includes(window.location.hostname)
+    throw new Error(deployedButLocal
+      ? 'This site is not connected to a SteelBox API server yet — please call us at (504) 555-0190.'
+      : 'Could not reach the SteelBox server. Check your connection and try again.')
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))

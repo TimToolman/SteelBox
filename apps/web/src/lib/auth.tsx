@@ -72,6 +72,21 @@ export function useAuth(): AuthContextValue {
 const label: React.CSSProperties = { display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: '#6B7280', marginBottom: '5px' }
 const input: React.CSSProperties = { width: '100%', padding: '11px 13px', border: '1.5px solid #D9DBE4', borderRadius: '10px', fontSize: '14px', outline: 'none', marginBottom: '12px', fontFamily: 'inherit', boxSizing: 'border-box' }
 
+// Eye / eye-off toggle shown inside password fields. Reused by the admin
+// portal's user form too — keep it dependency-free.
+export function ShowPasswordButton({ shown, onToggle }: { shown: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" onClick={onToggle} aria-label={shown ? 'Hide password' : 'Show password'} tabIndex={-1}
+      style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)', width: '36px', height: '36px', display: 'grid', placeItems: 'center', background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', padding: 0 }}>
+      {shown ? (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" /><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" /><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
+      ) : (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+      )}
+    </button>
+  )
+}
+
 export function LoginForm({ onDone, allowRegister = false, subtitle }: {
   onDone?: (u: AuthUser) => void
   allowRegister?: boolean
@@ -83,6 +98,7 @@ export function LoginForm({ onDone, allowRegister = false, subtitle }: {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [pwFocused, setPwFocused] = useState(false)  // hide the ••• placeholder the moment the field is focused
+  const [showPw, setShowPw] = useState(false)
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [k]: e.target.value }))
 
   const submit = async () => {
@@ -114,11 +130,14 @@ export function LoginForm({ onDone, allowRegister = false, subtitle }: {
       <input style={input} type="email" placeholder="you@company.com" value={form.email} onChange={set('email')}
         onKeyDown={e => e.key === 'Enter' && submit()} autoFocus />
       <label style={label}>Password</label>
-      <input style={input} type="password"
-        placeholder={pwFocused ? '' : mode === 'register' ? 'At least 8 characters' : '••••••••'}
-        value={form.password} onChange={set('password')}
-        onFocus={() => setPwFocused(true)} onBlur={() => setPwFocused(false)}
-        onKeyDown={e => e.key === 'Enter' && submit()} />
+      <div style={{ position: 'relative', marginBottom: '12px' }}>
+        <input style={{ ...input, paddingRight: '44px', marginBottom: 0 }} type={showPw ? 'text' : 'password'}
+          placeholder={pwFocused ? '' : mode === 'register' ? 'At least 8 characters' : '••••••••'}
+          value={form.password} onChange={set('password')}
+          onFocus={() => setPwFocused(true)} onBlur={() => setPwFocused(false)}
+          onKeyDown={e => e.key === 'Enter' && submit()} />
+        <ShowPasswordButton shown={showPw} onToggle={() => setShowPw(s => !s)} />
+      </div>
       {mode === 'register' && (
         <div>
           <label style={label}>Mobile phone <span style={{ fontWeight: 400, textTransform: 'none' }}>(used to verify orders by text)</span></label>

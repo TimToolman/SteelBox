@@ -130,3 +130,18 @@ export function useSnackbar() {
 
   return { message, open, toast, close }
 }
+
+// ── useIsMobile ───────────────────────────────────────────
+// The app is styled inline (no CSS breakpoints), so responsive layouts
+// branch on this flag instead of media queries.
+
+export function useIsMobile(maxWidth = 760) {
+  const [mobile, setMobile] = useState(() => window.matchMedia(`(max-width: ${maxWidth}px)`).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${maxWidth}px)`)
+    const onChange = (e: MediaQueryListEvent) => setMobile(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [maxWidth])
+  return mobile
+}

@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { GradeBadge, StatusBadge, Button, Modal, Snackbar, Input, Select, BuildClipart } from '../components/ui'
-import { useContainers, useSnackbar, useAuth } from '../hooks'
+import { useContainers, useSnackbar, useAuth, useIsMobile } from '../hooks'
 import { LoginForm } from '../lib/auth'
 import { auth as authApi, containers, quotes, orders, isZipCovered, estimateDelivery, drivers as driversApi, messages as messagesApi, customers as customersApi, customBuilds as customBuildsApi, photoUrl, SHOT_LABELS, CUSTOM_STAGES, type Container, type ContainerGrade, type ContainerSize, type Driver, type Customer, type Order, type Message, type AuthUser, type CustomBuild } from '../lib/api'
 
@@ -373,6 +373,7 @@ interface DetailModalProps {
 }
 
 function DetailModal({ container, onClose, onAddToCart, mode, inCart, onNavigate, index, total }: DetailModalProps) {
+  const isMobile = useIsMobile()
   const [delivery, setDelivery] = useState('Enter your ZIP above')
   const [zip, setZip] = useState('')
   // The shopper picks Buy vs Rent right in the modal (seeded from the active
@@ -422,7 +423,7 @@ function DetailModal({ container, onClose, onAddToCart, mode, inCart, onNavigate
       <Spin360Gallery container={container} />
 
       {/* Body */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '22px', padding: '22px 26px 26px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 300px', gap: '22px', padding: isMobile ? '18px 18px 22px' : '22px 26px 26px' }}>
         <div>
           <div style={{ fontFamily: 'var(--mono)', fontSize: '12px', fontWeight: 700, color: 'var(--primary)', letterSpacing: '0.5px', marginBottom: '3px' }}>{sku}</div>
           <h2 style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.3px', marginBottom: '14px' }}>
@@ -592,6 +593,7 @@ const fieldInput: React.CSSProperties = { width: '100%', padding: '10px 12px', b
 const sectionTitle: React.CSSProperties = { fontSize: '14px', fontWeight: 700, marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }
 
 function CartModal({ open, cart, user, onClose, onRemove, onUpdateItem, onLongTermInquiry, onPlaceOrder }: CartModalProps) {
+  const isMobile = useIsMobile()
   const [form, setForm] = useState<CheckoutDetails>(EMPTY_CHECKOUT)
   const [placing, setPlacing] = useState(false)
   const [placed, setPlaced] = useState(false)
@@ -711,7 +713,7 @@ function CartModal({ open, cart, user, onClose, onRemove, onUpdateItem, onLongTe
       <h2 style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.3px', marginBottom: '2px' }}>Review your order</h2>
       <p style={{ fontSize: '12px', color: 'var(--ink3)', marginBottom: '20px' }}>{cart.length} item{cart.length > 1 ? 's' : ''} · {buyItems.length} to buy · {rentItems.length} to rent</p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 300px', gap: '24px', alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0,1fr) 300px', gap: '24px', alignItems: 'start' }}>
         {/* ── Left: items + forms ── */}
         <div>
           {/* Items */}
@@ -1458,6 +1460,9 @@ export default function MarketplacePage() {
   const [accountTab, setAccountTab] = useState<ProfileTab>('account')
   const browseRef = useRef<HTMLDivElement>(null)
   const { toast, message, open: snackOpen, close: snackClose } = useSnackbar()
+  const isMobile = useIsMobile()
+  // Phones: the filter sidebar collapses behind a toggle so inventory shows first.
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   const { data: allContainers, loading, refetch: refetchContainers } = useContainers()
   const { user, logout } = useAuth()
@@ -1616,29 +1621,29 @@ export default function MarketplacePage() {
   return (
     <div style={{ fontFamily: 'var(--sans)', background: 'var(--pg)', color: 'var(--ink)', minHeight: '100vh' }}>
       {/* ── Nav ── */}
-      <header style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 400, height: 'var(--nav-h)', background: 'var(--surf-w)', borderBottom: '1px solid var(--div)', display: 'flex', alignItems: 'center', padding: '0 20px', gap: '14px' }}>
+      <header style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 400, height: 'var(--nav-h)', background: 'var(--surf-w)', borderBottom: '1px solid var(--div)', display: 'flex', alignItems: 'center', padding: isMobile ? '0 10px' : '0 20px', gap: isMobile ? '8px' : '14px' }}>
         <a href="/" onClick={e => { e.preventDefault(); setActiveTab('buy'); setSelectedContainer(null); window.scrollTo({ top: 0 }) }} title="Back to Buy" style={{ display: 'flex', alignItems: 'center', gap: '9px', textDecoration: 'none', flexShrink: 0, cursor: 'pointer' }}>
           <div style={{ width: '32px', height: '32px', borderRadius: 'var(--r8)', background: 'var(--primary)', display: 'grid', placeItems: 'center' }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><rect x="1" y="6" width="22" height="14" rx="2" /><line x1="6" y1="6" x2="6" y2="20" /><line x1="11" y1="6" x2="11" y2="20" /><line x1="16" y1="6" x2="16" y2="20" /></svg>
           </div>
-          <span style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.4px' }}><span style={{ color: '#2B7FD4' }}>Steel</span><span style={{ color: 'var(--cta)' }}>Box</span></span>
+          {!isMobile && <span style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.4px' }}><span style={{ color: '#2B7FD4' }}>Steel</span><span style={{ color: 'var(--cta)' }}>Box</span></span>}
         </a>
-        <nav style={{ display: 'flex', gap: '2px', marginLeft: '12px' }}>
+        <nav style={{ display: 'flex', gap: '2px', marginLeft: isMobile ? 0 : '12px', overflowX: 'auto', scrollbarWidth: 'none', minWidth: 0 }}>
           {(['buy', 'rent', 'custom', 'bulk'] as Tab[]).map(t => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
-              style={{ padding: '6px 13px', borderRadius: 'var(--pill)', fontSize: '13px', fontWeight: 600, color: activeTab === t ? '#fff' : 'var(--ink3)', background: activeTab === t ? 'var(--primary)' : 'transparent', border: 'none', cursor: 'pointer' }}
+              style={{ padding: '6px 13px', borderRadius: 'var(--pill)', fontSize: '13px', fontWeight: 600, color: activeTab === t ? '#fff' : 'var(--ink3)', background: activeTab === t ? 'var(--primary)' : 'transparent', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
             >
               {t === 'buy' ? 'Buy' : t === 'rent' ? 'Rent' : t === 'custom' ? 'Custom Builds' : 'Bulk / B2B'}
             </button>
           ))}
         </nav>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
-          <button onClick={() => openQuote('contact')} style={{ padding: '7px 16px', borderRadius: 'var(--pill)', background: 'transparent', border: '1.5px solid var(--div)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Contact Us</button>
-          <button onClick={() => setCartOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: 'var(--pill)', background: 'var(--cta)', color: '#fff', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto', flexShrink: 0 }}>
+          {!isMobile && <button onClick={() => openQuote('contact')} style={{ padding: '7px 16px', borderRadius: 'var(--pill)', background: 'transparent', border: '1.5px solid var(--div)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Contact Us</button>}
+          <button onClick={() => setCartOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: isMobile ? '7px 12px' : '7px 16px', borderRadius: 'var(--pill)', background: 'var(--cta)', color: '#fff', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
             <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M1 2h2.5l2 9h9l2-7H5" /><circle cx="8" cy="17.5" r="1.5" fill="#fff" stroke="none" /><circle cx="13" cy="17.5" r="1.5" fill="#fff" stroke="none" /></svg>
-            Cart <span style={{ background: 'rgba(255,255,255,.25)', padding: '0 6px', borderRadius: '99px', fontSize: '10px', marginLeft: '2px' }}>{cart.length}</span>
+            {!isMobile && 'Cart '}<span style={{ background: 'rgba(255,255,255,.25)', padding: '0 6px', borderRadius: '99px', fontSize: '10px', marginLeft: '2px' }}>{cart.length}</span>
           </button>
           <button onClick={() => setProfileOpen(true)} title={customerReplies > 0 ? `${customerReplies} new message${customerReplies > 1 ? 's' : ''} from your driver` : user ? `${user.name} · Profile` : 'Sign in / Profile'} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px', borderRadius: '50%', background: user ? 'var(--primary)' : 'transparent', border: user ? 'none' : '1.5px solid var(--div)', cursor: 'pointer', flexShrink: 0 }}>
             {user
@@ -1654,14 +1659,14 @@ export default function MarketplacePage() {
       </header>
 
       {/* ── Hero ── */}
-      <section style={{ marginTop: 'var(--nav-h)', background: '#0B1629', padding: (activeTab === 'custom' || activeTab === 'bulk') ? '14px 48px 16px' : '22px 48px 24px', display: 'flex', alignItems: 'center', gap: '48px', position: 'relative', overflow: 'hidden' }}>
+      <section style={{ marginTop: 'var(--nav-h)', background: '#0B1629', padding: isMobile ? '20px 20px 22px' : (activeTab === 'custom' || activeTab === 'bulk') ? '14px 48px 16px' : '22px 48px 24px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? '20px' : '48px', position: 'relative', overflow: 'hidden' }}>
         <img src="https://images.unsplash.com/photo-1494412574643-ff11b0a5c1c3?w=1600&q=80" alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 60%', opacity: 0.28, pointerEvents: 'none' }} />
         <div style={{ flex: 1, minWidth: 0, position: 'relative', zIndex: 1 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.15)', borderRadius: 'var(--pill)', padding: '5px 14px', fontSize: '11px', fontWeight: 600, letterSpacing: '0.8px', textTransform: 'uppercase', color: 'rgba(255,255,255,.7)', marginBottom: '14px' }}>
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#4DFFB4', animation: 'pulse 2s ease infinite', flexShrink: 0 }} />
             Now Serving the Gulf Coast · 200-Mile Radius from New Orleans
           </div>
-          <h1 style={{ fontSize: 'clamp(22px,2.6vw,40px)', fontWeight: 700, lineHeight: 1.1, letterSpacing: '-0.5px', color: '#fff', marginBottom: (activeTab === 'custom' || activeTab === 'bulk') ? '10px' : '12px', whiteSpace: 'nowrap' }}>
+          <h1 style={{ fontSize: 'clamp(22px,2.6vw,40px)', fontWeight: 700, lineHeight: 1.15, letterSpacing: '-0.5px', color: '#fff', marginBottom: (activeTab === 'custom' || activeTab === 'bulk') ? '10px' : '12px', whiteSpace: isMobile ? 'normal' : 'nowrap' }}>
             {activeTab === 'custom' ? <>Custom Container Builds.</> : activeTab === 'bulk' ? <>Bulk &amp; B2B Orders.</> : <>Steel Containers. <em style={{ fontStyle: 'normal', color: '#60A5FA' }}>Delivered in Days.</em></>}
           </h1>
           {activeTab !== 'custom' && activeTab !== 'bulk' && (
@@ -1675,7 +1680,7 @@ export default function MarketplacePage() {
 
         {/* ZIP card — only on Buy/Rent */}
         {activeTab !== 'custom' && activeTab !== 'bulk' && (
-        <div style={{ flexShrink: 0, width: '340px', background: 'rgba(255,255,255,.07)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255,255,255,.13)', borderRadius: 'var(--r24)', padding: '24px', position: 'relative', zIndex: 1 }}>
+        <div style={{ flexShrink: 0, width: isMobile ? '100%' : '340px', boxSizing: 'border-box', background: 'rgba(255,255,255,.07)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255,255,255,.13)', borderRadius: 'var(--r24)', padding: isMobile ? '18px' : '24px', position: 'relative', zIndex: 1 }}>
           <div style={{ fontSize: '14px', fontWeight: 700, color: '#fff', marginBottom: '4px' }}>Check delivery to your address</div>
           <div style={{ fontSize: '12px', color: 'rgba(255,255,255,.5)', marginBottom: '16px' }}>Enter your ZIP — we'll confirm coverage and estimated date.</div>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
@@ -1697,9 +1702,21 @@ export default function MarketplacePage() {
 
       {/* ── Browse panel ── */}
       {(activeTab === 'buy' || activeTab === 'rent') && (
-        <div ref={browseRef} style={{ display: 'flex', width: '100%' }}>
+        <div ref={browseRef} style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', width: '100%' }}>
+          {/* Mobile: filters live behind a toggle bar so inventory shows first */}
+          {isMobile && (
+            <button onClick={() => setFiltersOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '12px 16px', background: 'var(--surf-w)', border: 'none', borderBottom: '1px solid var(--div)', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink)' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>
+                Filters &amp; Sort
+              </span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ transform: filtersOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}><polyline points="6 9 12 15 18 9" /></svg>
+            </button>
+          )}
           {/* Sidebar */}
-          <aside style={{ width: 'var(--sb-w)', flexShrink: 0, borderRight: '1px solid var(--div)', padding: '14px 10px', position: 'sticky', top: 'var(--nav-h)', height: 'calc(100vh - var(--nav-h))', overflowY: 'auto', background: 'var(--surf-w)' }}>
+          <aside style={isMobile
+            ? { display: filtersOpen ? 'block' : 'none', width: '100%', boxSizing: 'border-box', borderBottom: '1px solid var(--div)', padding: '14px 16px', background: 'var(--surf-w)' }
+            : { width: 'var(--sb-w)', flexShrink: 0, borderRight: '1px solid var(--div)', padding: '14px 10px', position: 'sticky', top: 'var(--nav-h)', height: 'calc(100vh - var(--nav-h))', overflowY: 'auto', background: 'var(--surf-w)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.4px' }}>Filters</span>
               <button onClick={() => { setSizeFilters(new Set(ALL_SIZES)); setGradeFilters(new Set(['A','B','C','R','X'])) }} style={{ background: 'none', border: 'none', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>Select All</button>
@@ -1770,7 +1787,7 @@ export default function MarketplacePage() {
             </div>
 
             {loading ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '10px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(auto-fill, minmax(220px, 1fr))' : 'repeat(4,1fr)', gap: '10px' }}>
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', height: '260px', animation: 'pulse 1.5s ease infinite' }} />
                 ))}

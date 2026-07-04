@@ -154,7 +154,23 @@
       "Bash(node -e 'let d='\\\\'''\\\\'';process.stdin.on\\('\\\\''data'\\\\'',c=>d+=c\\).on\\('\\\\''end'\\\\'',\\(\\)=>{ *)",
       "Bash(node --check /Users/tmoore/Documents/GitHub/SteelBox/apps/api/server.mjs)",
       "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{JSON.parse\\(d\\).forEach\\(x=>console.log\\(x.id, x.name.padEnd\\(14\\), x.active===false?'ARCHIVED':'active'\\)\\)}\\)\")",
-      "Bash(grep -n \"calView === 'week' ? Array.from\\\\|Array.from\\({ length: 7 }, \\(_, offset\\)\" /Users/tmoore/Documents/GitHub/SteelBox/apps/web/src/pages/admin/index.tsx)"
+      "Bash(grep -n \"calView === 'week' ? Array.from\\\\|Array.from\\({ length: 7 }, \\(_, offset\\)\" /Users/tmoore/Documents/GitHub/SteelBox/apps/web/src/pages/admin/index.tsx)",
+      "Bash(gh variable *)",
+      "Bash(gh api *)",
+      "Bash(railway whoami *)",
+      "Read(//Users/tmoore/Library/Caches/ms-playwright/**)",
+      "Bash(npx --no-install playwright --version)",
+      "Read(//Users/tmoore/**)",
+      "Bash(npm ls *)",
+      "Bash(npm init *)",
+      "Bash(npm i *)",
+      "Bash(curl -s -o /dev/null -w \"web:%{http_code} \" http://localhost:3000/SteelBox/)",
+      "Bash(curl -s -o /dev/null -w \"api:%{http_code}\\\\n\" http://localhost:4000/containers)",
+      "Bash(lsof -nP -iTCP:3000 -iTCP:4000 -sTCP:LISTEN)",
+      "Bash(node shot.mjs)",
+      "Bash(curl -s -X POST http://localhost:4000/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"dan@steelbox.co\",\"password\":\"wrongpw\"}')",
+      "Bash(awk -F',' 'NR==1 || $2 ~ /steelbox.co|tgmoore/ {print $2\", role=\"$4\", active=\"$10}' apps/api/data/users.csv)",
+      "Bash(git -C /Users/tmoore/Documents/GitHub/SteelBox diff --stat)"
     ],
     "additionalDirectories": [
       "/private/tmp/claude-501/-Users-tmoore-Documents-GitHub-SteelBox/8bc4a042-4d10-4d19-90cb-3295d19f3bb6/scratchpad/csvbak"
