@@ -1350,6 +1350,13 @@ export default function AdminPage() {
   const driverById = (id: string) => driverList.find(d => d.id === id)
   const weekStart = new Date(); weekStart.setHours(0, 0, 0, 0)
   const dayDate = (offset: number) => { const d = new Date(weekStart); d.setDate(d.getDate() + offset); return d }
+  // The calendar always shows Monday–Sunday of the current week. Offsets stay
+  // relative to today (the schedule's storage model), so Monday's offset is
+  // negative or zero depending on what day it is.
+  const mondayDelta = -((weekStart.getDay() + 6) % 7)
+  const weekOffsets = Array.from({ length: 7 }, (_, i) => mondayDelta + i)
+  // Calendar shows two full Mon–Sun weeks: this week and next.
+  const twoWeeks = [weekOffsets, weekOffsets.map(o => o + 7)]
   // Overlap detection per driver per day, using the 60mph + 30min-each-end job block.
   const conflictIds = (() => {
     const set = new Set<string>()
@@ -2184,7 +2191,7 @@ export default function AdminPage() {
             <div>
               {/* KPIs */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '14px', marginBottom: '20px' }}>
-                <KpiCard label="Scheduled (7 days)" value={scheduleEvents.length} color="var(--ink)" bgColor="var(--surf1)" icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--ink2)" strokeWidth="1.5" strokeLinecap="round"><rect x="2" y="4" width="16" height="14" rx="2" /><line x1="2" y1="8.5" x2="18" y2="8.5" /></svg>} />
+                <KpiCard label="Scheduled (2 weeks)" value={scheduleEvents.length} color="var(--ink)" bgColor="var(--surf1)" icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--ink2)" strokeWidth="1.5" strokeLinecap="round"><rect x="2" y="4" width="16" height="14" rx="2" /><line x1="2" y1="8.5" x2="18" y2="8.5" /></svg>} />
                 <KpiCard label="Deliveries" value={scheduleEvents.filter(e => e.type === 'delivery').length} color="var(--primary)" bgColor="var(--primary-cont)" icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="8" width="11" height="8" rx="1.5" /><path d="M12 10H16L19 13V16H12Z" /></svg>} />
                 <KpiCard label="Returns" value={scheduleEvents.filter(e => e.type === 'return').length} color="#6D28D9" bgColor="#EDE9FE" icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#6D28D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 4L4 8l4 4" /><path d="M4 8h9a4 4 0 0 1 4 4v2" /></svg>} />
                 <KpiCard label="Conflicts" value={conflictIds.size} color={conflictIds.size ? 'var(--cta)' : 'var(--green)'} bgColor={conflictIds.size ? 'var(--cta-cont)' : 'var(--green-cont)'} delta={conflictIds.size ? 'Driver double-booked' : 'No overlaps'} deltaType="warn" icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke={conflictIds.size ? 'var(--cta)' : 'var(--green)'} strokeWidth="1.5" strokeLinecap="round"><path d="M10 2L1 18h18L10 2z" /><line x1="10" y1="8" x2="10" y2="12" /><circle cx="10" cy="15" r="0.6" fill="currentColor" /></svg>} />
@@ -2193,7 +2200,7 @@ export default function AdminPage() {
               {/* Week calendar */}
               <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', overflow: 'hidden', marginBottom: '22px' }}>
                 <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--div)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ fontSize: '15px', fontWeight: 700 }}>{calView === 'week' ? 'This Week' : dayDate(schedDay).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</div>
+                  <div style={{ fontSize: '15px', fontWeight: 700 }}>{calView === 'week' ? 'This Week & Next' : dayDate(schedDay).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</div>
                   <select value={calView} onChange={e => setCalView(e.target.value as 'week' | 'day')} style={{ padding: '6px 10px', borderRadius: 'var(--r8)', border: '1.5px solid var(--div)', background: 'var(--surf-w)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', outline: 'none', fontFamily: 'var(--sans)' }}>
                     <option value="week">Week view</option>
                     <option value="day">Day view</option>
@@ -2207,12 +2214,20 @@ export default function AdminPage() {
                   <Button variant="primary" size="sm" onClick={() => setSchedModal({})} icon={<span>+</span>}>Schedule Job</Button>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
+                  {(calView === 'week' ? twoWeeks : [[schedDay]]).map((week, wi) => (
+                  <div key={wi}>
+                  {calView === 'week' && (
+                    <div style={{ padding: '7px 14px', background: 'var(--surf1)', borderTop: wi ? '1px solid var(--div)' : 'none', borderBottom: '1px solid var(--div)', fontSize: '10px', fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', color: 'var(--ink3)' }}>
+                      {wi === 0 ? 'This Week' : 'Next Week'} · {dayDate(week[0]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {dayDate(week[6]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </div>
+                  )}
                   <div style={{ display: 'grid', gridTemplateColumns: calView === 'week' ? 'repeat(7,minmax(150px,1fr))' : '1fr', minWidth: calView === 'week' ? '900px' : 'auto' }}>
-                    {(calView === 'week' ? Array.from({ length: 7 }, (_, i) => i) : [schedDay]).map((offset) => {
+                    {week.map((offset, idx) => {
                       const d = dayDate(offset)
+                      const past = offset < 0
                       const jobs = scheduleEvents.filter(e => e.dayOffset === offset).sort((a, b) => a.startMin - b.startMin)
                       return (
-                        <div key={offset} style={{ borderRight: offset < 6 ? '1px solid var(--div)' : 'none', minHeight: '150px' }}>
+                        <div key={offset} style={{ borderRight: calView === 'week' && idx < 6 ? '1px solid var(--div)' : 'none', minHeight: '150px', opacity: past ? 0.55 : 1 }}>
                           <div style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid var(--div)', background: offset === 0 ? 'var(--primary-cont)' : 'var(--surf1)' }}>
                             <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.6px', textTransform: 'uppercase', color: offset === 0 ? 'var(--primary)' : 'var(--ink3)' }}>{d.toLocaleDateString('en-US', { weekday: 'short' })}</div>
                             <div style={{ fontSize: '15px', fontWeight: 700, color: offset === 0 ? 'var(--primary)' : 'var(--ink)' }}>{d.getDate()}</div>
@@ -2239,6 +2254,8 @@ export default function AdminPage() {
                       )
                     })}
                   </div>
+                  </div>
+                  ))}
                 </div>
               </div>
 
@@ -2246,30 +2263,57 @@ export default function AdminPage() {
               <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', overflow: 'hidden' }}>
                 <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--div)', fontSize: '15px', fontWeight: 700 }}>By Driver — double-booking check <span style={{ fontSize: '11px', fontWeight: 400, color: 'var(--ink3)' }}>· travel @ 60 mph + 30 min load/unload each end</span></div>
                 <div style={{ display: 'flex', gap: '6px', padding: '10px 14px', overflowX: 'auto', borderBottom: '1px solid var(--div)' }}>
-                  {Array.from({ length: 7 }, (_, offset) => {
+                  {[...weekOffsets, ...weekOffsets.map(o => o + 7)].map(offset => {
                     const d = dayDate(offset)
                     const active = schedDay === offset
                     return (
-                      <button key={offset} onClick={() => setSchedDay(offset)} style={{ flexShrink: 0, padding: '6px 12px', borderRadius: 'var(--pill)', border: '1.5px solid', borderColor: active ? 'var(--primary)' : 'var(--div)', background: active ? 'var(--primary)' : 'transparent', color: active ? '#fff' : 'var(--ink2)', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
+                      <button key={offset} onClick={() => setSchedDay(offset)} style={{ flexShrink: 0, padding: '6px 12px', borderRadius: 'var(--pill)', border: '1.5px solid', borderColor: active ? 'var(--primary)' : 'var(--div)', background: active ? 'var(--primary)' : 'transparent', color: active ? '#fff' : offset < 0 ? 'var(--ink3)' : 'var(--ink2)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: offset < 0 && !active ? 0.6 : 1 }}>
                         {d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' })}
                       </button>
                     )
                   })}
                 </div>
                 <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  {activeDrivers.filter(drv => scheduleEvents.some(e => e.dayOffset === schedDay && e.driverId === drv.id)).map(drv => {
+                  {/* Every driver with jobs today — INCLUDING archived ones, so
+                      removing a driver never hides their still-scheduled work.
+                      Archived drivers get a bulk "reassign all" control. */}
+                  {[...new Set(scheduleEvents.filter(e => e.dayOffset === schedDay).map(e => e.driverId))]
+                    .map(id => driverList.find(d => d.id === id)
+                      ?? ({ id, name: 'Unknown driver', initials: '?', colorHex: '#9CA3AF', vehicle: '', active: false } as Driver))
+                    .sort((a, b) => Number(b.active !== false) - Number(a.active !== false))
+                    .map(drv => {
                     const jobs = scheduleEvents.filter(e => e.dayOffset === schedDay && e.driverId === drv.id).sort((a, b) => a.startMin - b.startMin)
                     const hasClash = jobs.some(e => conflictIds.has(e.id))
+                    const archived = drv.active === false
                     return (
-                      <div key={drv.id} style={{ border: `1px solid ${hasClash ? 'var(--cta)' : 'var(--div)'}`, borderRadius: 'var(--r12)', overflow: 'hidden' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'var(--surf1)', borderBottom: '1px solid var(--div)' }}>
-                          <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: drv.colorHex, color: '#fff', fontSize: '11px', fontWeight: 700, display: 'grid', placeItems: 'center' }}>{drv.initials}</span>
+                      <div key={drv.id} style={{ border: `1px solid ${archived ? 'var(--amber)' : hasClash ? 'var(--cta)' : 'var(--div)'}`, borderRadius: 'var(--r12)', overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: archived ? 'var(--amb-c,#FEF3C7)' : 'var(--surf1)', borderBottom: '1px solid var(--div)', flexWrap: 'wrap' }}>
+                          <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: drv.colorHex, color: '#fff', fontSize: '11px', fontWeight: 700, display: 'grid', placeItems: 'center', opacity: archived ? 0.6 : 1 }}>{drv.initials}</span>
                           <div style={{ fontSize: '13px', fontWeight: 700 }}>{drv.name}</div>
-                          <span style={{ fontSize: '10px', color: 'var(--ink3)' }}>{drv.vehicle}</span>
+                          {archived
+                            ? <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--amber)', background: 'var(--surf-w)', border: '1px solid var(--amber)', padding: '2px 9px', borderRadius: 'var(--pill)', letterSpacing: '0.4px' }}>ARCHIVED — jobs need a new driver</span>
+                            : <span style={{ fontSize: '10px', color: 'var(--ink3)' }}>{drv.vehicle}</span>}
                           {hasClash
                             ? <span style={{ marginLeft: 'auto', fontSize: '11px', fontWeight: 700, color: 'var(--cta)', background: 'var(--cta-cont)', padding: '3px 10px', borderRadius: 'var(--pill)' }}>⚠ Overlap</span>
-                            : <span style={{ marginLeft: 'auto', fontSize: '11px', fontWeight: 600, color: 'var(--green)' }}>✓ {jobs.length} job{jobs.length > 1 ? 's' : ''}, clear</span>}
-                          <button onClick={() => setSchedModal({ driverId: drv.id })} style={{ padding: '4px 11px', borderRadius: 'var(--pill)', border: '1.5px solid var(--div)', background: 'transparent', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>+ Schedule</button>
+                            : <span style={{ marginLeft: 'auto', fontSize: '11px', fontWeight: 600, color: archived ? 'var(--amber)' : 'var(--green)' }}>{archived ? `${jobs.length} orphaned job${jobs.length > 1 ? 's' : ''}` : `✓ ${jobs.length} job${jobs.length > 1 ? 's' : ''}, clear`}</span>}
+                          {archived ? (
+                            <select
+                              value=""
+                              onChange={e => {
+                                const newId = e.target.value
+                                if (!newId) return
+                                // Move ALL of this archived driver's scheduled jobs (every day).
+                                scheduleEvents.filter(j => j.driverId === drv.id).forEach(j => reassignJob(j.id, newId))
+                                toast(`${drv.name}'s jobs reassigned to ${activeDrivers.find(d => d.id === newId)?.name ?? 'driver'}`)
+                              }}
+                              style={{ padding: '5px 10px', border: '1.5px solid var(--amber)', borderRadius: 'var(--r8)', fontSize: '11px', fontWeight: 600, outline: 'none', fontFamily: 'var(--sans)', background: 'var(--surf-w)', cursor: 'pointer' }}
+                            >
+                              <option value="">Reassign all to…</option>
+                              {activeDrivers.map(d => <option key={d.id} value={d.id}>{d.name} · {d.vehicle}</option>)}
+                            </select>
+                          ) : (
+                            <button onClick={() => setSchedModal({ driverId: drv.id })} style={{ padding: '4px 11px', borderRadius: 'var(--pill)', border: '1.5px solid var(--div)', background: 'transparent', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>+ Schedule</button>
+                          )}
                         </div>
                         <div>
                           {jobs.map((e, i) => {
@@ -2295,7 +2339,7 @@ export default function AdminPage() {
                       </div>
                     )
                   })}
-                  {activeDrivers.filter(drv => scheduleEvents.some(e => e.dayOffset === schedDay && e.driverId === drv.id)).length === 0 && (
+                  {scheduleEvents.filter(e => e.dayOffset === schedDay).length === 0 && (
                     <div style={{ textAlign: 'center', padding: '30px', color: 'var(--ink3)', fontSize: '13px' }}>No jobs scheduled for this day.</div>
                   )}
                 </div>
