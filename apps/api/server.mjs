@@ -79,7 +79,10 @@ function serializeCsv(headers, records, toCells) {
 const SCHEMAS = {
   containers: {
     file: 'containers.csv',
-    headers: ['id','sku','guid','stockNumber','size','grade','status','buyPrice','rentMonthly','photos','photoCount','has360','depotLocation','bayNumber','inspectorName','inspectedAt','deliveryIncluded','listingType','createdAt','purchaseCost','conditionScore'],
+    // customEta/customBuildName only apply to custom-build orders
+    // (status custom_in_progress): the promised completion date + which
+    // catalog build the unit is being fabricated as.
+    headers: ['id','sku','guid','stockNumber','size','grade','status','buyPrice','rentMonthly','photos','photoCount','has360','depotLocation','bayNumber','inspectorName','inspectedAt','deliveryIncluded','listingType','createdAt','purchaseCost','conditionScore','customEta','customBuildName'],
     types: {
       buyPrice: 'number', rentMonthly: 'numberOrNull', photoCount: 'number', purchaseCost: 'number', conditionScore: 'number',
       has360: 'boolean', deliveryIncluded: 'boolean',
@@ -156,6 +159,13 @@ const SCHEMAS = {
     headers: ['id','channel','to','subject','body','relatedType','relatedId','status','createdAt'],
     types: {},
   },
+  // Custom build products on the marketplace "Custom Builds" tab.
+  // Managed in Admin → Settings. photo '' = show the built-in clipart.
+  custombuilds: {
+    file: 'custombuilds.csv',
+    headers: ['id','name','tag','description','features','fromPrice','photo','sortOrder','active'],
+    types: { fromPrice: 'number', sortOrder: 'number', active: 'boolean', features: 'array' },
+  },
 }
 
 function decodeCell(raw, type) {
@@ -224,7 +234,9 @@ function nextSku(size, code, containers) {
 }
 
 function uid(prefix) {
-  return `${prefix}_${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`
+  // Time-sortable + 5 random bytes — burst-safe (the old 4-digit random
+  // suffix could collide when many records were created in the same ms).
+  return `${prefix}_${Date.now().toString(36)}${randomBytes(5).toString('hex')}`
 }
 
 // Find-or-create a customer from an order/checkout body; returns the customer id.
@@ -253,7 +265,7 @@ function upsertCustomerFromOrder(body) {
   customers.push({
     id,
     name: body.customerName || body.customerEmail || 'Guest',
-    company: '',
+    company: body.company || '',
     email: body.customerEmail || '',
     phone: body.customerPhone || '',
     address: body.deliveryAddress || '',
@@ -338,6 +350,22 @@ function ensureSeedUsers() {
   if (changed) writeTable('users', users)
 }
 
+// Seed the Custom Builds catalog once (previously hard-coded in the
+// marketplace). Admin edits these under Settings; photos are optional —
+// blank means the marketplace shows the built-in clipart.
+function ensureSeedCustomBuilds() {
+  if (readTable('custombuilds').length > 0) return
+  const seed = [
+    { name: 'Roll-Up Door', tag: 'POPULAR', description: 'Single or double roll-up doors for easy forklift access.', features: ['8×7 roll-up', 'Galvanized steel', 'Lockable'], fromPrice: 3200 },
+    { name: 'Personnel Door + Window', tag: 'COMMON', description: 'Man door and sliding window for office or site use.', features: ['36" steel door', 'Deadbolt', 'Slider window'], fromPrice: 2800 },
+    { name: 'Workshop Container', tag: 'TURNKEY', description: 'Wired for power, vented, shelving included.', features: ['110v outlets', 'Fluorescent lighting', 'Vent fans'], fromPrice: 5500 },
+    { name: 'Pop-Up Retail Shell', tag: 'TRENDING', description: 'Fold-out panels, branded exterior, ready for signage.', features: ['Fold-out counter', 'Service window', 'Awning mounts'], fromPrice: 7200 },
+    { name: 'Security Vault', tag: 'HEAVY DUTY', description: 'Reinforced doors, CCTV mount points, alarm wiring.', features: ['10-gauge steel door', '3-point lock', 'CCTV prep'], fromPrice: 4400 },
+  ]
+  writeTable('custombuilds', seed.map((b, i) => ({ id: uid('cb'), ...b, photo: '', sortOrder: i + 1, active: true })))
+  console.log('Seeded custom builds catalog (5 products)')
+}
+
 // ── Two-factor codes (SMS) ────────────────────────────────
 // Codes live in memory (10-min expiry); the "text" itself is logged to
 // outbox.csv. Orders require a verification completed in the last 15 min —
@@ -410,7 +438,7 @@ function readBody(req) {
 
 // ── Router ────────────────────────────────────────────────
 
-const server = createServer(async (req, res) => {
+async function handleRequest(req, res) {
   const method = req.method || 'GET'
   const url = new URL(req.url || '/', `http://localhost:${PORT}`)
   const path = url.pathname
@@ -600,7 +628,9 @@ const server = createServer(async (req, res) => {
           purchaseCost: body.purchaseCost != null ? Number(body.purchaseCost) : 0,
           // Field-scored condition 1–5 (0 = not yet inspected).
           conditionScore: body.conditionScore != null ? Number(body.conditionScore) : 0,
-          rentMonthly: body.rentMonthly != null ? Number(body.rentMonthly) : estimateRent(buyPrice),
+          // Buy-only units carry no rent rate; otherwise default to an estimate.
+          rentMonthly: body.listingType === 'buy' ? (body.rentMonthly != null ? Number(body.rentMonthly) : null)
+            : body.rentMonthly != null ? Number(body.rentMonthly) : estimateRent(buyPrice),
           photos,
           photoCount: body.photoCount != null ? Number(body.photoCount) : photos.length,
           has360: body.has360 ?? false,
@@ -630,6 +660,28 @@ const server = createServer(async (req, res) => {
         const body = await readBody(req)
         containers[idx] = withPhotoPromotion({ ...containers[idx], ...body, id: containers[idx].id })
         writeTable('containers', containers)
+        // Setting/altering the custom-build ETA syncs the customer's order and
+        // notifies them (their portal shows the expected completion date).
+        if (body.customEta !== undefined) {
+          const orders = readTable('orders')
+          const oi = orders.findIndex(o => (o.containerId === containers[idx].id || o.containerSku === containers[idx].sku) && o.status === 'custom_in_progress')
+          if (oi !== -1) {
+            orders[oi] = { ...orders[oi], scheduledDate: body.customEta || null }
+            writeTable('orders', orders)
+            if (body.customEta) {
+              const o = orders[oi]
+              const nice = String(body.customEta).slice(0, 10)
+              queueMessage('email', o.customerEmail, `Your custom build — estimated completion ${nice}`,
+                `Good news! Your ${containers[idx].customBuildName || 'custom container'} (${o.containerSku}) is in the shop. Estimated completion: ${nice}. We'll schedule delivery as soon as it's ready.`,
+                'order', o.id)
+              const cust = readTable('customers').find(c => c.id === o.customerId)
+              if (cust?.notifySms && o.customerPhone) {
+                queueMessage('sms', o.customerPhone, 'Custom build update',
+                  `SteelBox: your ${o.containerSku} custom build is estimated complete ${nice}.`, 'order', o.id)
+              }
+            }
+          }
+        }
         return send(res, 200, containers[idx])
       }
 
@@ -780,6 +832,69 @@ const server = createServer(async (req, res) => {
         return send(res, 200, orders[idx])
       }
 
+      // ── Custom-build stage machine (admin) ──
+      // estimate_requested → estimate_in_progress → estimate_sent (amount set,
+      // approval happens over the phone) → estimate_approved →
+      // custom_in_progress (build ETA) → sold → normal delivery pipeline.
+      // Each transition syncs the container and notifies the customer.
+      if (seg.length === 3 && seg[2] === 'custom-stage' && method === 'POST') {
+        if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
+        if (idx === -1) return send(res, 404, { message: 'Order not found' })
+        const body = await readBody(req)
+        const STAGES = ['estimate_in_progress', 'estimate_sent', 'estimate_approved', 'custom_in_progress']
+        if (!STAGES.includes(body.stage)) return send(res, 400, { message: `stage must be one of ${STAGES.join(', ')}` })
+        const amount = Number(body.amount)
+        if (body.stage === 'estimate_sent' && !(amount > 0)) return send(res, 400, { message: 'A positive estimate amount is required' })
+        orders[idx] = {
+          ...orders[idx],
+          status: body.stage,
+          ...(body.stage === 'estimate_sent' ? { amount } : {}),
+        }
+        writeTable('orders', orders)
+        const o = orders[idx]
+        // Mirror the stage (and settled price) onto the pipeline container.
+        const containers = readTable('containers')
+        const ci = containers.findIndex(c => c.id === o.containerId || c.sku === o.containerSku)
+        if (ci !== -1) {
+          containers[ci] = { ...containers[ci], status: body.stage, ...(body.stage === 'estimate_sent' ? { buyPrice: amount } : {}) }
+          writeTable('containers', containers)
+        }
+        const buildName = (ci !== -1 && containers[ci].customBuildName) || 'custom build'
+        const cust = readTable('customers').find(c => c.id === o.customerId)
+        const sms = (subject, text) => { if (cust?.notifySms && o.customerPhone) queueMessage('sms', o.customerPhone, subject, text, 'order', o.id) }
+        if (body.stage === 'estimate_in_progress') {
+          queueMessage('email', o.customerEmail, `We're preparing your estimate — ${buildName}`,
+            `Hi ${o.customerName}, our team is working up your ${buildName} estimate (${o.containerSku}). Expect a call at ${o.customerPhone || 'your number'} to walk through the details.`,
+            'order', o.id)
+        } else if (body.stage === 'estimate_sent') {
+          queueMessage('email', o.customerEmail, `Your estimate — ${buildName}: $${amount.toLocaleString()}`,
+            `Hi ${o.customerName}, your ${buildName} (${o.containerSku}) estimate is $${amount.toLocaleString()}, delivery included. We'll call to walk through it — approval happens right on the call.`,
+            'order', o.id)
+          sms('Estimate ready', `SteelBox: your ${buildName} estimate is $${amount.toLocaleString()}. We'll call to review and confirm.`)
+        } else if (body.stage === 'estimate_approved') {
+          queueMessage('email', o.customerEmail, `Estimate approved — ${buildName} ($${(o.amount || 0).toLocaleString()})`,
+            `Great news ${o.customerName} — your ${buildName} (${o.containerSku}) estimate of $${(o.amount || 0).toLocaleString()} is approved. We're scheduling fabrication and will send your build completion date next.`,
+            'order', o.id)
+          sms('Estimate approved', `SteelBox: ${o.containerSku} approved at $${(o.amount || 0).toLocaleString()}. Build date coming soon.`)
+        } else if (body.stage === 'custom_in_progress') {
+          queueMessage('email', o.customerEmail, `Fabrication started — ${buildName}`,
+            `Your ${buildName} (${o.containerSku}) is in the shop! We'll send the estimated completion date as soon as it's scheduled.`,
+            'order', o.id)
+        }
+        return send(res, 200, o)
+      }
+
+      // Admin edits (e.g. moving a finished custom build to 'sold' so it
+      // enters the normal approve → assign-driver delivery pipeline).
+      if (seg.length === 2 && method === 'PATCH') {
+        if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
+        if (idx === -1) return send(res, 404, { message: 'Order not found' })
+        const body = await readBody(req)
+        orders[idx] = { ...orders[idx], ...body, id: orders[idx].id }
+        writeTable('orders', orders)
+        return send(res, 200, orders[idx])
+      }
+
       if (seg.length === 3 && seg[2] === 'assign-driver' && method === 'POST') {
         if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
         if (idx === -1) return send(res, 404, { message: 'Order not found' })
@@ -878,8 +993,21 @@ const server = createServer(async (req, res) => {
         }
         if (idx === -1) return send(res, 404, { message: 'Driver not found' })
         const body = await readBody(req)
+        const oldName = drivers[idx].name
         drivers[idx] = { ...drivers[idx], ...body, id: drivers[idx].id }
         writeTable('drivers', drivers)
+        // Open orders carry the driver's name as display text — keep them in
+        // step on rename (delivered orders keep their historical snapshot).
+        if (body.name && body.name !== oldName) {
+          const orders = readTable('orders')
+          let changed = false
+          orders.forEach((o, i) => {
+            if (o.driverId === drivers[idx].id && o.status !== 'delivered') {
+              orders[i] = { ...o, driverName: drivers[idx].name }; changed = true
+            }
+          })
+          if (changed) writeTable('orders', orders)
+        }
         return send(res, 200, drivers[idx])
       }
       // Soft delete — keep the row (activity/order history intact), just deactivate.
@@ -948,8 +1076,31 @@ const server = createServer(async (req, res) => {
         if (!hasRole('admin') && !own) return denied(403, 'Not your profile')
         const body = await readBody(req)
         if (!hasRole('admin')) delete body.email
+        const oldName = customers[idx].name
         customers[idx] = { ...customers[idx], ...body, id: customers[idx].id, notifyEmail: true }
         writeTable('customers', customers)
+        // Open orders + scheduled jobs show the customer's name — cascade
+        // renames so admin, field app, and profile views all agree.
+        if (body.name && body.name !== oldName) {
+          const orders = readTable('orders')
+          let oChanged = false
+          orders.forEach((o, i) => {
+            if (o.customerId === customers[idx].id && o.status !== 'delivered') {
+              orders[i] = { ...o, customerName: customers[idx].name }; oChanged = true
+            }
+          })
+          if (oChanged) writeTable('orders', orders)
+          const sched = readTable('schedule')
+          let sChanged = false
+          sched.forEach((s, i) => {
+            const next = { ...s }
+            if (next.customer === oldName) { next.customer = customers[idx].name; sChanged = true }
+            if (next.origin === oldName) { next.origin = customers[idx].name; sChanged = true }
+            if (next.destination === oldName) { next.destination = customers[idx].name; sChanged = true }
+            sched[i] = next
+          })
+          if (sChanged) writeTable('schedule', sched)
+        }
         return send(res, 200, customers[idx])
       }
       // Soft delete — keep the row (order history intact), just deactivate.
@@ -1102,8 +1253,33 @@ const server = createServer(async (req, res) => {
       if (seg.length === 2 && method === 'PATCH') {
         if (idx === -1) return send(res, 404, { message: 'Depot not found' })
         const body = await readBody(req)
+        const oldName = depots[idx].name
         depots[idx] = { ...depots[idx], ...body, id: depots[idx].id }
         writeTable('depots', depots)
+        // Containers and the schedule reference depots by name/address strings —
+        // cascade renames so admin, field app, and marketplace stay in sync.
+        const { name: newName, address: newAddress } = depots[idx]
+        if (newName !== oldName) {
+          const containers = readTable('containers')
+          let changed = false
+          containers.forEach((c, i) => {
+            if (c.depotLocation === oldName) { containers[i] = { ...c, depotLocation: newName }; changed = true }
+          })
+          if (changed) writeTable('containers', containers)
+        }
+        if (newName !== oldName || body.address !== undefined) {
+          const sched = readTable('schedule')
+          let changed = false
+          sched.forEach((s, i) => {
+            const next = { ...s }
+            if (next.origin === oldName) { next.origin = newName; next.originAddress = newAddress; changed = true }
+            else if (next.origin === newName && body.address !== undefined) { next.originAddress = newAddress; changed = true }
+            if (next.destination === oldName) { next.destination = newName; next.destinationAddress = newAddress; changed = true }
+            else if (next.destination === newName && body.address !== undefined) { next.destinationAddress = newAddress; changed = true }
+            sched[i] = next
+          })
+          if (changed) writeTable('schedule', sched)
+        }
         return send(res, 200, depots[idx])
       }
 
@@ -1178,6 +1354,139 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // ── Custom builds (marketplace catalog · admin-managed) ──
+    if (seg[0] === 'custombuilds') {
+      const builds = readTable('custombuilds')
+
+      // Public list — shoppers see active builds; admins also see inactive ones.
+      if (seg.length === 1 && method === 'GET') {
+        const list = [...builds].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+        return send(res, 200, hasRole('admin') ? list : list.filter(b => b.active !== false))
+      }
+
+      // ── Request an estimate for a custom build. Open to guests — no login
+      // required; pricing is agreed over the phone, so name + phone + email
+      // are enough. Creates the pipeline container (status estimate_requested,
+      // shown in admin "Custom Orders") plus the customer's order row.
+      if (seg.length === 3 && seg[2] === 'order' && method === 'POST') {
+        const build = builds.find(b => b.id === seg[1] && b.active !== false)
+        if (!build) return send(res, 404, { message: 'Custom build not found' })
+        const body = await readBody(req)
+        const email = (user?.email || String(body.customerEmail || '')).trim().toLowerCase()
+        if (!/^\S+@\S+\.\S+$/.test(email)) return send(res, 400, { message: 'A valid email is required so we can send your estimate' })
+        if (String(body.customerPhone || '').replace(/\D/g, '').length < 10) {
+          return send(res, 400, { message: 'A valid phone number is required — estimates are confirmed by phone' })
+        }
+        const containers = readTable('containers')
+        const size = ['20ft-std', '20ft-hc', '40ft-std', '40ft-hc'].includes(body.size) ? body.size : '20ft-std'
+        // Custom fabrication happens at the Houston depot.
+        const depotRow = readTable('depots').find(d => /houston/i.test(d.name)) || readTable('depots')[0]
+        const skuCode = (depotRow?.code || 'SBX').toUpperCase()
+        const sku = nextSku(size, skuCode, containers)
+        // Price is settled by the estimate — fromPrice is only the reference floor.
+        const amount = 0
+        const record = {
+          id: uid('ctr'), sku,
+          guid: `${crypto.randomUUID?.() ?? uid('guid')}`,
+          stockNumber: `STK-${sku.slice(-4)}`,
+          size, grade: 'X', status: 'estimate_requested', listingType: 'buy',
+          buyPrice: build.fromPrice, purchaseCost: 0, conditionScore: 0, rentMonthly: null,
+          photos: [], photoCount: 0, has360: false,
+          depotLocation: depotRow?.name || 'Houston Depot', bayNumber: '',
+          inspectorName: '', inspectedAt: null, deliveryIncluded: true,
+          createdAt: new Date().toISOString(),
+          customEta: '', customBuildName: build.name,
+        }
+        containers.push(record)
+        writeTable('containers', containers)
+        const orders = readTable('orders')
+        const nums = orders.map(o => Number(String(o.orderNumber).replace('ORD-', ''))).filter(n => !Number.isNaN(n))
+        const customerId = upsertCustomerFromOrder({ ...body, customerEmail: email, customerName: body.customerName || user?.name || email })
+        // Honor the SMS opt-in on existing customer records too (upsert only backfills blanks).
+        if (body.notifySms === true) {
+          const custs = readTable('customers')
+          const ci2 = custs.findIndex(x => x.id === customerId)
+          if (ci2 !== -1 && !custs[ci2].notifySms) {
+            custs[ci2] = { ...custs[ci2], notifySms: true, phone: custs[ci2].phone || body.customerPhone || '' }
+            writeTable('customers', custs)
+          }
+        }
+        const order = {
+          id: uid('ord'),
+          orderNumber: `ORD-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(4, '0')}`,
+          containerId: record.id, containerSku: sku,
+          customerId,
+          customerName: body.customerName || user?.name || email,
+          customerEmail: email,
+          customerPhone: body.customerPhone || user?.phone || '',
+          deliveryAddress: body.deliveryAddress || '', deliveryZip: body.deliveryZip || '',
+          amount, status: 'estimate_requested',
+          driverId: null, driverName: null, scheduledDate: null, completedAt: null,
+          createdAt: new Date().toISOString(),
+          saleType: 'buy', unitCost: 0, deposit: 0, driverHours: 0,
+        }
+        orders.push(order)
+        writeTable('orders', orders)
+        queueMessage('email', order.customerEmail, `Estimate requested — ${build.name} (${order.orderNumber})`,
+          `Thanks ${order.customerName}! We received your estimate request for a ${build.name} (${sku}, base from $${build.fromPrice.toLocaleString()}). Our team will call ${order.customerPhone || 'you'} to walk through the specs and send your estimate.`,
+          'order', order.id)
+        if (body.notifySms === true && order.customerPhone) {
+          queueMessage('sms', order.customerPhone, 'Estimate requested',
+            `SteelBox: got your ${build.name} estimate request (${sku}). Expect a call from our team shortly.`, 'order', order.id)
+        }
+        return send(res, 201, { order, container: record })
+      }
+
+      if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
+
+      if (seg.length === 1 && method === 'POST') {
+        const body = await readBody(req)
+        if (!body.name || !String(body.name).trim()) return send(res, 400, { message: 'name is required' })
+        const record = {
+          id: uid('cb'),
+          name: String(body.name).trim(),
+          tag: (body.tag || '').toUpperCase(),
+          description: body.description || '',
+          features: Array.isArray(body.features) ? body.features.map(f => String(f).replace(/\|/g, '/')) : [],
+          fromPrice: Number(body.fromPrice) || 0,
+          photo: '',
+          sortOrder: builds.length ? Math.max(...builds.map(b => b.sortOrder || 0)) + 1 : 1,
+          active: body.active !== false,
+        }
+        builds.push(record)
+        writeTable('custombuilds', builds)
+        return send(res, 201, record)
+      }
+
+      const idx = builds.findIndex(b => b.id === seg[1])
+      if (idx === -1) return send(res, 404, { message: 'Custom build not found' })
+
+      if (seg.length === 2 && method === 'PATCH') {
+        const body = await readBody(req)
+        if (Array.isArray(body.features)) body.features = body.features.map(f => String(f).replace(/\|/g, '/'))
+        builds[idx] = { ...builds[idx], ...body, id: builds[idx].id }
+        writeTable('custombuilds', builds)
+        return send(res, 200, builds[idx])
+      }
+
+      if (seg.length === 2 && method === 'DELETE') {
+        const [removed] = builds.splice(idx, 1)
+        writeTable('custombuilds', builds)
+        return send(res, 200, { id: removed.id, deleted: true })
+      }
+
+      // Upload the showcase photo (real product shot replaces the clipart).
+      if (seg.length === 3 && seg[2] === 'photo' && method === 'POST') {
+        const body = await readBody(req)
+        const slug = builds[idx].name.replace(/[^a-z0-9]/gi, '').slice(0, 12) || 'build'
+        const saved = savePhoto(`CB-${slug}`, 0, body.dataUrl)
+        if (saved.error) return send(res, 400, { message: saved.error })
+        builds[idx] = { ...builds[idx], photo: saved.url }
+        writeTable('custombuilds', builds)
+        return send(res, 200, builds[idx])
+      }
+    }
+
     // ── Quotes (write-only log) ──
     if (path === '/quotes' && method === 'POST') {
       await readBody(req)
@@ -1194,9 +1503,25 @@ const server = createServer(async (req, res) => {
     console.error(err)
     return send(res, 500, { message: err instanceof Error ? err.message : 'Internal error' })
   }
+}
+
+// Every route does a whole-file read-modify-write on its CSV table, so
+// concurrent requests could interleave and silently lose updates (both read,
+// then both write). Serialize handling — correctness over throughput for a
+// CSV-backed dev API. handleRequest never rejects (it catches internally);
+// the .catch here is a backstop so one failure can't wedge the chain.
+let requestChain = Promise.resolve()
+const server = createServer((req, res) => {
+  requestChain = requestChain
+    .then(() => handleRequest(req, res))
+    .catch(err => {
+      console.error('Unhandled request error:', err)
+      try { send(res, 500, { message: 'Internal error' }) } catch { /* headers already sent */ }
+    })
 })
 
 ensureSeedUsers()
+ensureSeedCustomBuilds()
 
 server.listen(PORT, () => {
   console.log(`SteelBox API (CSV-backed) listening on http://localhost:${PORT}`)

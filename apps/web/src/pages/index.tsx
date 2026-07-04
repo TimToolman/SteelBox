@@ -5,10 +5,10 @@
 // ============================================================
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { GradeBadge, StatusBadge, Button, Modal, Snackbar, Input, Select } from '../components/ui'
+import { GradeBadge, StatusBadge, Button, Modal, Snackbar, Input, Select, BuildClipart } from '../components/ui'
 import { useContainers, useSnackbar, useAuth } from '../hooks'
 import { LoginForm } from '../lib/auth'
-import { auth as authApi, containers, quotes, orders, isZipCovered, estimateDelivery, drivers as driversApi, messages as messagesApi, customers as customersApi, photoUrl, SHOT_LABELS, type Container, type ContainerGrade, type ContainerSize, type Driver, type Customer, type Order, type Message, type AuthUser } from '../lib/api'
+import { auth as authApi, containers, quotes, orders, isZipCovered, estimateDelivery, drivers as driversApi, messages as messagesApi, customers as customersApi, customBuilds as customBuildsApi, photoUrl, SHOT_LABELS, CUSTOM_STAGES, type Container, type ContainerGrade, type ContainerSize, type Driver, type Customer, type Order, type Message, type AuthUser, type CustomBuild } from '../lib/api'
 
 // ── Types ─────────────────────────────────────────────────
 
@@ -44,14 +44,9 @@ const SIZE_LABELS: Record<ContainerSize, string> = {
 // Canonical ordered size list for filters and forms.
 const SIZE_OPTIONS = Object.entries(SIZE_LABELS) as [ContainerSize, string][]
 
-const CUSTOM_BUILDS = [
-  { name: 'Roll-Up Door', tag: 'POPULAR', desc: 'Single or double roll-up doors for easy forklift access.', features: ['8×7 roll-up', 'Galvanized steel', 'Lockable'], fromPrice: 3200 },
-  { name: 'Personnel Door + Window', tag: 'COMMON', desc: 'Man door and sliding window for office or site use.', features: ['36" steel door', 'Deadbolt', 'Slider window'], fromPrice: 2800 },
-  { name: 'Workshop Container', tag: 'TURNKEY', desc: 'Wired for power, vented, shelving included.', features: ['110v outlets', 'Fluorescent lighting', 'Vent fans'], fromPrice: 5500 },
-  { name: 'Pop-Up Retail Shell', tag: 'TRENDING', desc: 'Fold-out panels, branded exterior, ready for signage.', features: ['Fold-out counter', 'Service window', 'Awning mounts'], fromPrice: 7200 },
-  { name: 'Refrigerated Conversion', tag: 'SPECIALTY', desc: 'Insulated walls, cooling unit, floor drains.', features: ['R-19 insulation', 'Commercial cooler', 'NSF floor'], fromPrice: 9800 },
-  { name: 'Security Vault', tag: 'HEAVY DUTY', desc: 'Reinforced doors, CCTV mount points, alarm wiring.', features: ['10-gauge steel door', '3-point lock', 'CCTV prep'], fromPrice: 4400 },
-]
+// Custom Builds are data-driven (custombuilds.csv, managed in Admin →
+// Settings). Each card shows the uploaded product photo, or clean clipart
+// (the default view) until a real shot exists.
 
 // ── Quote Dialog ───────────────────────────────────────────
 
@@ -151,10 +146,12 @@ interface ContainerCardProps {
 function ContainerCard({ container, onSelect, mode = 'buy', inCart = false, onAddToCart }: ContainerCardProps) {
   const { sku, grade, status, size, buyPrice, rentMonthly, photos } = container
   const gradeMeta = GRADE_META[grade]
+  const allow = allowedModes(container) // the unit's own listing capability
   const isLocked = status === 'sale_in_progress'
   const isDraft = status === 'draft' // admin-only preview — not purchasable yet
-  // On the Rent tab, lead with the monthly rate; on Buy, lead with purchase price.
-  const rentLead = mode === 'rent' && rentMonthly != null
+  // Lead with the browse tab's mode when the unit supports it; otherwise
+  // whatever it does support (rent-only always leads with the monthly rate).
+  const rentLead = allow.rent && (mode === 'rent' || !allow.buy)
   const disabled = isLocked || inCart || isDraft
 
   return (
@@ -217,24 +214,29 @@ function ContainerCard({ container, onSelect, mode = 'buy', inCart = false, onAd
       <div style={{ padding: '9px 11px 10px', flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '6px' }}>
           <span style={{ fontSize: '13px', fontWeight: 700, lineHeight: 1.2 }}>{SIZE_LABELS[size]}</span>
-          <span style={{ flexShrink: 0, padding: '2px 8px', borderRadius: 'var(--r4)', fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', background: rentLead ? 'var(--pri-c,#D6E4FF)' : 'var(--green-cont)', color: rentLead ? 'var(--primary)' : 'var(--green)' }}>
-            {rentLead ? 'Rent' : 'Buy'}
+          {/* Chip reflects the unit's actual listing capability, not the tab */}
+          <span style={{
+            flexShrink: 0, padding: '2px 8px', borderRadius: 'var(--r4)', fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase',
+            background: allow.buy && allow.rent ? '#EDE9FE' : allow.rent ? 'var(--pri-c,#D6E4FF)' : 'var(--green-cont)',
+            color: allow.buy && allow.rent ? '#6D28D9' : allow.rent ? 'var(--primary)' : 'var(--green)',
+          }}>
+            {allow.buy && allow.rent ? 'Buy · Rent' : allow.rent ? 'Rent' : 'Buy'}
           </span>
         </div>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--ink3)', letterSpacing: '0.3px' }}>{sku}</div>
         <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
           <span style={{ background: 'var(--surf1)', borderRadius: 'var(--r4)', padding: '3px 7px', fontSize: '10px', color: 'var(--ink2)', fontFamily: 'var(--mono)' }}>{gradeMeta.label}</span>
-          {container.has360 && <span style={{ background: 'var(--pri-c, #D6E4FF)', borderRadius: 'var(--r4)', padding: '3px 7px', fontSize: '10px', color: 'var(--primary)', fontFamily: 'var(--mono)' }}>360°</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: 'auto', paddingTop: '10px', borderTop: '1px solid var(--div)' }}>
           {rentLead ? (
             <div>
               <div style={{ fontSize: '21px', fontWeight: 700, fontFamily: 'var(--mono)', letterSpacing: '-0.3px' }}>${rentMonthly}<span style={{ fontSize: '12px', color: 'var(--ink3)', fontWeight: 600 }}>/mo</span></div>
-              <div style={{ fontSize: '10px', color: 'var(--ink3)', marginTop: '1px' }}>or ${buyPrice.toLocaleString()} to buy</div>
+              <div style={{ fontSize: '10px', color: 'var(--ink3)', marginTop: '1px' }}>{allow.buy ? `or $${buyPrice.toLocaleString()} to buy` : 'Rental only'}</div>
             </div>
           ) : (
             <div>
               <div style={{ fontSize: '21px', fontWeight: 700, fontFamily: 'var(--mono)', letterSpacing: '-0.3px' }}>${buyPrice.toLocaleString()}</div>
-              <div style={{ fontSize: '10px', color: 'var(--ink3)', marginTop: '1px' }}>{rentMonthly ? `or $${rentMonthly}/mo rental` : 'One-time purchase'}</div>
+              <div style={{ fontSize: '10px', color: 'var(--ink3)', marginTop: '1px' }}>{allow.rent && rentMonthly ? `or $${rentMonthly}/mo rental` : 'One-time purchase'}</div>
             </div>
           )}
           {/* Add to Cart — greyed once in cart or while a sale is in progress */}
@@ -373,9 +375,18 @@ interface DetailModalProps {
 function DetailModal({ container, onClose, onAddToCart, mode, inCart, onNavigate, index, total }: DetailModalProps) {
   const [delivery, setDelivery] = useState('Enter your ZIP above')
   const [zip, setZip] = useState('')
+  // The shopper picks Buy vs Rent right in the modal (seeded from the active
+  // browse tab, constrained to what this unit's listingType allows).
+  const [txn, setTxn] = useState<CartMode>(mode)
 
   // Reset the gallery (and ZIP result) whenever the viewed container changes.
-  useEffect(() => { setDelivery('Enter your ZIP above'); setZip('') }, [container?.id])
+  useEffect(() => {
+    setDelivery('Enter your ZIP above'); setZip('')
+    if (container) {
+      const allow = allowedModes(container)
+      setTxn(mode === 'rent' ? (allow.rent ? 'rent' : 'buy') : (allow.buy ? 'buy' : 'rent'))
+    }
+  }, [container?.id, mode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyboard ← / → step between containers (ignored while typing in a field).
   useEffect(() => {
@@ -413,9 +424,7 @@ function DetailModal({ container, onClose, onAddToCart, mode, inCart, onNavigate
       {/* Body */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '22px', padding: '22px 26px 26px' }}>
         <div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--ink3)', marginBottom: '5px' }}>
-            {sku} · 12 photos · 360° spin
-          </div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '12px', fontWeight: 700, color: 'var(--primary)', letterSpacing: '0.5px', marginBottom: '3px' }}>{sku}</div>
           <h2 style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.3px', marginBottom: '14px' }}>
             {SIZE_LABELS[size]} Container
           </h2>
@@ -445,16 +454,39 @@ function DetailModal({ container, onClose, onAddToCart, mode, inCart, onNavigate
 
         {/* Price card */}
         <div style={{ background: 'var(--surf-w)', border: '1.5px solid var(--div)', borderRadius: 'var(--r16)', padding: '18px', position: 'sticky', top: '20px' }}>
-          <span style={{ display: 'inline-block', padding: '2px 9px', borderRadius: 'var(--r4)', fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '10px', background: mode === 'rent' ? 'var(--pri-c,#D6E4FF)' : 'var(--green-cont)', color: mode === 'rent' ? 'var(--primary)' : 'var(--green)' }}>
-            {mode === 'rent' ? 'Rental' : 'Purchase'}
-          </span>
+          {/* Buy vs Rent — the shopper's first decision, front and center.
+              Only the options this unit actually offers are shown: rent-only
+              units show just Rent, buy-only just Buy, both show the toggle. */}
+          {(() => {
+            const allow = allowedModes(container)
+            const seg = (m: CartMode, title: string, price: string) => {
+              const active = txn === m
+              const color = m === 'rent' ? 'var(--primary)' : 'var(--green)'
+              return (
+                <button
+                  key={m}
+                  onClick={() => setTxn(m)}
+                  style={{ flex: 1, padding: '10px 6px', borderRadius: 'var(--r12)', border: `2px solid ${active ? color : 'var(--div)'}`, background: active ? (m === 'rent' ? 'var(--pri-c,#D6E4FF)' : 'var(--green-cont)') : 'var(--surf-w)', cursor: 'pointer', textAlign: 'center' }}
+                >
+                  <span style={{ display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.6px', textTransform: 'uppercase', color: active ? color : 'var(--ink3)' }}>{title}</span>
+                  <span style={{ display: 'block', fontFamily: 'var(--mono)', fontSize: '15px', fontWeight: 700, marginTop: '2px', color: active ? 'var(--ink)' : 'var(--ink2)' }}>{price}</span>
+                </button>
+              )
+            }
+            return (
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+                {allow.buy && seg('buy', 'Buy', `$${buyPrice.toLocaleString()}`)}
+                {allow.rent && seg('rent', 'Rent', rentMonthly ? `$${rentMonthly}/mo` : '—')}
+              </div>
+            )
+          })()}
           <div style={{ fontSize: '30px', fontWeight: 700, fontFamily: 'var(--mono)', letterSpacing: '-0.4px' }}>
-            {mode === 'rent'
+            {txn === 'rent'
               ? (rentMonthly ? <>${rentMonthly}<span style={{ fontSize: '15px', color: 'var(--ink3)', fontWeight: 600 }}>/mo</span></> : 'Call for pricing')
               : `$${buyPrice.toLocaleString()}`}
           </div>
           <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '2px', marginBottom: '14px' }}>
-            {mode === 'rent' ? `Monthly rental rate${buyPrice ? ` · or $${buyPrice.toLocaleString()} to buy` : ''}` : `One-time purchase price${rentMonthly ? ` · or $${rentMonthly}/mo to rent` : ''}`}
+            {txn === 'rent' ? 'Monthly rental rate · one-month refundable deposit' : 'One-time purchase price · delivery included'}
           </div>
 
           {/* Delivery estimator */}
@@ -481,14 +513,14 @@ function DetailModal({ container, onClose, onAddToCart, mode, inCart, onNavigate
             </div>
           )}
           <button
-            onClick={() => { if (!cannotBuy) onAddToCart(container, mode) }}
+            onClick={() => { if (!cannotBuy) onAddToCart(container, txn) }}
             disabled={cannotBuy}
             style={{ width: '100%', padding: '14px', borderRadius: 'var(--pill)', background: cannotBuy ? 'var(--surf1)' : 'var(--cta)', color: cannotBuy ? 'var(--ink3)' : '#fff', fontSize: '14px', fontWeight: 700, border: 'none', cursor: cannotBuy ? 'not-allowed' : 'pointer', boxShadow: cannotBuy ? 'none' : '0 4px 14px rgba(230,81,0,.3)', marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
           >
             {isDraft ? 'Not Listed (Draft)' : isLocked ? 'Currently Reserved' : inCart ? 'In Cart ✓' : (
               <>
                 <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M1 2h2.5l2 9h9l2-7H5" /><circle cx="8" cy="17.5" r="1.5" fill="#fff" stroke="none" /><circle cx="13" cy="17.5" r="1.5" fill="#fff" stroke="none" /></svg>
-                Add to Cart
+                {txn === 'rent' ? 'Add to Cart — Rent' : 'Add to Cart — Buy'}
               </>
             )}
           </button>
@@ -895,6 +927,113 @@ function Row({ label, val, green, sub }: { label: string; val: string; green?: b
   )
 }
 
+// ── Order a Custom Build ───────────────────────────────────
+// Open to everyone — no account needed. Estimates are confirmed over the
+// phone, so we just collect name, phone, email, and the delivery address.
+
+function OrderBuildModal({ build, user, onClose, onPlaced, toast }: {
+  build: CustomBuild | null
+  user: AuthUser | null
+  onClose: () => void
+  onPlaced: () => void
+  toast: (m: string) => void
+}) {
+  const [form, setForm] = useState({ size: '20ft-std' as ContainerSize, name: '', company: '', phone: '', email: '', address: '', city: '', state: '', zip: '' })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [placed, setPlaced] = useState<Order | null>(null)
+
+  useEffect(() => {
+    if (!build) return
+    setPlaced(null)
+    setError('')
+    if (user) setForm(p => ({ ...p, name: p.name || user.name || '', phone: p.phone || user.phone || '', email: p.email || user.email }))
+  }, [build?.id, user]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!build) return null
+  const set = (k: keyof typeof form, v: string | boolean) => setForm(p => ({ ...p, [k]: v }))
+  const ready = form.name.trim() && form.phone.trim() && /^\S+@\S+\.\S+$/.test(form.email.trim())
+    && form.address.trim() && form.city.trim() && form.state.trim() && form.zip.trim()
+
+  const submit = async () => {
+    if (!ready || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      const fullAddress = `${form.address.trim()}, ${form.city.trim()}, ${form.state.trim()} ${form.zip.trim()}`
+      const r = await customBuildsApi.order(build.id, {
+        size: form.size, customerName: form.name.trim(), customerPhone: form.phone.trim(),
+        customerEmail: form.email.trim(), company: form.company.trim(),
+        deliveryAddress: fullAddress, deliveryZip: form.zip.trim(),
+      })
+      setPlaced(r.order)
+      onPlaced()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Request failed — please try again or call (504) 555-0190.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const lbl: React.CSSProperties = { display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '5px' }
+  const inp: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '13px', outline: 'none', fontFamily: 'var(--sans)', marginBottom: '12px', boxSizing: 'border-box' }
+
+  if (placed) {
+    return (
+      <Modal open onClose={onClose} maxWidth={480} closeLabel="Close">
+        <div style={{ textAlign: 'center', padding: '18px 8px' }}>
+          <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: '#EDE9FE', border: '2px solid #6D28D9', display: 'grid', placeItems: 'center', margin: '0 auto 14px' }}>🔧</div>
+          <h2 style={{ fontSize: '21px', fontWeight: 700, marginBottom: '8px' }}>Estimate requested!</h2>
+          <p style={{ fontSize: '13px', color: 'var(--ink3)', lineHeight: 1.6, maxWidth: '360px', margin: '0 auto 16px' }}>
+            {build.name} · <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--ink)' }}>{placed.orderNumber}</span>.
+            Our team will <strong style={{ color: 'var(--ink)' }}>call {form.phone}</strong> to walk through the specs and send your estimate — pricing is confirmed on the call.
+            {user ? ' Track every stage under Profile → Orders.' : ' Create an account with this email any time to track progress online.'}
+          </p>
+          <Button variant="primary" onClick={onClose}>Done</Button>
+        </div>
+      </Modal>
+    )
+  }
+
+  return (
+    <Modal open onClose={onClose} maxWidth={520} closeLabel="Close">
+      <div style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, color: '#6D28D9', letterSpacing: '0.5px', marginBottom: '3px' }}>CUSTOM BUILD</div>
+      <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '2px' }}>{build.name}</h2>
+      <p style={{ fontSize: '12px', color: 'var(--ink3)', marginBottom: '16px' }}>{build.description} · pricing set by your estimate · built at our Houston depot</p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 10px' }}>
+        <div><label style={lbl}>Full name</label><input style={inp} value={form.name} onChange={e => set('name', e.target.value)} placeholder="Jane Smith" /></div>
+        <div><label style={lbl}>Company <span style={{ fontWeight: 400, textTransform: 'none' }}>(n/a if none)</span></label><input style={inp} value={form.company} onChange={e => set('company', e.target.value)} placeholder="Your Company LLC" /></div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 10px' }}>
+        <div><label style={lbl}>Phone (we'll call you)</label><input style={inp} type="tel" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="(504) 555-0000" /></div>
+        <div><label style={lbl}>Email (estimate sent here)</label><input style={inp} type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="jane@company.com" /></div>
+      </div>
+      <label style={lbl}>Base container size</label>
+      <select value={form.size} onChange={e => set('size', e.target.value)} style={inp}>
+        <option value="20ft-std">20ft Standard</option>
+        <option value="20ft-hc">20ft High Cube</option>
+        <option value="40ft-std">40ft Standard</option>
+        <option value="40ft-hc">40ft High Cube</option>
+      </select>
+      <label style={lbl}>Delivery street address</label>
+      <input style={inp} value={form.address} onChange={e => set('address', e.target.value)} placeholder="5500 Industrial Pkwy" />
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '0 10px' }}>
+        <div><label style={lbl}>City</label><input style={inp} value={form.city} onChange={e => set('city', e.target.value)} /></div>
+        <div><label style={lbl}>State</label><input style={inp} value={form.state} onChange={e => set('state', e.target.value)} placeholder="TX" /></div>
+        <div><label style={lbl}>ZIP</label><input style={inp} value={form.zip} onChange={e => set('zip', e.target.value)} placeholder="77029" /></div>
+      </div>
+      {error && (
+        <div style={{ background: '#FDECEA', border: '1px solid #F5C6C0', color: '#B3261E', borderRadius: 'var(--r8)', padding: '9px 12px', fontSize: '12px', lineHeight: 1.5, marginBottom: '10px' }}>{error}</div>
+      )}
+      <Button variant="cta" fullWidth disabled={!ready || busy} onClick={submit}>
+        {busy ? 'Sending…' : 'Request estimate'}
+      </Button>
+      <div style={{ fontSize: '10px', color: 'var(--ink3)', textAlign: 'center', marginTop: '8px' }}>No account needed — our team calls to finalize specs and pricing.</div>
+    </Modal>
+  )
+}
+
 // ── Customer → driver message ──────────────────────────────
 function CustomerMessageModal({ open, onClose, onSent }: { open: boolean; onClose: () => void; onSent: (msg: string) => void }) {
   const [drivers, setDrivers] = useState<Driver[]>([])
@@ -942,28 +1081,37 @@ function CustomerMessageModal({ open, onClose, onSent }: { open: boolean; onClos
 }
 
 // ── Bulk / B2B request form ────────────────────────────────
-// Submits through the same quotes endpoint as the quote dialog.
+// Same shape as the custom-build estimate form (name, company, phone, email,
+// base size, delivery address) plus estimated units. No account needed —
+// submits through the quotes endpoint and sales follows up by phone.
 
 function BulkForm({ onSuccess }: { onSuccess: () => void }) {
-  const [form, setForm] = useState({ firstName: '', company: '', phone: '', email: '', units: '' })
+  const [form, setForm] = useState({ name: '', company: '', phone: '', email: '', size: '20ft-std' as ContainerSize, units: '', address: '', city: '', state: '', zip: '' })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [k]: e.target.value }))
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm(p => ({ ...p, [k]: e.target.value }))
 
   const submit = async () => {
-    if (!form.firstName.trim() || (!form.phone.trim() && !form.email.trim())) {
-      setError('Please give us your name and a phone number or email.')
+    if (!form.name.trim() || (!form.phone.trim() && !form.email.trim())) {
+      setError('Please give us your full name and a phone number or email.')
       return
     }
     setSubmitting(true)
     setError('')
     try {
+      const address = [form.address.trim(), form.city.trim(), [form.state.trim(), form.zip.trim()].filter(Boolean).join(' ')].filter(Boolean).join(', ')
       await quotes.submit({
-        firstName: form.firstName.trim(), lastName: '', phone: form.phone.trim(), email: form.email.trim(),
-        deliveryZip: '', need: 'bulk',
-        notes: `B2B request${form.company.trim() ? ` — company: ${form.company.trim()}` : ''}${form.units.trim() ? ` — estimated units: ${form.units.trim()}` : ''}`,
+        firstName: form.name.trim(), lastName: '', phone: form.phone.trim(), email: form.email.trim(),
+        deliveryZip: form.zip.trim(), need: 'bulk',
+        notes: [
+          'B2B request',
+          form.company.trim() ? `company: ${form.company.trim()}` : 'company: n/a',
+          `base size: ${form.size}`,
+          form.units.trim() ? `estimated units: ${form.units.trim()}` : '',
+          address ? `delivery: ${address}` : '',
+        ].filter(Boolean).join(' — '),
       })
-      setForm({ firstName: '', company: '', phone: '', email: '', units: '' })
+      setForm({ name: '', company: '', phone: '', email: '', size: '20ft-std', units: '', address: '', city: '', state: '', zip: '' })
       onSuccess()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong — please call (504) 555-0190.')
@@ -972,13 +1120,38 @@ function BulkForm({ onSuccess }: { onSuccess: () => void }) {
     }
   }
 
+  const lbl: React.CSSProperties = { display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '5px' }
+  const inp: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '13px', outline: 'none', fontFamily: 'var(--sans)', marginBottom: '12px', boxSizing: 'border-box' }
+
   return (
     <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', padding: '28px 30px' }}>
-      <Input label="First Name" placeholder="Jane" value={form.firstName} onChange={set('firstName')} />
-      <Input label="Company" placeholder="Your Company LLC" value={form.company} onChange={set('company')} />
-      <Input label="Phone" type="tel" placeholder="(504) 555-0000" value={form.phone} onChange={set('phone')} />
-      <Input label="Email" type="email" placeholder="jane@company.com" value={form.email} onChange={set('email')} />
-      <Input label="Estimated Units Needed" type="number" placeholder="10" value={form.units} onChange={set('units')} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 10px' }}>
+        <div><label style={lbl}>Full name</label><input style={inp} value={form.name} onChange={set('name')} placeholder="Jane Smith" /></div>
+        <div><label style={lbl}>Company <span style={{ fontWeight: 400, textTransform: 'none' }}>(n/a if none)</span></label><input style={inp} value={form.company} onChange={set('company')} placeholder="Your Company LLC" /></div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 10px' }}>
+        <div><label style={lbl}>Phone (we'll call you)</label><input style={inp} type="tel" value={form.phone} onChange={set('phone')} placeholder="(504) 555-0000" /></div>
+        <div><label style={lbl}>Email</label><input style={inp} type="email" value={form.email} onChange={set('email')} placeholder="jane@company.com" /></div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 10px' }}>
+        <div>
+          <label style={lbl}>Base container size</label>
+          <select value={form.size} onChange={set('size')} style={inp}>
+            <option value="20ft-std">20ft Standard</option>
+            <option value="20ft-hc">20ft High Cube</option>
+            <option value="40ft-std">40ft Standard</option>
+            <option value="40ft-hc">40ft High Cube</option>
+          </select>
+        </div>
+        <div><label style={lbl}>Estimated units</label><input style={inp} type="number" value={form.units} onChange={set('units')} placeholder="10" /></div>
+      </div>
+      <label style={lbl}>Delivery street address</label>
+      <input style={inp} value={form.address} onChange={set('address')} placeholder="5500 Industrial Pkwy" />
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '0 10px' }}>
+        <div><label style={lbl}>City</label><input style={inp} value={form.city} onChange={set('city')} /></div>
+        <div><label style={lbl}>State</label><input style={inp} value={form.state} onChange={set('state')} placeholder="TX" /></div>
+        <div><label style={lbl}>ZIP</label><input style={inp} value={form.zip} onChange={set('zip')} placeholder="77029" /></div>
+      </div>
       {error && (
         <div style={{ background: '#FDECEA', border: '1px solid #F5C6C0', color: '#B3261E', borderRadius: 'var(--r8)', padding: '9px 12px', fontSize: '12px', lineHeight: 1.5, marginBottom: '12px' }}>
           {error}
@@ -988,7 +1161,7 @@ function BulkForm({ onSuccess }: { onSuccess: () => void }) {
         {submitting ? 'Submitting…' : 'Request B2B Pricing'}
       </button>
       <div style={{ textAlign: 'center', marginTop: '14px', fontSize: '12px', color: 'var(--ink3)' }}>
-        Or call us directly: <strong style={{ color: 'var(--ink)' }}>(504) 555-0190</strong> — we respond within 2 hours
+        No account needed · or call us directly: <strong style={{ color: 'var(--ink)' }}>(504) 555-0190</strong> — we respond within 2 hours
       </div>
     </div>
   )
@@ -1024,13 +1197,14 @@ interface CustomerProfileModalProps {
   initialTab: ProfileTab
   onClose: () => void
   onMessageDriver: () => void
+  onSaved: () => void          // after a successful save, return to the profile menu
   toast: (msg: string) => void
 }
 
 // Every profile feature requires a signed-in account (RBAC): signed-out
 // visitors get the login/register form; signed-in customers see their
 // customers.csv record (auto-created on first visit), orders, and messages.
-function CustomerProfileModal({ open, initialTab, onClose, onMessageDriver, toast }: CustomerProfileModalProps) {
+function CustomerProfileModal({ open, initialTab, onClose, onMessageDriver, onSaved, toast }: CustomerProfileModalProps) {
   const { user, logout } = useAuth()
   const [tab, setTab] = useState<ProfileTab>(initialTab)
   const [error, setError] = useState('')
@@ -1095,6 +1269,7 @@ function CustomerProfileModal({ open, initialTab, onClose, onMessageDriver, toas
       setCustomer(updated)
       setForm(customerToForm(updated))
       toast('Profile saved')
+      onSaved() // back to the main profile menu
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save your changes — please try again.')
     } finally {
@@ -1111,7 +1286,7 @@ function CustomerProfileModal({ open, initialTab, onClose, onMessageDriver, toas
   }
 
   return (
-    <Modal open={open} onClose={onClose} maxWidth={560}>
+    <Modal open={open} onClose={onClose} maxWidth={560} closeLabel="Close">
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
         <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: 'var(--pri-c,#D6E4FF)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
           <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6.5" r="3" /><path d="M3.5 17a6.5 6.5 0 0 1 13 0" /></svg>
@@ -1225,12 +1400,28 @@ function CustomerProfileModal({ open, initialTab, onClose, onMessageDriver, toas
                         <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--ink3)' }}>{o.containerSku}</span>
                         <span style={{ marginLeft: 'auto' }}><StatusBadge status={o.status} /></span>
                       </div>
-                      <div style={{ display: 'flex', gap: '12px', fontSize: '11px', color: 'var(--ink3)', flexWrap: 'wrap' }}>
-                        <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--ink)' }}>${(o.amount || 0).toLocaleString()}</span>
-                        <span>{o.saleType === 'rent' ? 'Rental' : 'Purchase'}</span>
-                        <span>Ordered {fmtDate(o.createdAt)}</span>
-                        {o.scheduledDate && <span>{o.status === 'delivered' ? 'Delivered' : 'Delivery'} {fmtDate(o.completedAt || o.scheduledDate)}{o.driverName ? ` · ${o.driverName}` : ''}</span>}
-                      </div>
+                      {(() => {
+                        const isCustom = (CUSTOM_STAGES as string[]).includes(o.status)
+                        return (
+                          <>
+                            <div style={{ display: 'flex', gap: '12px', fontSize: '11px', color: 'var(--ink3)', flexWrap: 'wrap' }}>
+                              <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--ink)' }}>{(o.amount || 0) > 0 ? `$${o.amount.toLocaleString()}` : 'Estimate pending'}</span>
+                              <span>{isCustom ? 'Custom build' : o.saleType === 'rent' ? 'Rental' : 'Purchase'}</span>
+                              <span>Ordered {fmtDate(o.createdAt)}</span>
+                              {!isCustom && o.scheduledDate && <span>{o.status === 'delivered' ? 'Delivered' : 'Delivery'} {fmtDate(o.completedAt || o.scheduledDate)}{o.driverName ? ` · ${o.driverName}` : ''}</span>}
+                            </div>
+                            {isCustom && (
+                              <div style={{ marginTop: '4px', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 600, color: '#6D28D9', background: '#EDE9FE', borderRadius: 'var(--r8)', padding: '4px 9px' }}>
+                                {o.status === 'estimate_requested' && '📞 Estimate requested — our team will call you shortly'}
+                                {o.status === 'estimate_in_progress' && '📞 Estimate in progress — expect our call'}
+                                {o.status === 'estimate_sent' && `📄 Estimate sent — $${(o.amount || 0).toLocaleString()} · approve on our call`}
+                                {o.status === 'estimate_approved' && '✅ Estimate approved — scheduling your build'}
+                                {o.status === 'custom_in_progress' && <>🔧 In fabrication{o.scheduledDate ? ` — estimated complete ${fmtDate(o.scheduledDate)}` : ' — completion date coming soon'}</>}
+                              </div>
+                            )}
+                          </>
+                        )
+                      })()}
                       {o.deliveryAddress && <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '3px' }}>→ {o.deliveryAddress}</div>}
                     </div>
                   ))}
@@ -1269,8 +1460,25 @@ export default function MarketplacePage() {
   const { toast, message, open: snackOpen, close: snackClose } = useSnackbar()
 
   const { data: allContainers, loading, refetch: refetchContainers } = useContainers()
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const customerEmail = user?.email.toLowerCase() ?? ''
+
+  // Custom Builds catalog (admin-managed) + the order-a-build dialog.
+  const [builds, setBuilds] = useState<CustomBuild[]>([])
+  const [orderBuild, setOrderBuild] = useState<CustomBuild | null>(null)
+  const loadBuilds = useCallback(() => customBuildsApi.list().then(setBuilds).catch(() => {}), [])
+  useEffect(() => { loadBuilds() }, [loadBuilds])
+
+  // Keep inventory fresh: re-pull whenever the shopper switches tabs
+  // (Buy ⇄ Rent ⇄ …), opens the cart or detail views won't need it, and
+  // whenever the window regains focus (e.g. after editing in the admin tab).
+  useEffect(() => { refetchContainers(); if (activeTab === 'custom') loadBuilds() }, [activeTab]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const onFocus = () => { if (document.visibilityState !== 'hidden') refetchContainers() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
+    return () => { window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus) }
+  }, [refetchContainers])
 
   // Unread replies addressed to this customer (requires a signed-in account).
   const [customerReplies, setCustomerReplies] = useState(0)
@@ -1432,8 +1640,10 @@ export default function MarketplacePage() {
             <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M1 2h2.5l2 9h9l2-7H5" /><circle cx="8" cy="17.5" r="1.5" fill="#fff" stroke="none" /><circle cx="13" cy="17.5" r="1.5" fill="#fff" stroke="none" /></svg>
             Cart <span style={{ background: 'rgba(255,255,255,.25)', padding: '0 6px', borderRadius: '99px', fontSize: '10px', marginLeft: '2px' }}>{cart.length}</span>
           </button>
-          <button onClick={() => setProfileOpen(true)} title={customerReplies > 0 ? `${customerReplies} new message${customerReplies > 1 ? 's' : ''} from your driver` : 'Profile'} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px', borderRadius: '50%', background: 'transparent', border: '1.5px solid var(--div)', cursor: 'pointer', flexShrink: 0 }}>
-            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6.5" r="3" /><path d="M3.5 17a6.5 6.5 0 0 1 13 0" /></svg>
+          <button onClick={() => setProfileOpen(true)} title={customerReplies > 0 ? `${customerReplies} new message${customerReplies > 1 ? 's' : ''} from your driver` : user ? `${user.name} · Profile` : 'Sign in / Profile'} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px', borderRadius: '50%', background: user ? 'var(--primary)' : 'transparent', border: user ? 'none' : '1.5px solid var(--div)', cursor: 'pointer', flexShrink: 0 }}>
+            {user
+              ? <span style={{ color: '#fff', fontSize: '13px', fontWeight: 700, letterSpacing: '0.3px' }}>{(user.name || user.email).trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()}</span>
+              : <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6.5" r="3" /><path d="M3.5 17a6.5 6.5 0 0 1 13 0" /></svg>}
             {customerReplies > 0 && (
               <span style={{ position: 'absolute', top: '-4px', right: '-4px', minWidth: '16px', height: '16px', padding: '0 3px', borderRadius: '999px', background: 'var(--cta)', border: '2px solid var(--surf-w)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <svg width="9" height="9" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 5.5A1.5 1.5 0 0 1 4 4h12a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5z" /><polyline points="3 5.5 10 11 17 5.5" /></svg>
@@ -1590,29 +1800,27 @@ export default function MarketplacePage() {
             <p style={{ fontSize: '13px', color: 'var(--ink3)' }}>Modified to your specs — roll-up doors, personnel doors, windows, electrics, and more. Built at our Houston depot and delivered ready to use.</p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '14px' }}>
-            {CUSTOM_BUILDS.map(cb => (
-              <div key={cb.name} style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', overflow: 'hidden', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' }}
+            {builds.length === 0 && <div style={{ color: 'var(--ink3)', fontSize: '13px', padding: '30px 0' }}>No custom builds published yet — check back soon.</div>}
+            {builds.map(cb => (
+              <div key={cb.id} style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', overflow: 'hidden', transition: 'transform 0.2s, box-shadow 0.2s' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-3px)'; (e.currentTarget as HTMLElement).style.boxShadow = 'var(--sh2)' }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = ''; (e.currentTarget as HTMLElement).style.boxShadow = 'var(--sh1)' }}
               >
-                <div style={{ width: '100%', aspectRatio: '16/9', background: 'linear-gradient(135deg,#1E293B,#0F2D4A)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '8px' }}>
-                  <span style={{ fontSize: '28px' }}>🔧</span>
-                  <span style={{ fontSize: '10px', color: 'rgba(255,255,255,.4)', fontWeight: 600, letterSpacing: '0.8px', textTransform: 'uppercase' }}>{cb.tag}</span>
+                {/* Product photo, or clean clipart until one is uploaded */}
+                <div style={{ width: '100%', aspectRatio: '16/9', background: 'linear-gradient(135deg,#1E293B,#0F2D4A)', overflow: 'hidden' }}>
+                  {cb.photo
+                    ? <img src={photoUrl(cb.photo)} alt={cb.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    : <BuildClipart name={cb.name} />}
                 </div>
                 <div style={{ padding: '14px 15px 16px' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 9px', borderRadius: 'var(--r4)', fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', background: 'var(--slate-cont)', color: 'var(--slate)', marginBottom: '8px' }}>{cb.tag}</span>
+                  {cb.tag && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 9px', borderRadius: 'var(--r4)', fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', background: 'var(--slate-cont)', color: 'var(--slate)', marginBottom: '8px' }}>{cb.tag}</span>}
                   <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '4px' }}>{cb.name}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--ink3)', lineHeight: 1.55, marginBottom: '12px' }}>{cb.desc}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--ink3)', lineHeight: 1.55, marginBottom: '12px' }}>{cb.description}</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '14px' }}>
                     {cb.features.map(f => <span key={f} style={{ padding: '3px 9px', borderRadius: 'var(--r4)', background: 'var(--surf1)', color: 'var(--ink2)', fontSize: '11px' }}>{f}</span>)}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>
-                      <div style={{ fontSize: '10px', color: 'var(--ink3)' }}>From</div>
-                      <div style={{ fontSize: '18px', fontWeight: 700, fontFamily: 'var(--mono)' }}>${cb.fromPrice.toLocaleString()}</div>
-                    </div>
-                    <button onClick={() => openQuote('quote')} style={{ padding: '7px 16px', borderRadius: 'var(--pill)', background: 'var(--slate)', color: '#fff', fontSize: '12px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>Get Quote</button>
-                  </div>
+                  {/* Pricing is settled by the estimate — no list price shown */}
+                  <button onClick={() => setOrderBuild(cb)} style={{ width: '100%', padding: '11px', borderRadius: 'var(--pill)', background: 'var(--cta)', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer', boxShadow: '0 2px 8px rgba(230,81,0,.25)' }}>Request Estimate</button>
                 </div>
               </div>
             ))}
@@ -1685,8 +1893,8 @@ export default function MarketplacePage() {
         onSuccess={() => toast('Request submitted! We\'ll be in touch within 2 hours.')}
       />
 
-      {/* ── Profile menu ── */}
-      <Modal open={profileOpen} onClose={() => setProfileOpen(false)} maxWidth={380}>
+      {/* ── Profile menu — options only appear once signed in ── */}
+      <Modal open={profileOpen} onClose={() => setProfileOpen(false)} maxWidth={380} closeLabel="Close">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
           <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: 'var(--primary-cont)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
             <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6.5" r="3" /><path d="M3.5 17a6.5 6.5 0 0 1 13 0" /></svg>
@@ -1696,7 +1904,10 @@ export default function MarketplacePage() {
             <div style={{ fontSize: '12px', color: 'var(--ink3)' }}>{user ? `Signed in · ${user.email}` : 'Sign in to manage your account & orders'}</div>
           </div>
         </div>
-        {([
+        {!user && (
+          <LoginForm allowRegister subtitle="Sign in or create an account to see your profile, saved info, orders, and driver messages." />
+        )}
+        {user && ([
           { key: 'account', label: 'My Account', desc: 'Sign-in, billing & preferences', icon: <><circle cx="10" cy="6.5" r="3" /><path d="M3.5 17a6.5 6.5 0 0 1 13 0" /></> },
           { key: 'info', label: 'My Info', desc: 'Contact details & delivery addresses', icon: <><rect x="3" y="4" width="14" height="12" rx="2" /><line x1="6" y1="8" x2="14" y2="8" /><line x1="6" y1="11.5" x2="11" y2="11.5" /></> },
           { key: 'message', label: 'Message Driver', desc: 'Send a note to your delivery driver', icon: <><path d="M2.5 5.5A1.5 1.5 0 0 1 4 4h12a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5z" /><polyline points="3 5.5 10 11 17 5.5" /></> },
@@ -1722,6 +1933,20 @@ export default function MarketplacePage() {
             <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="var(--ink3)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="8 4 14 10 8 16" /></svg>
           </button>
         ))}
+        {user && (
+          <button
+            onClick={() => { logout(); setProfileOpen(false); toast('Signed out') }}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', marginTop: '4px', borderRadius: 'var(--r12)', border: '1.5px solid var(--cta-cont)', background: 'var(--surf-w)', cursor: 'pointer', textAlign: 'left' }}
+          >
+            <span style={{ width: '34px', height: '34px', borderRadius: 'var(--r8)', background: 'var(--cta-cont)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="var(--cta)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 17H4a1 1 0 01-1-1V4a1 1 0 011-1h4" /><polyline points="13,6 17,10 13,14" /><line x1="17" y1="10" x2="7" y2="10" /></svg>
+            </span>
+            <span style={{ flex: 1 }}>
+              <span style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: 'var(--cta)' }}>Sign Out</span>
+              <span style={{ display: 'block', fontSize: '11px', color: 'var(--ink3)' }}>{user.email}</span>
+            </span>
+          </button>
+        )}
       </Modal>
 
       {/* ── Account / My Info / Orders (requires a signed-in account) ── */}
@@ -1730,10 +1955,20 @@ export default function MarketplacePage() {
         initialTab={accountTab}
         onClose={() => setAccountOpen(false)}
         onMessageDriver={() => { setAccountOpen(false); setMsgOpen(true) }}
+        onSaved={() => { setAccountOpen(false); setProfileOpen(true) }}
         toast={toast}
       />
 
       <CustomerMessageModal open={msgOpen} onClose={() => setMsgOpen(false)} onSent={(m) => toast(m)} />
+
+      {/* ── Order a custom build ── */}
+      <OrderBuildModal
+        build={orderBuild}
+        user={user}
+        onClose={() => setOrderBuild(null)}
+        onPlaced={() => { refetchContainers() }}
+        toast={toast}
+      />
 
       <Snackbar message={message} open={snackOpen} onClose={snackClose} />
     </div>

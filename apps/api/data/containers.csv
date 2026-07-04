@@ -1,14 +1,17 @@
-id,sku,guid,stockNumber,size,grade,status,buyPrice,rentMonthly,photos,photoCount,has360,depotLocation,bayNumber,inspectorName,inspectedAt,deliveryIncluded,listingType,createdAt,purchaseCost,conditionScore
-ctr_0041,NOLA-20-0001,7f3a1c20-0041-4a1b-9c11-000000000041,STK-0041,20ft-std,A,available,3850,145,,12,true,NOLA Depot,Bay 2,T. Rivera,2026-06-20T14:00:00.000Z,true,both,2026-06-18T09:12:00.000Z,2100,5
-ctr_0052,NOLA-20-0002,7f3a1c20-0052-4a1b-9c11-000000000052,STK-0052,20ft-hc,A,assigned,4850,180,,12,true,NOLA Depot,Bay 4,T. Rivera,2026-06-22T10:30:00.000Z,true,both,2026-06-19T11:40:00.000Z,2700,5
-ctr_0038,HOU-40-0001,7f3a1c20-0038-4a1b-9c11-000000000038,STK-0038,40ft-hc,B,in_transit,5600,240,,12,false,Houston Depot,Bay 1,M. Chen,2026-06-15T16:20:00.000Z,true,buy,2026-06-12T08:05:00.000Z,3200,4
-ctr_0029,HOU-20-0001,7f3a1c20-0029-4a1b-9c11-000000000029,STK-0029,20ft-std,C,delivered,2950,110,,8,false,Houston Depot,Bay 3,M. Chen,2026-06-10T13:00:00.000Z,true,both,2026-06-08T15:22:00.000Z,1650,3
-ctr_0061,NOLA-20-0003,7f3a1c20-0061-4a1b-9c11-000000000061,STK-0061,20ft-std,A,delivered,3990,150,,12,true,NOLA Depot,Bay 5,T. Rivera,2026-06-28T09:00:00.000Z,true,rent,2026-06-26T10:15:00.000Z,2200,5
-ctr_0044,BR-40-0001,7f3a1c20-0044-4a1b-9c11-000000000044,STK-0044,40ft-std,B,draft,5200,225,,0,false,Baton Rouge Depot,Bay 1,,,true,buy,2026-06-27T14:30:00.000Z,3000,4
-ctr_0067,NOLA-20-0004,7f3a1c20-0067-4a1b-9c11-000000000067,STK-0067,20ft-std,B,assigned,3400,130,,12,true,NOLA Depot,Bay 6,T. Rivera,2026-06-29T09:00:00.000Z,true,both,2026-06-27T10:00:00.000Z,1900,4
-ctr_0068,NOLA-20-0005,7f3a1c20-0068-4a1b-9c11-000000000068,STK-0068,20ft-std,A,assigned,3990,150,,12,true,NOLA Depot,Bay 7,T. Rivera,2026-06-30T09:00:00.000Z,true,both,2026-06-28T10:00:00.000Z,2250,5
-ctr_0070,NOLA-20-0006,7f3a1c20-0070-4a1b-9c11-000000000070,STK-0070,20ft-std,B,draft,3300,125,,0,false,NOLA Depot,Bay 8,,,true,both,2026-07-01T10:30:00.000Z,1800,0
-ctr_0071,NOLA-20-0007,7f3a1c20-0071-4a1b-9c11-000000000071,STK-0071,20ft-hc,B,delivered,4600,175,,12,false,NOLA Depot,,T. Rivera,2026-05-16T10:00:00.000Z,true,rent,2026-05-15T09:00:00.000Z,2600,4
-ctr_0072,HOU-20-0002,7f3a1c20-0072-4a1b-9c11-000000000072,STK-0072,20ft-std,C,delivered,2900,110,,12,false,Houston Depot,,M. Chen,2026-05-20T11:00:00.000Z,true,rent,2026-05-18T08:30:00.000Z,1600,3
-ctr_0073,NOLA-40-0001,7f3a1c20-0073-4a1b-9c11-000000000073,STK-0073,40ft-hc,A,available,6400,260,,12,true,NOLA Depot,Bay 3,T. Rivera,2026-06-30T15:00:00.000Z,true,both,2026-06-30T08:00:00.000Z,3900,5
-ctr_0074,BR-20-0001,7f3a1c20-0074-4a1b-9c11-000000000074,STK-0074,20ft-std,B,available,3548,135,,12,false,Baton Rouge Depot,Bay 2,T. Rivera,2026-06-29T16:00:00.000Z,true,both,2026-06-29T09:30:00.000Z,1950,4
+id,sku,guid,stockNumber,size,grade,status,buyPrice,rentMonthly,photos,photoCount,has360,depotLocation,bayNumber,inspectorName,inspectedAt,deliveryIncluded,listingType,createdAt,purchaseCost,conditionScore,customEta,customBuildName
+ctr_0041,NOLA-20-0001,7f3a1c20-0041-4a1b-9c11-000000000041,STK-0041,20ft-std,A,available,3850,566,,12,true,NOLA Depot,Bay 2,T. Rivera,2026-06-20T14:00:00.000Z,true,rent,2026-06-18T09:12:00.000Z,2100,5,,
+ctr_0052,NOLA-20-0002,7f3a1c20-0052-4a1b-9c11-000000000052,STK-0052,20ft-hc,A,assigned,4850,180,,12,true,NOLA Depot,Bay 4,T. Rivera,2026-06-22T10:30:00.000Z,true,both,2026-06-19T11:40:00.000Z,2700,5,,
+ctr_0038,HOU-40-0001,7f3a1c20-0038-4a1b-9c11-000000000038,STK-0038,40ft-hc,B,in_transit,5600,240,,12,false,Houston Depot,Bay 1,M. Chen,2026-06-15T16:20:00.000Z,true,buy,2026-06-12T08:05:00.000Z,3200,4,,
+ctr_0029,HOU-20-0001,7f3a1c20-0029-4a1b-9c11-000000000029,STK-0029,20ft-std,C,delivered,2950,110,,8,false,Houston Depot,Bay 3,M. Chen,2026-06-10T13:00:00.000Z,true,both,2026-06-08T15:22:00.000Z,1650,3,,
+ctr_0061,NOLA-20-0003,7f3a1c20-0061-4a1b-9c11-000000000061,STK-0061,20ft-std,A,delivered,3990,150,,12,true,NOLA Depot,Bay 5,T. Rivera,2026-06-28T09:00:00.000Z,true,rent,2026-06-26T10:15:00.000Z,2200,5,,
+ctr_0044,BR-40-0001,7f3a1c20-0044-4a1b-9c11-000000000044,STK-0044,40ft-std,B,draft,5200,225,,0,false,Baton Rouge Depot,Bay 1,,,true,buy,2026-06-27T14:30:00.000Z,3000,4,,
+ctr_0067,NOLA-20-0004,7f3a1c20-0067-4a1b-9c11-000000000067,STK-0067,20ft-std,B,assigned,3400,,,12,true,NOLA Depot,Bay 6,T. Rivera,2026-06-29T09:00:00.000Z,true,buy,2026-06-27T10:00:00.000Z,1900,4,,
+ctr_0068,NOLA-20-0005,7f3a1c20-0068-4a1b-9c11-000000000068,STK-0068,20ft-std,A,assigned,3990,,,12,true,NOLA Depot,Bay 7,T. Rivera,2026-06-30T09:00:00.000Z,true,buy,2026-06-28T10:00:00.000Z,2250,5,,
+ctr_0070,NOLA-20-0006,7f3a1c20-0070-4a1b-9c11-000000000070,STK-0070,20ft-std,B,draft,3300,125,,0,false,NOLA Depot,Bay 8,,,true,both,2026-07-01T10:30:00.000Z,1800,0,,
+ctr_0071,NOLA-20-0007,7f3a1c20-0071-4a1b-9c11-000000000071,STK-0071,20ft-hc,B,delivered,4600,175,,12,false,NOLA Depot,,T. Rivera,2026-05-16T10:00:00.000Z,true,rent,2026-05-15T09:00:00.000Z,2600,4,,
+ctr_0072,HOU-20-0002,7f3a1c20-0072-4a1b-9c11-000000000072,STK-0072,20ft-std,C,delivered,2900,110,,12,false,Houston Depot,,M. Chen,2026-05-20T11:00:00.000Z,true,rent,2026-05-18T08:30:00.000Z,1600,3,,
+ctr_0073,NOLA-40-0001,7f3a1c20-0073-4a1b-9c11-000000000073,STK-0073,40ft-hc,A,available,6400,260,,12,true,NOLA Depot,Bay 3,T. Rivera,2026-06-30T15:00:00.000Z,true,rent,2026-06-30T08:00:00.000Z,3900,5,,
+ctr_0074,BR-20-0001,7f3a1c20-0074-4a1b-9c11-000000000074,STK-0074,20ft-std,B,available,3548,,,12,false,Baton Rouge Depot,Bay 2,T. Rivera,2026-06-29T16:00:00.000Z,true,buy,2026-06-29T09:30:00.000Z,1950,4,,
+ctr_mr5jg37k9d443bd2f2,NOLA-20-0008,2ecb8ca6-ee18-4a01-a794-4c20b53c1ae9,STK-0008,20ft-std,A,available,3650,,,0,false,NOLA Depot,Bay 3,,,true,buy,2026-07-03T23:02:07.424Z,2000,0,,
+ctr_mr5jg38se1983e6789,HOU-20-0003,3e446261-0495-497b-9279-0a3c96e3b73f,STK-0003,20ft-hc,B,available,4200,165,,0,false,Houston Depot,Bay 2,,,true,rent,2026-07-03T23:02:07.468Z,2300,0,,
+ctr_mr5jg3a01e6b7361d1,BR-40-0002,245a2dce-38cb-4c74-af62-d95870dede5e,STK-0002,40ft-std,A,available,5900,250,,0,false,Baton Rouge Depot,Bay 1,,,true,rent,2026-07-03T23:02:07.512Z,3300,0,,

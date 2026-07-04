@@ -144,6 +144,15 @@ button, input, select, textarea {
   to { transform: rotate(360deg); }
 }
 
+/* A table row landing in its new group after a listing/status change:
+   slides in and glows, then settles to normal. */
+@keyframes rowArrive {
+  0%   { opacity: 0; transform: translateX(-18px); background-color: #D6E4FF; }
+  30%  { opacity: 1; transform: none; background-color: #D6E4FF; }
+  70%  { background-color: #EAF1FF; }
+  100% { background-color: transparent; }
+}
+
 /* Marketplace card hover veil (Buy/Rent grid) */
 .card-hover-veil { background: rgba(0,0,0,0); opacity: 0; transition: opacity .2s, background .2s; }
 .card-hover-icon { transform: scale(.8); transition: transform .2s; }

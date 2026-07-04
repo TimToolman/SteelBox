@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Field app — green tile with a truck mark -->
+  <rect width="32" height="32" rx="8" fill="#1B7A5A"/>
+  <rect x="3" y="10" width="16" height="11" rx="1.5" fill="none" stroke="white" stroke-width="1.6"/>
+  <path d="M19 13h5l4 4v4h-9v-8z" fill="none" stroke="white" stroke-width="1.6" stroke-linejoin="round"/>
+  <circle cx="9" cy="24" r="2.4" fill="white"/>
+  <circle cx="23" cy="24" r="2.4" fill="white"/>
+</svg>

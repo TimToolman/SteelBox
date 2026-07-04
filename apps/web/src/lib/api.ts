@@ -110,6 +110,18 @@ export type ContainerStatus =
   | 'assigned'
   | 'in_transit'
   | 'delivered'
+  // Custom-build estimate → fabrication pipeline (estimates are settled over the phone)
+  | 'estimate_requested'
+  | 'estimate_in_progress'
+  | 'estimate_sent'
+  | 'estimate_approved'
+  | 'custom_in_progress'   // build underway (customEta = promised completion)
+
+// Every stage a custom build passes through before entering the normal
+// delivery pipeline — shared by admin views and the customer portal.
+export const CUSTOM_STAGES: ContainerStatus[] = [
+  'estimate_requested', 'estimate_in_progress', 'estimate_sent', 'estimate_approved', 'custom_in_progress',
+]
 export type ContainerGrade = 'A' | 'B' | 'C' | 'R' | 'X'
 // How a container may be transacted on the marketplace.
 export type ListingType = 'buy' | 'rent' | 'both'
@@ -136,6 +148,8 @@ export interface Container {
   inspectedAt: string | null
   deliveryIncluded: boolean
   createdAt: string
+  customEta: string          // custom builds: promised completion date (YYYY-MM-DD)
+  customBuildName: string    // custom builds: which catalog product is being fabricated
 }
 
 export interface ContainerFilters {
@@ -251,6 +265,12 @@ export const orders = {
   get: (id: string) => request<Order>(`/orders/${id}`),
   create: (data: Partial<Order>) =>
     request<Order>('/orders', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<Order>) =>
+    request<Order>(`/orders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  // Advance a custom build through the estimate → build pipeline (admin).
+  // estimate_sent requires the settled amount; customer is notified each step.
+  customStage: (id: string, stage: ContainerStatus, amount?: number) =>
+    request<Order>(`/orders/${id}/custom-stage`, { method: 'POST', body: JSON.stringify({ stage, amount }) }),
   assignDriver: (id: string, driverId: string, scheduledDate: string) =>
     request<Order>(`/orders/${id}/assign-driver`, {
       method: 'POST',
@@ -310,7 +330,10 @@ export function parseTrucks(s: string): Truck[] {
   })
 }
 export function encodeTrucks(trucks: Truck[]): string {
-  return trucks.filter(t => t.name.trim()).map(t => `${t.name.trim()}~${t.sizes.join('+')}`).join(';')
+  // ~ + ; | are structural delimiters of this packed field — strip them from
+  // user-entered truck names so one odd character can't corrupt the record.
+  const clean = (s: string) => s.replace(/[~;+|]/g, ' ').replace(/\s+/g, ' ').trim()
+  return trucks.filter(t => clean(t.name)).map(t => `${clean(t.name)}~${t.sizes.join('+')}`).join(';')
 }
 
 export const drivers = {
@@ -499,6 +522,35 @@ export const availability = {
   // Upsert by (driverId, weekStart).
   save: (data: { driverId: string; weekStart: string; workHours: string }) =>
     request<Availability>('/availability', { method: 'POST', body: JSON.stringify(data) }),
+}
+
+// ── Custom builds (marketplace catalog · managed in Admin → Settings) ──
+
+export interface CustomBuild {
+  id: string
+  name: string
+  tag: string            // short badge, e.g. POPULAR
+  description: string
+  features: string[]
+  fromPrice: number
+  photo: string          // /photos/… showcase shot; '' = show built-in clipart
+  sortOrder: number
+  active: boolean
+}
+
+export const customBuilds = {
+  list: () => request<CustomBuild[]>('/custombuilds'),
+  create: (data: Partial<CustomBuild>) =>
+    request<CustomBuild>('/custombuilds', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<CustomBuild>) =>
+    request<CustomBuild>(`/custombuilds/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  remove: (id: string) =>
+    request<{ id: string; deleted: true }>(`/custombuilds/${id}`, { method: 'DELETE' }),
+  uploadPhoto: (id: string, dataUrl: string) =>
+    request<CustomBuild>(`/custombuilds/${id}/photo`, { method: 'POST', body: JSON.stringify({ dataUrl }) }),
+  // Request an estimate for a custom build — open to guests (no account needed).
+  order: (id: string, data: { size?: ContainerSize; customerName?: string; customerEmail?: string; customerPhone?: string; company?: string; deliveryAddress?: string; deliveryZip?: string; notifySms?: boolean; amount?: number }) =>
+    request<{ order: Order; container: Container }>(`/custombuilds/${id}/order`, { method: 'POST', body: JSON.stringify(data) }),
 }
 
 // ── ZIP coverage check ────────────────────────────────────

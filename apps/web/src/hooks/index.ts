@@ -2,7 +2,7 @@
 // SteelBox React Hooks
 // ============================================================
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   containers,
   orders,
@@ -26,13 +26,17 @@ export function useContainers(filters?: ContainerFilters) {
   const [data, setData] = useState<Container[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const loaded = useRef(false)
 
   const fetch = useCallback(async () => {
-    setLoading(true)
+    // Skeletons only on the first load — background refreshes (tab switches,
+    // window focus) swap the data in place without flashing the grid.
+    if (!loaded.current) setLoading(true)
     setError(null)
     try {
       const result = await containers.list(filters)
       setData(result)
+      loaded.current = true
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load containers')
     } finally {
@@ -91,6 +95,24 @@ export function useDrivers() {
   useEffect(() => { fetch() }, [fetch])
 
   return { data, loading, error, refetch: fetch }
+}
+
+// ── useFavicon ────────────────────────────────────────────
+// Per-portal favicon + tab title so admin / field / marketplace tabs are
+// distinguishable at a glance. Restores the defaults on unmount.
+
+export function useFavicon(file: string, title?: string) {
+  useEffect(() => {
+    const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
+    const prevHref = link?.getAttribute('href') ?? null
+    const prevTitle = document.title
+    if (link) link.href = `${import.meta.env.BASE_URL}${file}`
+    if (title) document.title = title
+    return () => {
+      if (link && prevHref) link.setAttribute('href', prevHref)
+      if (title) document.title = prevTitle
+    }
+  }, [file, title])
 }
 
 // ── useSnackbar ───────────────────────────────────────────

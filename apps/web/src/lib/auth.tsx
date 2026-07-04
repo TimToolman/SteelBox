@@ -82,6 +82,7 @@ export function LoginForm({ onDone, allowRegister = false, subtitle }: {
   const [form, setForm] = useState({ name: '', email: '', password: '', phone: '' })
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [pwFocused, setPwFocused] = useState(false)  // hide the ••• placeholder the moment the field is focused
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [k]: e.target.value }))
 
   const submit = async () => {
@@ -113,7 +114,10 @@ export function LoginForm({ onDone, allowRegister = false, subtitle }: {
       <input style={input} type="email" placeholder="you@company.com" value={form.email} onChange={set('email')}
         onKeyDown={e => e.key === 'Enter' && submit()} autoFocus />
       <label style={label}>Password</label>
-      <input style={input} type="password" placeholder={mode === 'register' ? 'At least 8 characters' : '••••••••'} value={form.password} onChange={set('password')}
+      <input style={input} type="password"
+        placeholder={pwFocused ? '' : mode === 'register' ? 'At least 8 characters' : '••••••••'}
+        value={form.password} onChange={set('password')}
+        onFocus={() => setPwFocused(true)} onBlur={() => setPwFocused(false)}
         onKeyDown={e => e.key === 'Enter' && submit()} />
       {mode === 'register' && (
         <div>

@@ -6,7 +6,7 @@
 // ============================================================
 
 import React, { useState, useRef, useEffect } from 'react'
-import { useSnackbar, useAuth } from '../../hooks'
+import { useSnackbar, useAuth, useFavicon } from '../../hooks'
 import { Snackbar } from '../../components/ui'
 import { activity, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, containers as containersApi, availability as availabilityApi, messages as messagesApi, customers as customersApi, orders as ordersApi, parseTrucks, parseWorkHours, encodeWorkHours, photoUrl, fileToDataUrl, type ActivityEvent, type Depot, type Driver, type SchedJob, type DayHours, type Availability, type Message, type Customer, type Container, type Order } from '../../lib/api'
 
@@ -254,6 +254,7 @@ function Stepper({ steps, title = 'Job Progress' }: { steps: StepItem[]; title?:
 // ── Main Field App ─────────────────────────────────────────
 
 export default function FieldAppPage() {
+  useFavicon('favicon-field.svg', 'SteelBox Field App')
   const { user, logout } = useAuth()
   // The signed-in driver's record id (admins previewing the app fall back to drv_01).
   const DRIVER_ID = user?.driverId || FALLBACK_DRIVER_ID

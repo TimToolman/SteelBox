@@ -146,7 +146,13 @@
       "Bash('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless=new --disable-gpu --window-size=1200,800 --screenshot=/private/tmp/claude-501/-Users-tmoore-Documents-GitHub-SteelBox/0e72af8e-02e7-4a79-a1ca-b502fedce638/scratchpad/u1.png --virtual-time-budget=8000 http://localhost:3000/SteelBox/)",
       "Bash('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless=new --disable-gpu --window-size=1200,800 --screenshot=/private/tmp/claude-501/-Users-tmoore-Documents-GitHub-SteelBox/0e72af8e-02e7-4a79-a1ca-b502fedce638/scratchpad/u2.png --virtual-time-budget=8000 http://localhost:3000/SteelBox/admin)",
       "Bash('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless=new --disable-gpu --window-size=430,900 --screenshot=/private/tmp/claude-501/-Users-tmoore-Documents-GitHub-SteelBox/0e72af8e-02e7-4a79-a1ca-b502fedce638/scratchpad/u3.png --virtual-time-budget=8000 http://localhost:3000/SteelBox/field)",
-      "Bash(curl -s localhost:4000/containers)"
+      "Bash(curl -s localhost:4000/containers)",
+      "Bash(awk 'NR>=137 && NR<=1180 && /await /' pages/admin/index.tsx)",
+      "Bash(node stress.mjs)",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>console.log\\(JSON.parse\\(d\\).length,'containers'\\)\\)\")",
+      "Bash(git -C /Users/tmoore/Documents/GitHub/SteelBox status --short apps/api/data)",
+      "Bash(node -e 'let d='\\\\'''\\\\'';process.stdin.on\\('\\\\''data'\\\\'',c=>d+=c\\).on\\('\\\\''end'\\\\'',\\(\\)=>{ *)",
+      "Bash(node --check /Users/tmoore/Documents/GitHub/SteelBox/apps/api/server.mjs)"
     ],
     "additionalDirectories": [
       "/private/tmp/claude-501/-Users-tmoore-Documents-GitHub-SteelBox/8bc4a042-4d10-4d19-90cb-3295d19f3bb6/scratchpad/csvbak"

@@ -5,9 +5,9 @@
 // ============================================================
 
 import React, { useState, useCallback, useEffect } from 'react'
-import { GradeBadge, StatusBadge, Button, Modal, Snackbar } from '../../components/ui'
-import { useContainers, useOrders, useDrivers, useSnackbar, useAuth } from '../../hooks'
-import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, SHOT_LABELS, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role } from '../../lib/api'
+import { GradeBadge, StatusBadge, Button, Modal, Snackbar, BuildClipart } from '../../components/ui'
+import { useContainers, useOrders, useDrivers, useSnackbar, useAuth, useFavicon } from '../../hooks'
+import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, customBuilds as customBuildsApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, SHOT_LABELS, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role, type CustomBuild, CUSTOM_STAGES } from '../../lib/api'
 
 // Container sizes a truck can be certified to pull.
 const TRUCK_SIZES: { value: ContainerSize; label: string }[] = [
@@ -20,7 +20,7 @@ const TRUCK_SIZES: { value: ContainerSize; label: string }[] = [
 
 // ── Types ─────────────────────────────────────────────────
 
-type AdminView = 'dashboard' | 'orders' | 'inventory' | 'schedule' | 'activity' | 'drivers' | 'customers' | 'notifications' | 'settings'
+type AdminView = 'dashboard' | 'orders' | 'inventory' | 'schedule' | 'activity' | 'drivers' | 'customers' | 'users' | 'notifications' | 'depots' | 'builds'
 
 const VIEW_TITLES: Record<AdminView, string> = {
   dashboard:     'Dashboard',
@@ -30,8 +30,10 @@ const VIEW_TITLES: Record<AdminView, string> = {
   activity:      'Activity Log',
   drivers:       'Drivers',
   customers:     'Customers',
+  users:         'Users & Access',
   notifications: 'Alerts',
-  settings:      'Settings',
+  depots:        'Depots',
+  builds:        'Custom Builds',
 }
 
 const ACTIVITY_META: Record<string, { label: string; color: string; bg: string }> = {
@@ -230,11 +232,13 @@ function ListingBadge({ listingType }: { listingType?: Container['listingType'] 
 
 function AddContainerModal({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: (msg: string) => void }) {
   const [form, setForm] = useState({ size: '20ft-std', grade: 'A', listingType: 'both', status: 'available', buyPrice: '', rentMonthly: '', purchaseCost: '', depot: '', bay: '' })
+  const [errField, setErrField] = useState<string | null>(null)  // field flagged red by validation
   const [saving, setSaving] = useState(false)
   const [depots, setDepots] = useState<Depot[]>([])
 
   React.useEffect(() => {
     if (!open) return
+    setErrField(null)
     depotsApi.list().then(ds => {
       setDepots(ds)
       setForm(p => (p.depot || !ds.length) ? p : { ...p, depot: ds[0].name })
@@ -247,6 +251,11 @@ function AddContainerModal({ open, onClose, onAdded }: { open: boolean; onClose:
 
   const handle = async () => {
     if (saving) return
+    if (form.listingType !== 'buy' && !(Number(form.rentMonthly) > 0)) {
+      setErrField('rentMonthly')
+      onAdded('Set a Rental Price — rent listings need one to appear on the marketplace')
+      return
+    }
     setSaving(true)
     try {
       const created = await containersApi.create({
@@ -255,7 +264,7 @@ function AddContainerModal({ open, onClose, onAdded }: { open: boolean; onClose:
         listingType: form.listingType as Container['listingType'],
         status: form.status as Container['status'],
         buyPrice: form.buyPrice ? Number(form.buyPrice) : 0,
-        rentMonthly: form.rentMonthly ? Number(form.rentMonthly) : null,
+        rentMonthly: form.listingType === 'buy' ? null : form.rentMonthly ? Number(form.rentMonthly) : null,
         purchaseCost: form.purchaseCost ? Number(form.purchaseCost) : 0,
         depotLocation: form.depot,
         bayNumber: form.bay,
@@ -272,13 +281,13 @@ function AddContainerModal({ open, onClose, onAdded }: { open: boolean; onClose:
 
   const field = (label: string, key: keyof typeof form, type = 'text', placeholder = '') => (
     <div style={{ marginBottom: '12px' }}>
-      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '5px' }}>{label}</label>
+      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: errField === key ? '#B3261E' : 'var(--ink3)', marginBottom: '5px' }}>{label}{errField === key ? ' — required' : ''}</label>
       <input
         type={type}
         value={form[key]}
         placeholder={placeholder}
-        onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
-        style={{ width: '100%', padding: '10px 12px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '13px', outline: 'none', fontFamily: 'var(--sans)' }}
+        onChange={e => { setForm(p => ({ ...p, [key]: e.target.value })); if (errField === key) setErrField(null) }}
+        style={{ width: '100%', padding: '10px 12px', border: errField === key ? '2px solid #B3261E' : '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '13px', outline: 'none', fontFamily: 'var(--sans)' }}
       />
     </div>
   )
@@ -323,8 +332,9 @@ function AddContainerModal({ open, onClose, onAdded }: { open: boolean; onClose:
         </select>
         <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '-6px' }}>Draft units stay hidden from Buy/Rent until their photo set is complete.</div>
       </div>
-      {field('Buy Price ($)', 'buyPrice', 'number', '3500')}
-      {field('Rental Price ($/mo)', 'rentMonthly', 'number', '150')}
+      {/* Only the price fields the listing type actually uses */}
+      {form.listingType !== 'rent' && field('Buy Price ($)', 'buyPrice', 'number', '3500')}
+      {form.listingType !== 'buy' && field('Rental Price ($/mo)', 'rentMonthly', 'number', '150')}
       {field('Purchase Cost ($ from depot)', 'purchaseCost', 'number', '2100')}
       <div style={{ marginBottom: '12px' }}>
         <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '5px' }}>Purchase Depot</label>
@@ -348,14 +358,19 @@ function AddContainerModal({ open, onClose, onAdded }: { open: boolean; onClose:
 // ── Edit Container Modal ───────────────────────────────────
 
 function EditContainerModal({ container, onClose, onSaved }: {
-  container: Container | null; onClose: () => void; onSaved: (msg: string) => void
+  container: Container | null; onClose: () => void
+  // `moved` is set when the unit changed listing type or status — i.e. it
+  // lands in a different inventory group and should animate on arrival.
+  onSaved: (msg: string, moved?: Container) => void
 }) {
   const [form, setForm] = useState({ size: '20ft-std', grade: 'A', status: 'draft', listingType: 'both', buyPrice: '', rentMonthly: '', purchaseCost: '', depot: '', bay: '', inspector: '' })
+  const [errField, setErrField] = useState<string | null>(null)  // field flagged red by validation
   const [saving, setSaving] = useState(false)
 
   // Hydrate the form each time a new container is opened for editing.
   React.useEffect(() => {
     if (!container) return
+    setErrField(null)
     setForm({
       size: container.size,
       grade: container.grade,
@@ -372,6 +387,13 @@ function EditContainerModal({ container, onClose, onSaved }: {
 
   const handle = async () => {
     if (!container || saving) return
+    // A rent-capable listing with no monthly rate can't render on the Rent
+    // tab — it would silently vanish from the marketplace.
+    if (form.listingType !== 'buy' && !(Number(form.rentMonthly) > 0)) {
+      setErrField('rentMonthly')
+      onSaved('Set a Rent / Month price — rent listings need one to appear on the marketplace')
+      return
+    }
     setSaving(true)
     try {
       const updated = await containersApi.update(container.id, {
@@ -380,13 +402,22 @@ function EditContainerModal({ container, onClose, onSaved }: {
         status: form.status as Container['status'],
         listingType: form.listingType as Container['listingType'],
         buyPrice: form.buyPrice ? Number(form.buyPrice) : 0,
-        rentMonthly: form.rentMonthly ? Number(form.rentMonthly) : null,
+        // Buy-only units carry no rent rate (the hidden field's stale value is discarded).
+        rentMonthly: form.listingType === 'buy' ? null : form.rentMonthly ? Number(form.rentMonthly) : null,
         purchaseCost: form.purchaseCost ? Number(form.purchaseCost) : 0,
         depotLocation: form.depot,
         bayNumber: form.bay,
         inspectorName: form.inspector,
       })
-      onSaved(`Container ${updated.sku} updated`)
+      const listingChanged = form.listingType !== (container.listingType ?? 'both')
+      const statusChanged = form.status !== container.status
+      const LT_LABEL: Record<string, string> = { both: 'Buy & Rent', buy: 'Buy only', rent: 'Rent only' }
+      onSaved(
+        listingChanged
+          ? `${updated.sku} moved to ${LT_LABEL[updated.listingType ?? 'both']} listing`
+          : `Container ${updated.sku} updated`,
+        listingChanged || statusChanged ? updated : undefined,
+      )
       onClose()
     } catch (e) {
       onSaved(`Failed to update container — ${e instanceof Error ? e.message : 'please try again'}`)
@@ -400,13 +431,13 @@ function EditContainerModal({ container, onClose, onSaved }: {
 
   const field = (label: string, key: keyof typeof form, type = 'text', placeholder = '') => (
     <div style={{ marginBottom: '12px' }}>
-      <label style={lblStyle}>{label}</label>
+      <label style={{ ...lblStyle, color: errField === key ? '#B3261E' : lblStyle.color }}>{label}{errField === key ? ' — required' : ''}</label>
       <input
         type={type}
         value={form[key]}
         placeholder={placeholder}
-        onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
-        style={selStyle}
+        onChange={e => { setForm(p => ({ ...p, [key]: e.target.value })); if (errField === key) setErrField(null) }}
+        style={{ ...selStyle, border: errField === key ? '2px solid #B3261E' : selStyle.border }}
       />
     </div>
   )
@@ -457,8 +488,9 @@ function EditContainerModal({ container, onClose, onSaved }: {
           <option value="rent">Rent only</option>
         </select>
       </div>
-      {field('Buy Price ($)', 'buyPrice', 'number', '3500')}
-      {field('Rent / Month ($)', 'rentMonthly', 'number', 'auto')}
+      {/* Only the price fields the listing type actually uses */}
+      {form.listingType !== 'rent' && field('Buy Price ($)', 'buyPrice', 'number', '3500')}
+      {form.listingType !== 'buy' && field('Rent / Month ($)', 'rentMonthly', 'number', '150')}
       {field('Purchase Cost ($ from depot)', 'purchaseCost', 'number', '2100')}
       {field('Depot Location', 'depot', 'text', 'NOLA Depot')}
       {field('Bay Number', 'bay', 'text', 'Bay 4')}
@@ -668,6 +700,86 @@ function UserModal({ target, drivers, onClose, onSaved }: {
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '8px' }}>
         <Button variant="ghost" onClick={onClose}>Cancel</Button>
         <Button variant="primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : isNew ? 'Create Account' : 'Save Changes'}</Button>
+      </div>
+    </Modal>
+  )
+}
+
+// ── Custom Build Add/Edit Modal (Settings) ─────────────────
+
+function CustomBuildModal({ target, onClose, onSaved }: {
+  target: CustomBuild | 'new' | null
+  onClose: () => void
+  onSaved: (msg: string) => void
+}) {
+  const isNew = target === 'new'
+  const [form, setForm] = useState({ name: '', tag: '', fromPrice: '', description: '', features: '', active: true })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!target) return
+    if (target === 'new') setForm({ name: '', tag: '', fromPrice: '', description: '', features: '', active: true })
+    else setForm({ name: target.name, tag: target.tag, fromPrice: String(target.fromPrice || ''), description: target.description, features: target.features.join('\n'), active: target.active !== false })
+    setError('')
+  }, [target])
+
+  if (!target) return null
+
+  const save = async () => {
+    if (saving) return
+    setSaving(true)
+    setError('')
+    try {
+      const payload = {
+        name: form.name.trim(),
+        tag: form.tag.trim().toUpperCase(),
+        fromPrice: Number(form.fromPrice) || 0,
+        description: form.description.trim(),
+        features: form.features.split('\n').map(f => f.trim()).filter(Boolean),
+        active: form.active,
+      }
+      if (isNew) { await customBuildsApi.create(payload); onSaved(`${payload.name} added to Custom Builds`) }
+      else { await customBuildsApi.update((target as CustomBuild).id, payload); onSaved(`${payload.name} updated`) }
+      onClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Save failed — please try again')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const lbl: React.CSSProperties = { display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '5px' }
+  const inp: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '13px', outline: 'none', fontFamily: 'var(--sans)', marginBottom: '12px', boxSizing: 'border-box' }
+
+  return (
+    <Modal open onClose={onClose} maxWidth={480}>
+      <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '4px' }}>{isNew ? 'Add Custom Build' : 'Edit Custom Build'}</h2>
+      <p style={{ fontSize: '12px', color: 'var(--ink3)', marginBottom: '18px' }}>Shown on the marketplace Custom Builds tab. Upload a product photo from the card — clipart shows until then.</p>
+      <label style={lbl}>Name</label>
+      <input style={inp} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Roll-Up Door" />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 10px' }}>
+        <div>
+          <label style={lbl}>Tag / badge</label>
+          <input style={inp} value={form.tag} onChange={e => setForm(p => ({ ...p, tag: e.target.value }))} placeholder="POPULAR" />
+        </div>
+        <div>
+          <label style={lbl}>From price ($)</label>
+          <input style={inp} type="number" value={form.fromPrice} onChange={e => setForm(p => ({ ...p, fromPrice: e.target.value }))} placeholder="3200" />
+        </div>
+      </div>
+      <label style={lbl}>Description</label>
+      <textarea rows={2} style={{ ...inp, resize: 'vertical' }} value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Single or double roll-up doors for easy forklift access." />
+      <label style={lbl}>Features (one per line)</label>
+      <textarea rows={3} style={{ ...inp, resize: 'vertical' }} value={form.features} onChange={e => setForm(p => ({ ...p, features: e.target.value }))} placeholder={'8×7 roll-up\nGalvanized steel\nLockable'} />
+      <label style={{ display: 'flex', alignItems: 'center', gap: '9px', cursor: 'pointer', marginBottom: '12px' }}>
+        <input type="checkbox" checked={form.active} onChange={e => setForm(p => ({ ...p, active: e.target.checked }))} style={{ width: '16px', height: '16px', accentColor: 'var(--primary)' }} />
+        <span style={{ fontSize: '13px' }}>Visible on the marketplace</span>
+      </label>
+      {error && <div style={{ background: '#FDECEA', border: '1px solid #F5C6C0', color: '#B3261E', borderRadius: 'var(--r8)', padding: '9px 12px', fontSize: '12px', marginBottom: '10px' }}>{error}</div>}
+      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button variant="primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : isNew ? 'Add Build' : 'Save Changes'}</Button>
       </div>
     </Modal>
   )
@@ -1170,6 +1282,7 @@ function NavItem({ icon, label, badge, active, onClick }: { icon: React.ReactNod
 }
 
 export default function AdminPage() {
+  useFavicon('favicon-admin.svg', 'SteelBox Admin Portal')
   const { user: adminUser, logout } = useAuth()
   const [view, setView] = useState<AdminView>('dashboard')
   const [assignOpen, setAssignOpen] = useState(false)
@@ -1179,6 +1292,14 @@ export default function AdminPage() {
   const [editContainer, setEditContainer] = useState<Container | null>(null)
   const [photosFor, setPhotosFor] = useState<Container | null>(null)   // photo review/fix modal
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  // Row that just changed listing/status group — animated + scrolled into view.
+  const [movedRowId, setMovedRowId] = useState<string | null>(null)
+  // Custom Builds catalog (Settings) + fabrication pipeline helpers
+  const [buildList, setBuildList] = useState<CustomBuild[]>([])
+  const [editBuild, setEditBuild] = useState<CustomBuild | 'new' | null>(null)
+  const [buildPhotoBusy, setBuildPhotoBusy] = useState<string | null>(null)
+  const refetchBuilds = useCallback(() => customBuildsApi.list().then(setBuildList), [])
+  useEffect(() => { refetchBuilds().catch(() => {}) }, [refetchBuilds])
   // RBAC accounts (users.csv) + sent email/SMS log (outbox.csv)
   const [userList, setUserList] = useState<AuthUser[]>([])
   const [editUser, setEditUser] = useState<AuthUser | 'new' | null>(null)
@@ -1209,13 +1330,19 @@ export default function AdminPage() {
   useEffect(() => { refetchSchedule().catch(() => {}) }, [refetchSchedule])
   // Re-sync whenever the admin navigates back to the Schedule page.
   useEffect(() => { if (view === 'schedule') refetchSchedule().catch(() => {}) }, [view, refetchSchedule])
-  // Re-sync with field-app reschedules on window focus (e.g. switching back from the field tab).
+  // Re-sync with field-app + marketplace changes on window focus (photos,
+  // reschedules, new orders made in another tab).
   useEffect(() => {
-    const onFocus = () => { if (document.visibilityState !== 'hidden') refetchSchedule().catch(() => {}) }
+    const onFocus = () => {
+      if (document.visibilityState === 'hidden') return
+      refetchSchedule().catch(() => {})
+      refetchContainers()
+      refetchOrders()
+    }
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onFocus)
     return () => { window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus) }
-  }, [refetchSchedule])
+  }, [refetchSchedule, refetchContainers, refetchOrders])
   const [schedDay, setSchedDay] = useState(0)              // selected day offset for the by-driver view
   const [calView, setCalView] = useState<'week' | 'day'>('week')  // calendar Week vs Day
   const [schedModal, setSchedModal] = useState<{ driverId?: string; edit?: SchedJob } | null>(null)
@@ -1320,6 +1447,69 @@ export default function AdminPage() {
       setDeletingId(null)
     }
   }, [deletingId, toast, refetchContainers])
+
+  // ── Custom build pipeline: estimate → phone approval → build → delivery ──
+  // Every custom build starts as an estimate request. Pricing is settled over
+  // the phone; each stage change emails/texts the customer and shows in their
+  // portal. Once the build completes it drops into the normal approve →
+  // assign-driver delivery pipeline.
+  const customContainers = containerList.filter(c => (CUSTOM_STAGES as string[]).includes(c.status))
+  const customOrderFor = useCallback((c: Container) =>
+    orderList.find(o => (o.containerId === c.id || o.containerSku === c.sku) && (CUSTOM_STAGES as string[]).includes(o.status)),
+    [orderList])
+  const refreshCustom = () => { refetchContainers(); refetchOrders(); refetchOutbox().catch(() => {}) }
+  const advanceCustomStage = async (c: Container, stage: Container['status'], label: string) => {
+    const o = customOrderFor(c)
+    if (!o) { toast(`No linked order found for ${c.sku}`); return }
+    let amount: number | undefined
+    if (stage === 'estimate_sent') {
+      const input = window.prompt(`Estimate amount for ${c.customBuildName || c.sku} (settled on the phone), USD:`, String(o.amount || c.buyPrice || ''))
+      if (input == null) return
+      amount = Number(String(input).replace(/[^0-9.]/g, ''))
+      if (!(amount > 0)) { toast('Enter a valid estimate amount'); return }
+    }
+    try {
+      await ordersApi.customStage(o.id, stage, amount)
+      toast(`${c.sku} → ${label} — customer notified`)
+      refreshCustom()
+    } catch (e) { toast(`Failed — ${e instanceof Error ? e.message : 'try again'}`) }
+  }
+  const setCustomEta = async (c: Container, eta: string) => {
+    try {
+      await containersApi.update(c.id, { customEta: eta })
+      toast(eta ? `${c.sku} build ETA set to ${eta} — customer notified` : `${c.sku} ETA cleared`)
+      refreshCustom()
+    } catch (e) { toast(`Failed to set ETA — ${e instanceof Error ? e.message : 'try again'}`) }
+  }
+  const markCustomReady = async (c: Container) => {
+    try {
+      const o = customOrderFor(c)
+      await containersApi.update(c.id, { status: 'sold' })
+      if (o) await ordersApi.update(o.id, { status: 'sold' })
+      toast(`${c.sku} build complete — assign a driver on the Orders page`)
+      refreshCustom()
+    } catch (e) { toast(`Failed — ${e instanceof Error ? e.message : 'try again'}`) }
+  }
+  // Stage-appropriate action buttons, shared by the Inventory + Orders tables.
+  const customStageActions = (c: Container) => {
+    switch (c.status) {
+      case 'estimate_requested':
+        return <TblBtn variant="primary" onClick={() => advanceCustomStage(c, 'estimate_in_progress', 'Estimate In Progress')}>Start Estimate</TblBtn>
+      case 'estimate_in_progress':
+        return <TblBtn variant="primary" onClick={() => advanceCustomStage(c, 'estimate_sent', 'Estimate Sent')}>Send Estimate…</TblBtn>
+      case 'estimate_sent':
+        return (
+          <div style={{ display: 'flex', gap: '5px' }}>
+            <TblBtn variant="success" onClick={() => advanceCustomStage(c, 'estimate_approved', 'Estimate Approved')}>Approved (phone)</TblBtn>
+            <TblBtn onClick={() => advanceCustomStage(c, 'estimate_sent', 'Estimate Revised')}>Revise…</TblBtn>
+          </div>
+        )
+      case 'estimate_approved':
+        return <TblBtn variant="primary" onClick={() => advanceCustomStage(c, 'custom_in_progress', 'Build In Progress')}>Start Build</TblBtn>
+      default: // custom_in_progress
+        return <TblBtn variant="success" onClick={() => markCustomReady(c)}>Build Complete</TblBtn>
+    }
+  }
 
   // ── Purchase-in-progress workflow (Orders page) ──
   // Which driver is assigned to each in-flight purchase (containerId → name).
@@ -1507,9 +1697,11 @@ export default function AdminPage() {
           <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', padding: '16px 18px 3px' }}>People</div>
           <NavItem active={view === 'drivers'} onClick={() => setView('drivers')} label="Drivers" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="10" cy="6.5" r="3" /><path d="M3 18A7 7 0 0 1 17 18" /></svg>} />
           <NavItem active={view === 'customers'} onClick={() => setView('customers')} label="Customers" badge={customerList.filter(c => c.active !== false).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="7" cy="7" r="2.6" /><path d="M2 16.5A5 5 0 0 1 12 16.5" /><path d="M13 4.6a2.6 2.6 0 0 1 0 4.8" /><path d="M14.5 16.5a5 5 0 0 0-2.2-4.1" /></svg>} />
+          <NavItem active={view === 'users'} onClick={() => setView('users')} label="Users & Access" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6" r="2.6" /><path d="M4.5 17a5.5 5.5 0 0 1 11 0" /><path d="M14.5 8.5l1 1 2-2" /></svg>} />
           <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', padding: '16px 18px 3px' }}>System</div>
           <NavItem active={view === 'notifications'} onClick={() => setView('notifications')} label="Alerts" badge={reserved.length + orderList.filter(o => !o.driverId && o.status !== 'delivered').length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M4 8A6 6 0 0 1 16 8L16 12L18 14L2 14L4 12Z" /><path d="M8 16a2 2 0 004 0" /></svg>} />
-          <NavItem active={view === 'settings'} onClick={() => setView('settings')} label="Settings" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="10" cy="10" r="2.5" /><path d="M10 2v2M10 16v2M2 10h2M16 10h2" /></svg>} />
+          <NavItem active={view === 'depots'} onClick={() => setView('depots')} label="Depots" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2a5.5 5.5 0 0 0-5.5 5.5c0 4 5.5 10 5.5 10s5.5-6 5.5-10A5.5 5.5 0 0 0 10 2z" /><circle cx="10" cy="7.5" r="1.8" /></svg>} />
+          <NavItem active={view === 'builds'} onClick={() => setView('builds')} label="Custom Builds" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5.5l2 2L7 15H5v-2z" /><path d="M11 7l2 2" /><rect x="2" y="4" width="16" height="13" rx="1.5" /></svg>} />
         </div>
 
         <div style={{ padding: '10px', borderTop: '1px solid var(--div)', flexShrink: 0 }}>
@@ -1617,6 +1809,51 @@ export default function AdminPage() {
                 <KpiCard label="In Transit" value={inTransit.length} color="var(--primary)" bgColor="var(--primary-cont)" icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="8" width="11" height="8" rx="1.5" /><path d="M12 10H16L19 13V16H12Z" /></svg>} />
                 <KpiCard label="Delivered (Month)" value={deliveredMonth.length} color="var(--green)" bgColor="var(--green-cont)" icon={<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--green)" strokeWidth="2" strokeLinecap="round"><polyline points="3,10.5 8,16 17,5" /></svg>} />
               </div>
+
+              {/* Custom Orders — builds in fabrication, with customer-facing ETA */}
+              {customContainers.length > 0 && (
+                <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1.5px solid #6D28D9', boxShadow: 'var(--sh1)', overflow: 'hidden', marginBottom: '22px' }}>
+                  <div style={{ background: '#6D28D9', padding: '10px 18px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '14px' }}>🔧</span>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff', flex: 1 }}>Custom Orders — estimates settled by phone, then build & delivery · customer notified at every stage</span>
+                    <span style={{ background: 'rgba(255,255,255,.25)', color: '#fff', borderRadius: 'var(--pill)', padding: '2px 10px', fontSize: '11px', fontWeight: 700 }}>{customContainers.length}</span>
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '920px' }}>
+                      <thead><tr><Th>Order</Th><Th>Build</Th><Th>SKU</Th><Th>Customer</Th><Th>Estimate</Th><Th>Build ETA</Th><Th>Stage</Th><Th>Next Step</Th></tr></thead>
+                      <tbody>
+                        {customContainers.map(c => {
+                          const o = customOrderFor(c)
+                          const priced = (o?.amount ?? 0) > 0
+                          return (
+                            <tr key={c.id}>
+                              <Td mono>{o?.orderNumber ?? '—'}</Td>
+                              <Td><span style={{ fontWeight: 700 }}>{c.customBuildName || 'Custom build'}</span><div style={{ fontSize: '11px', color: 'var(--ink3)' }}>{c.size} · {c.depotLocation}</div></Td>
+                              <Td mono>{c.sku}</Td>
+                              <Td>{o ? <><div>{o.customerName}</div><div style={{ fontSize: '11px', color: 'var(--ink3)' }}>{o.customerPhone || o.customerEmail}</div></> : '—'}</Td>
+                              <Td>{priced
+                                ? <span style={{ fontFamily: 'var(--mono)', fontWeight: 700 }}>${o!.amount.toLocaleString()}</span>
+                                : <span style={{ color: 'var(--ink3)', fontSize: '11px' }}>TBD · from ${c.buyPrice.toLocaleString()}</span>}</Td>
+                              <Td>
+                                {c.status === 'custom_in_progress' ? (
+                                  <input
+                                    type="date"
+                                    defaultValue={(c.customEta || '').slice(0, 10)}
+                                    onChange={e => setCustomEta(c, e.target.value)}
+                                    style={{ padding: '6px 9px', border: `1.5px solid ${c.customEta ? 'var(--green)' : 'var(--amber)'}`, borderRadius: 'var(--r8)', fontSize: '12px', fontFamily: 'var(--sans)', outline: 'none' }}
+                                  />
+                                ) : <span style={{ color: 'var(--ink3)' }}>—</span>}
+                              </Td>
+                              <Td><StatusBadge status={c.status as any} /></Td>
+                              <Td>{customStageActions(c)}</Td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {/* Purchase in Progress — approve, then assign (or re-assign) a driver */}
               {purchases.length > 0 && (
@@ -1765,6 +2002,68 @@ export default function AdminPage() {
                 <Button variant="primary" size="md" onClick={() => setAddContainerOpen(true)} icon={<span>+</span>}>Add Container</Button>
               </div>
 
+              {/* ── Custom Orders — builds in fabrication ── */}
+              <div style={{ marginBottom: '22px' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '8px' }}>
+                  <span style={{ width: '9px', height: '9px', borderRadius: '3px', background: '#6D28D9', flexShrink: 0, alignSelf: 'center' }} />
+                  <span style={{ fontSize: '14px', fontWeight: 700 }}>Custom Orders</span>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, color: '#6D28D9', background: 'var(--surf1)', border: '1px solid var(--div)', borderRadius: 'var(--pill)', padding: '1px 9px' }}>{customContainers.length}</span>
+                  <span style={{ fontSize: '11px', color: 'var(--ink3)' }}>Estimate → phone approval → build → delivery · every stage change notifies the customer</span>
+                </div>
+                {customContainers.length === 0 ? (
+                  <div style={{ background: 'var(--surf-w)', border: '1px dashed var(--div)', borderRadius: 'var(--r12)', padding: '14px 16px', fontSize: '12px', color: 'var(--ink3)' }}>No custom orders right now — estimate requests from the marketplace land here.</div>
+                ) : (
+                  <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1.5px solid #6D28D9', boxShadow: 'var(--sh1)', overflow: 'hidden' }}>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '980px' }}>
+                        <thead><tr><Th>{''}</Th><Th>SKU</Th><Th>Build</Th><Th>Size</Th><Th>Customer</Th><Th>Estimate</Th><Th>Build ETA</Th><Th>Stage</Th><Th>Next Step</Th></tr></thead>
+                        <tbody>
+                          {customContainers.map((c, i) => {
+                            const o = customOrderFor(c)
+                            const priced = (o?.amount ?? 0) > 0
+                            return (
+                              <tr key={c.id} id={`inv-${c.id}`}>
+                                <Td mono><span style={{ color: 'var(--ink3)', fontSize: '10px' }}>{i + 1}</span></Td>
+                                <Td mono>{c.sku}</Td>
+                                <Td><span style={{ fontWeight: 700 }}>{c.customBuildName || 'Custom build'}</span></Td>
+                                <Td>{c.size}</Td>
+                                <Td>
+                                  <div style={{ fontWeight: 600 }}>{o?.customerName || '—'}</div>
+                                  {o && <div style={{ fontSize: '11px', color: 'var(--ink3)', fontFamily: 'var(--mono)' }}>{o.orderNumber}{o.customerPhone ? ` · ${o.customerPhone}` : ''}</div>}
+                                </Td>
+                                <Td>{priced
+                                  ? <span style={{ fontFamily: 'var(--mono)', fontWeight: 700 }}>${o!.amount.toLocaleString()}</span>
+                                  : <span style={{ color: 'var(--ink3)', fontSize: '11px' }}>TBD · from ${c.buyPrice.toLocaleString()}</span>}</Td>
+                                <Td>
+                                  {c.status === 'custom_in_progress' ? (
+                                    <>
+                                      <input
+                                        type="date"
+                                        defaultValue={(c.customEta || '').slice(0, 10)}
+                                        onChange={e => setCustomEta(c, e.target.value)}
+                                        style={{ padding: '6px 9px', border: `1.5px solid ${c.customEta ? 'var(--green)' : 'var(--amber)'}`, borderRadius: 'var(--r8)', fontSize: '12px', fontFamily: 'var(--sans)', outline: 'none' }}
+                                      />
+                                      {!c.customEta && <div style={{ fontSize: '10px', color: 'var(--amber)', marginTop: '3px', fontWeight: 600 }}>Customer waiting on a date</div>}
+                                    </>
+                                  ) : <span style={{ color: 'var(--ink3)' }}>—</span>}
+                                </Td>
+                                <Td><StatusBadge status={c.status as any} /></Td>
+                                <Td>
+                                  <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+                                    {customStageActions(c)}
+                                    <TblBtn iconOnly title="Edit" onClick={() => setEditContainer(c)}>{EditIcon}</TblBtn>
+                                  </div>
+                                </Td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {(() => {
                 // A delivered container is "Rented" if its most recent order was a
                 // rental (it comes back and relists); otherwise it was purchased.
@@ -1777,12 +2076,19 @@ export default function AdminPage() {
                   (latestOrderFor(c) ? latestOrderFor(c).saleType === 'rent' : c.listingType === 'rent')
                 const sections: { key: string; title: string; desc: string; color: string; items: Container[] }[] = [
                   {
-                    key: 'market', title: 'Marketplace', color: 'var(--primary)',
-                    desc: 'Listed or moving through a sale — available, reserved, approved, assigned, in transit',
-                    items: containerList.filter(c => ['available', 'sale_in_progress', 'sold', 'assigned', 'in_transit'].includes(c.status)),
+                    // Exactly what shoppers can see right now (Buy/Rent tabs).
+                    key: 'live', title: 'Live on Marketplace', color: 'var(--green)',
+                    desc: 'Visible to shoppers now — available (or reserved & shown locked) · Both → Buy → Rent',
+                    items: containerList.filter(c => ['available', 'sale_in_progress'].includes(c.status)),
                   },
                   {
-                    key: 'photos', title: 'Awaiting Photos', color: 'var(--amber)',
+                    // Off-market because they're mid-fulfilment for an order.
+                    key: 'fulfilment', title: 'Hidden — In Fulfilment', color: 'var(--cta)',
+                    desc: 'Not shown to shoppers — sold, assigned to a driver, or in transit for an order',
+                    items: containerList.filter(c => ['sold', 'assigned', 'in_transit'].includes(c.status)),
+                  },
+                  {
+                    key: 'photos', title: 'Hidden — Awaiting Photos', color: 'var(--amber)',
                     desc: 'Drafts — hidden from shoppers until the 12-shot photo set is complete, then they list automatically',
                     items: containerList.filter(c => c.status === 'draft'),
                   },
@@ -1797,28 +2103,48 @@ export default function AdminPage() {
                     items: containerList.filter(c => c.status === 'delivered' && !isRented(c)),
                   },
                 ]
-                const row = (c: Container) => (
-                  <tr key={c.id}>
+                // Within each section: Both listings first, then Buy, then Rent.
+                const LT_ORDER: Record<string, number> = { both: 0, buy: 1, rent: 2 }
+                const byListing = (a: Container, b: Container) =>
+                  (LT_ORDER[a.listingType ?? 'both'] - LT_ORDER[b.listingType ?? 'both']) || a.sku.localeCompare(b.sku)
+                const row = (c: Container, i: number, live = false) => (
+                  <tr key={c.id} id={`inv-${c.id}`} style={movedRowId === c.id ? { animation: 'rowArrive 1.8s ease' } : undefined}>
+                    <Td mono><span style={{ color: 'var(--ink3)', fontSize: '10px' }}>{i + 1}</span></Td>
                     <Td mono>{c.sku}</Td>
                     <Td>{c.size}</Td>
                     <Td><GradeBadge grade={c.grade as any} showLabel /></Td>
                     <Td><ListingBadge listingType={c.listingType} /></Td>
                     <Td>
-                      <div onClick={() => setPhotosFor(c)} title="Review & fix photos" style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                        {c.photos?.filter(Boolean)[0]
-                          ? <img src={photoUrl(c.photos.filter(Boolean)[0])} alt="" style={{ width: '34px', height: '26px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0, border: '1px solid var(--div)' }} />
-                          : <div style={{ width: '34px', height: '26px', borderRadius: '4px', background: 'var(--surf1)', border: '1px dashed var(--div)', flexShrink: 0 }} />}
-                        <div style={{ flex: 1, height: '4px', background: 'var(--div)', borderRadius: '2px', minWidth: '48px' }}>
-                          <div style={{ height: '100%', borderRadius: '2px', background: c.photoCount >= 12 ? 'var(--green)' : c.photoCount > 0 ? 'var(--amber)' : 'var(--div)', width: `${Math.min(100, (c.photoCount / 12) * 100)}%` }} />
-                        </div>
-                        <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--primary)', fontWeight: 700 }}>{c.photoCount}/12</span>
+                      {/* Compact: camera icon + count, click to review/fix */}
+                      <div onClick={() => setPhotosFor(c)} title="Review & fix photos" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke={c.photoCount >= 12 ? 'var(--green)' : c.photoCount > 0 ? 'var(--amber)' : 'var(--ink3)'} strokeWidth="1.6" strokeLinecap="round"><path d="M2 7h2.5L6 5h8l1.5 2H18a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V8a1 1 0 011-1z" /><circle cx="10" cy="11" r="3" /></svg>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, color: c.photoCount >= 12 ? 'var(--green)' : c.photoCount > 0 ? 'var(--amber)' : 'var(--ink3)' }}>{c.photoCount}/12</span>
                       </div>
+                      {/* A live listing without its full photo set looks bad to shoppers — flag it */}
+                      {live && c.photoCount < 12 && (
+                        <div style={{ fontSize: '10px', color: 'var(--amber)', fontWeight: 700, marginTop: '2px', whiteSpace: 'nowrap' }}>⚠ live without photos</div>
+                      )}
+                      {/* Rent-capable but no rate → can't render on the Rent tab */}
+                      {live && (c.listingType ?? 'both') !== 'buy' && c.rentMonthly == null && (
+                        <div style={{ fontSize: '10px', color: 'var(--cta)', fontWeight: 700, marginTop: '2px', whiteSpace: 'nowrap' }}>
+                          ⚠ no rent rate — {(c.listingType ?? 'both') === 'rent' ? 'hidden from shoppers' : 'hidden from Rent tab'}
+                        </div>
+                      )}
                     </Td>
                     <Td>{c.inspectorName || '—'}</Td>
                     <Td>{c.depotLocation || '—'}</Td>
                     <Td><span style={{ fontFamily: 'var(--mono)', color: 'var(--ink3)' }}>${(c.purchaseCost ?? 0).toLocaleString()}</span></Td>
-                    <Td><span style={{ fontFamily: 'var(--mono)', fontWeight: 700 }}>${c.buyPrice.toLocaleString()}</span></Td>
-                    <Td><StatusBadge status={c.status as any} /></Td>
+                    <Td>
+                      {/* Purchase + monthly rental, per what the listing offers */}
+                      {(c.listingType ?? 'both') !== 'rent' && (
+                        <div style={{ whiteSpace: 'nowrap' }}><span style={{ fontFamily: 'var(--mono)', fontWeight: 700 }}>${c.buyPrice.toLocaleString()}</span> <span style={{ fontSize: '10px', color: 'var(--ink3)' }}>buy</span></div>
+                      )}
+                      {(c.listingType ?? 'both') !== 'buy' && (
+                        <div style={{ whiteSpace: 'nowrap' }}>{c.rentMonthly != null
+                          ? <><span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--primary)' }}>${c.rentMonthly.toLocaleString()}</span> <span style={{ fontSize: '10px', color: 'var(--ink3)' }}>/mo rent</span></>
+                          : <span style={{ fontSize: '10px', color: 'var(--cta)', fontWeight: 700 }}>no rent rate</span>}</div>
+                      )}
+                    </Td>
                     <Td>
                       <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
                         <TblBtn iconOnly title="Edit" onClick={() => setEditContainer(c)}>{EditIcon}</TblBtn>
@@ -1841,8 +2167,8 @@ export default function AdminPage() {
                       <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', overflow: 'hidden' }}>
                         <div style={{ overflowX: 'auto' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '860px' }}>
-                            <thead><tr><Th>SKU</Th><Th>Size</Th><Th>Grade</Th><Th>Listing</Th><Th>Photos</Th><Th>Inspector</Th><Th>Depot</Th><Th>Cost</Th><Th>Price</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
-                            <tbody>{s.items.map(row)}</tbody>
+                            <thead><tr><Th>{''}</Th><Th>SKU</Th><Th>Size</Th><Th>Grade</Th><Th>Listing</Th><Th>Photos</Th><Th>Inspector</Th><Th>Depot</Th><Th>Cost</Th><Th>Pricing</Th><Th>Actions</Th></tr></thead>
+                            <tbody>{[...s.items].sort(byListing).map((c, i) => row(c, i, s.key === 'live'))}</tbody>
                           </table>
                         </div>
                       </div>
@@ -2153,8 +2479,8 @@ export default function AdminPage() {
             )
           })()}
 
-          {/* ── Settings ── */}
-          {view === 'settings' && (
+          {/* ── Depots ── */}
+          {view === 'depots' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                 <div>
@@ -2187,9 +2513,89 @@ export default function AdminPage() {
                 ))}
                 {depotList.length === 0 && <div style={{ fontSize: '13px', color: 'var(--ink3)', padding: '20px' }}>No depots yet. Add your first pickup location.</div>}
               </div>
+            </div>
+          )}
 
-              {/* ── Users & access (RBAC accounts from users.csv) ── */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '28px 0 14px' }}>
+          {/* ── Custom Builds catalog (marketplace Custom Builds tab) ── */}
+          {view === 'builds' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <div>
+                  <div style={{ fontSize: '15px', fontWeight: 700 }}>Custom Builds</div>
+                  <div style={{ fontSize: '12px', color: 'var(--ink3)', marginTop: '2px' }}>
+                    {buildList.length} product{buildList.length === 1 ? '' : 's'} on the marketplace Custom Builds tab · clipart shows until you upload a real photo
+                  </div>
+                </div>
+                <Button variant="primary" size="md" onClick={() => setEditBuild('new')} icon={<span>+</span>}>Add Build</Button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: '14px' }}>
+                {buildList.map(b => (
+                  <div key={b.id} style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', overflow: 'hidden', opacity: b.active === false ? 0.55 : 1 }}>
+                    <div style={{ width: '100%', aspectRatio: '16/9', background: 'linear-gradient(135deg,#1E293B,#0F2D4A)', overflow: 'hidden', position: 'relative' }}>
+                      {b.photo
+                        ? <img src={photoUrl(b.photo)} alt={b.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                        : <BuildClipart name={b.name} />}
+                      <span style={{ position: 'absolute', top: '8px', left: '8px', background: b.photo ? 'var(--green)' : 'rgba(255,255,255,.18)', color: '#fff', fontSize: '9px', fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--pill)', letterSpacing: '0.5px' }}>
+                        {b.photo ? 'PHOTO' : 'CLIPART (DEFAULT)'}
+                      </span>
+                      {b.active === false && <span style={{ position: 'absolute', top: '8px', right: '8px', background: 'var(--cta)', color: '#fff', fontSize: '9px', fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--pill)' }}>HIDDEN</span>}
+                    </div>
+                    <div style={{ padding: '12px 14px 14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 700, flex: 1 }}>{b.name}</span>
+                        {b.tag && <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px', background: 'var(--slate-cont)', color: 'var(--slate)', padding: '2px 8px', borderRadius: 'var(--r4)' }}>{b.tag}</span>}
+                        <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '13px' }}>${b.fromPrice.toLocaleString()}</span>
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--ink3)', lineHeight: 1.5, marginBottom: '8px' }}>{b.description}</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '12px' }}>
+                        {b.features.map(f => <span key={f} style={{ padding: '2px 8px', borderRadius: 'var(--r4)', background: 'var(--surf1)', color: 'var(--ink2)', fontSize: '10px' }}>{f}</span>)}
+                      </div>
+                      <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                        <TblBtn onClick={() => setEditBuild(b)}>Edit</TblBtn>
+                        <TblBtn variant="primary" onClick={() => {
+                          const input = document.createElement('input')
+                          input.type = 'file'; input.accept = 'image/*'
+                          input.onchange = async () => {
+                            const file = input.files?.[0]
+                            if (!file) return
+                            setBuildPhotoBusy(b.id)
+                            try {
+                              const dataUrl = await fileToDataUrl(file, 1600, 0.82)
+                              await customBuildsApi.uploadPhoto(b.id, dataUrl)
+                              toast(`${b.name} photo updated`)
+                              refetchBuilds().catch(() => {})
+                            } catch (e) { toast(`Upload failed — ${e instanceof Error ? e.message : 'try again'}`) }
+                            finally { setBuildPhotoBusy(null) }
+                          }
+                          input.click()
+                        }}>{buildPhotoBusy === b.id ? 'Uploading…' : b.photo ? 'Replace Photo' : 'Upload Photo'}</TblBtn>
+                        {b.photo && <TblBtn onClick={async () => {
+                          try { await customBuildsApi.update(b.id, { photo: '' }); toast(`${b.name} back to clipart`); refetchBuilds().catch(() => {}) }
+                          catch (e) { toast(`Failed — ${e instanceof Error ? e.message : 'try again'}`) }
+                        }}>Use Clipart</TblBtn>}
+                        <TblBtn onClick={async () => {
+                          try { await customBuildsApi.update(b.id, { active: b.active === false }); toast(b.active === false ? `${b.name} visible on marketplace` : `${b.name} hidden from marketplace`); refetchBuilds().catch(() => {}) }
+                          catch (e) { toast(`Failed — ${e instanceof Error ? e.message : 'try again'}`) }
+                        }}>{b.active === false ? 'Show' : 'Hide'}</TblBtn>
+                        <TblBtn variant="danger" onClick={async () => {
+                          if (!window.confirm(`Delete "${b.name}" from the catalog? Existing custom orders are unaffected.`)) return
+                          try { await customBuildsApi.remove(b.id); toast(`${b.name} deleted`); refetchBuilds().catch(() => {}) }
+                          catch (e) { toast(`Failed — ${e instanceof Error ? e.message : 'try again'}`) }
+                        }}>Delete</TblBtn>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {buildList.length === 0 && <div style={{ fontSize: '13px', color: 'var(--ink3)', padding: '20px' }}>No custom builds yet.</div>}
+              </div>
+
+            </div>
+          )}
+
+          {/* ── Users & access (RBAC accounts from users.csv) ── */}
+          {view === 'users' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                 <div>
                   <div style={{ fontSize: '15px', fontWeight: 700 }}>Users &amp; Access</div>
                   <div style={{ fontSize: '12px', color: 'var(--ink3)', marginTop: '2px' }}>
@@ -2272,7 +2678,17 @@ export default function AdminPage() {
       <EditContainerModal
         container={editContainer}
         onClose={() => setEditContainer(null)}
-        onSaved={(msg) => { toast(msg); refetchContainers() }}
+        onSaved={(msg, moved) => {
+          toast(msg)
+          refetchContainers()
+          if (moved) {
+            setMovedRowId(moved.id)
+            // Let the refetched row mount, then bring it into view; the CSS
+            // arrival animation plays as it lands in its new group.
+            setTimeout(() => document.getElementById(`inv-${moved.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 350)
+            setTimeout(() => setMovedRowId(null), 2600)
+          }
+        }}
       />
       <PhotosModal
         container={photosFor}
@@ -2284,6 +2700,11 @@ export default function AdminPage() {
         drivers={activeDrivers}
         onClose={() => setEditUser(null)}
         onSaved={(msg) => { toast(msg); refetchUsers().catch(() => {}) }}
+      />
+      <CustomBuildModal
+        target={editBuild}
+        onClose={() => setEditBuild(null)}
+        onSaved={(msg) => { toast(msg); refetchBuilds().catch(() => {}) }}
       />
       <DepotModal
         target={editDepot}
