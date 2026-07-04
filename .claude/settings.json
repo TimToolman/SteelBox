@@ -176,7 +176,11 @@
       "Bash(git -C /Users/tmoore/Documents/GitHub/SteelBox log --oneline -3)",
       "Bash(git add *)",
       "Bash(git commit -m 'Make API cloud-deployable: DATA_DIR volume support, /health, Railway config *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(curl -s -m 15 https://steelbox-production.up.railway.app/health)",
+      "Bash(curl -s -m 15 https://steelbox-production.up.railway.app/containers)",
+      "Bash(gh workflow *)",
+      "Bash(git commit -m 'Admin portal: collapsible left-nav drawer + tighter layout on phones *)"
     ],
     "additionalDirectories": [
       "/private/tmp/claude-501/-Users-tmoore-Documents-GitHub-SteelBox/8bc4a042-4d10-4d19-90cb-3295d19f3bb6/scratchpad/csvbak"
