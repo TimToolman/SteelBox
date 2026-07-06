@@ -1,9 +1,9 @@
 {
-  "name": "steelbox",
+  "name": "gatorworx",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "SteelBox monorepo — web marketplace/admin/field app + CSV-backed dev API.",
+  "description": "Gatorworx monorepo — web marketplace/admin/field app + CSV-backed dev API.",
   "scripts": {
     "dev": "node dev.mjs",
     "dev:api": "node apps/api/server.mjs",

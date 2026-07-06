@@ -1,5 +1,5 @@
 // ============================================================
-// SteelBox Field App — Mobile web app for drivers + inspectors
+// Gatorworx Field App — Mobile web app for drivers + inspectors
 // Route: /field (role: driver | employee)
 // Design source: Field App.dc.html
 // Responsive web route — no Expo required
@@ -15,7 +15,7 @@ import { activity, depots as depotsApi, drivers as driversApi, schedule as sched
 const FALLBACK_DRIVER_ID = 'drv_01'
 const ACTOR = 'Mike Torres'
 // Company dispatch identity for driver ⇄ admin messaging (single place to change).
-const DISPATCH = { name: 'Dispatch (James R.)', email: 'ops@steelbox.co' }
+const DISPATCH = { name: 'Dispatch (James R.)', email: 'ops@gatorworx.co' }
 
 // ── Stroke icons (match the admin portal's simple iconography) ──
 const ICON_PATHS: Record<string, React.ReactNode> = {
@@ -254,7 +254,7 @@ function Stepper({ steps, title = 'Job Progress' }: { steps: StepItem[]; title?:
 // ── Main Field App ─────────────────────────────────────────
 
 export default function FieldAppPage() {
-  useFavicon('favicon-field.svg', 'SteelBox Field App')
+  useFavicon('favicon-field.svg', 'Gatorworx Field App')
   const { user, logout } = useAuth()
   // The signed-in driver's record id (admins previewing the app fall back to drv_01).
   const DRIVER_ID = user?.driverId || FALLBACK_DRIVER_ID
@@ -511,7 +511,7 @@ export default function FieldAppPage() {
     const w = window.open('', '_blank', 'width=420,height=640')
     if (w) {
       const now = new Date().toLocaleString('en-US')
-      w.document.write(`<html><head><title>SteelBox Receipt ${job.sku}</title><style>body{font:14px -apple-system,sans-serif;padding:28px;color:#0D0E12}h1{font-size:20px;margin:0 0 2px}.sub{color:#6B7280;font-size:12px}.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}.k{color:#6B7280}b{font-family:monospace}</style></head><body><h1><span style="color:#2B7FD4">Steel</span><span style="color:#E65100">Box</span></h1><div class="sub">${KIND_META[job.kind].label} receipt · ${now}</div><div style="margin-top:20px"><div class="row"><span class="k">Container</span><b>${job.sku}</b></div><div class="row"><span class="k">Customer</span><span>${job.customer || '—'}</span></div><div class="row"><span class="k">Location</span><span>${job.address || '—'}</span></div><div class="row"><span class="k">Field rep</span><span>${me?.name ?? ACTOR}</span></div><div class="row"><span class="k">Status</span><span>Completed</span></div></div><p class="sub" style="margin-top:24px">A copy has been emailed to ${job.email || 'the customer'} and the SteelBox admin portal.</p><button onclick="window.print()" style="margin-top:14px;padding:10px 18px;border:none;border-radius:999px;background:#0057B8;color:#fff;font-weight:700;cursor:pointer">Save as PDF</button></body></html>`)
+      w.document.write(`<html><head><title>Gatorworx Receipt ${job.sku}</title><style>body{font:14px -apple-system,sans-serif;padding:28px;color:#0D0E12}h1{font-size:20px;margin:0 0 2px}.sub{color:#6B7280;font-size:12px}.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}.k{color:#6B7280}b{font-family:monospace}</style></head><body><h1><span style="color:#2B7FD4">Gator</span><span style="color:#E65100">worx</span></h1><div class="sub">${KIND_META[job.kind].label} receipt · ${now}</div><div style="margin-top:20px"><div class="row"><span class="k">Container</span><b>${job.sku}</b></div><div class="row"><span class="k">Customer</span><span>${job.customer || '—'}</span></div><div class="row"><span class="k">Location</span><span>${job.address || '—'}</span></div><div class="row"><span class="k">Field rep</span><span>${me?.name ?? ACTOR}</span></div><div class="row"><span class="k">Status</span><span>Completed</span></div></div><p class="sub" style="margin-top:24px">A copy has been emailed to ${job.email || 'the customer'} and the Gatorworx admin portal.</p><button onclick="window.print()" style="margin-top:14px;padding:10px 18px;border:none;border-radius:999px;background:#0057B8;color:#fff;font-weight:700;cursor:pointer">Save as PDF</button></body></html>`)
       w.document.close()
     }
     toast(`Receipt PDF emailed to ${job.customer || 'customer'} + admin`)
@@ -615,7 +615,7 @@ export default function FieldAppPage() {
       <div style={{ width: '20px', height: '20px', borderRadius: '5px', background: 'rgba(255,255,255,.15)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
         <Icon name="box" size={12} color="#fff" />
       </div>
-      <span style={{ fontSize: '14px', fontWeight: 700 }}><span style={{ color: '#90C4FF' }}>Steel</span><span style={{ color: '#E65100' }}>Box</span></span>
+      <span style={{ fontSize: '14px', fontWeight: 700 }}><span style={{ color: '#90C4FF' }}>Gator</span><span style={{ color: '#E65100' }}>worx</span></span>
       <button
         onClick={() => setOnDuty(d => !d)}
         style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '7px', background: onDuty ? 'rgba(61,255,160,.15)' : 'rgba(255,255,255,.15)', border: `1.5px solid ${onDuty ? 'rgba(61,255,160,.4)' : 'rgba(255,255,255,.3)'}`, borderRadius: '999px', padding: '5px 12px', cursor: 'pointer' }}
@@ -700,7 +700,7 @@ export default function FieldAppPage() {
           <div style={{ width: '20px', height: '20px', borderRadius: '5px', background: 'rgba(255,255,255,.15)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
             <Icon name="box" size={12} color="#fff" />
           </div>
-          <span style={{ fontSize: '14px', fontWeight: 700 }}><span style={{ color: '#90C4FF' }}>Steel</span><span style={{ color: '#E65100' }}>Box</span></span>
+          <span style={{ fontSize: '14px', fontWeight: 700 }}><span style={{ color: '#90C4FF' }}>Gator</span><span style={{ color: '#E65100' }}>worx</span></span>
           <button
             onClick={() => setOnDuty(d => !d)}
             style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '7px', background: onDuty ? 'rgba(61,255,160,.15)' : 'rgba(255,255,255,.15)', border: `1.5px solid ${onDuty ? 'rgba(61,255,160,.4)' : 'rgba(255,255,255,.3)'}`, borderRadius: '999px', padding: '5px 12px', cursor: 'pointer' }}

@@ -1,5 +1,5 @@
 // ============================================================
-// SteelBox React Hooks
+// Gatorworx React Hooks
 // ============================================================
 
 import { useState, useEffect, useCallback, useRef } from 'react'

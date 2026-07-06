@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================================
-// SteelBox dev launcher — starts the CSV API and the web app
+// Gatorworx dev launcher — starts the CSV API and the web app
 // together with prefixed output. Zero dependencies.
 //   node dev.mjs   (or: npm run dev)
 // ============================================================
@@ -57,5 +57,5 @@ for (const svc of services) {
 process.on('SIGINT', () => shutdown(0))
 process.on('SIGTERM', () => shutdown(0))
 
-console.log('SteelBox dev: api → http://localhost:4000  ·  web → http://localhost:3000')
+console.log('Gatorworx dev: api → http://localhost:4000  ·  web → http://localhost:3000')
 console.log('Press Ctrl+C to stop both.\n')

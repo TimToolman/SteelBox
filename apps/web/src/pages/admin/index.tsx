@@ -1,5 +1,5 @@
 // ============================================================
-// SteelBox Admin Portal — Internal ops dashboard
+// Gatorworx Admin Portal — Internal ops dashboard
 // Route: /admin (role: admin only)
 // Design source: Admin Portal.dc.html
 // ============================================================
@@ -51,7 +51,7 @@ const ACTIVITY_META: Record<string, { label: string; color: string; bg: string }
 
 // Company dispatch identity used when messaging drivers / logging admin actions
 // (kept in sync with the field app's DISPATCH constant).
-const DISPATCH = { name: 'Dispatch (James R.)', email: 'ops@steelbox.co' }
+const DISPATCH = { name: 'Dispatch (James R.)', email: 'ops@gatorworx.co' }
 
 // ── Combined delivery/return schedule (types from lib/api) ─
 
@@ -703,7 +703,7 @@ function UserModal({ target, drivers, onClose, onSaved }: {
       <label style={lbl}>Name</label>
       <input style={inp} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Jane Smith" />
       <label style={lbl}>Email {isNew ? '' : '(fixed)'}</label>
-      <input style={{ ...inp, background: isNew ? undefined : 'var(--surf1)' }} value={form.email} disabled={!isNew} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="user@steelbox.co" />
+      <input style={{ ...inp, background: isNew ? undefined : 'var(--surf1)' }} value={form.email} disabled={!isNew} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="user@gatorworx.co" />
       <label style={lbl}>Role</label>
       <select style={inp} value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value as Role }))}>
         <option value="admin">Admin — full portal access</option>
@@ -1312,7 +1312,7 @@ function NavItem({ icon, label, badge, active, onClick }: { icon: React.ReactNod
 }
 
 export default function AdminPage() {
-  useFavicon('favicon-admin.svg', 'SteelBox Admin Portal')
+  useFavicon('favicon-admin.svg', 'Gatorworx Admin Portal')
   const { user: adminUser, logout } = useAuth()
   const [view, setView] = useState<AdminView>('dashboard')
   const isMobile = useIsMobile()
@@ -1679,7 +1679,7 @@ export default function AdminPage() {
       const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
       const a = document.createElement('a')
       a.href = url
-      a.download = `steelbox-orders-${new Date().toISOString().slice(0, 10)}.csv`
+      a.download = `gatorworx-orders-${new Date().toISOString().slice(0, 10)}.csv`
       a.click()
       URL.revokeObjectURL(url)
       toast(`Exported ${orderList.length} orders to CSV`)
@@ -1744,7 +1744,7 @@ export default function AdminPage() {
           <div style={{ width: '32px', height: '32px', borderRadius: 'var(--r8)', background: 'var(--primary)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><rect x="1" y="6" width="22" height="14" rx="2" /><line x1="6" y1="6" x2="6" y2="20" /><line x1="11" y1="6" x2="11" y2="20" /><line x1="16" y1="6" x2="16" y2="20" /></svg>
           </div>
-          <span style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.3px', color: '#2B7FD4' }}>Steel<span style={{ color: 'var(--cta)' }}>Box</span></span>
+          <span style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.3px', color: '#2B7FD4' }}>Gator<span style={{ color: 'var(--cta)' }}>worx</span></span>
           <span style={{ marginLeft: 'auto', background: 'var(--primary-cont)', color: 'var(--primary)', borderRadius: 'var(--r4)', padding: '2px 8px', fontSize: '9px', fontWeight: 700, letterSpacing: '0.8px' }}>ADMIN</span>
         </div>
 
@@ -1793,7 +1793,7 @@ export default function AdminPage() {
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: '16px', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{VIEW_TITLES[view]}</div>
             <div style={{ fontSize: '11px', color: 'var(--ink3)', fontFamily: 'var(--mono)' }}>
-              {view === 'dashboard' ? `Overview · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : `SteelBox · Gulf Coast`}
+              {view === 'dashboard' ? `Overview · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : `Gatorworx · Gulf Coast`}
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto', alignItems: 'center' }}>

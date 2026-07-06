@@ -189,10 +189,23 @@
       "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{JSON.parse\\(d\\).forEach\\(x=>console.log\\(x.code+' | '+x.name+' | '+x.destination\\)\\)}\\)\")",
       "Bash(curl -s http://localhost:4000/depots)",
       "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{JSON.parse\\(d\\).forEach\\(x=>console.log\\(' ', x.code, '|', x.name, '|', x.destination, '| addr:', x.address ?? '\\(omitted\\)', '| cell:', x.attendantCell ?? '\\(omitted\\)'\\)\\)}\\)\")",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/SteelBox/)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/SteelBox/)",
+      "Bash(sed -i '' \\\\ *)",
+      "Bash(sed -i '' -e 's/\"name\": \"steelbox\"/\"name\": \"gatorworx\"/' -e s/SteelBox/Gatorworx/g package.json)",
+      "Bash(sed -i '' -e 's/\"name\": \"steelbox-web\"/\"name\": \"gatorworx-web\"/' -e 's/SteelBox/Gatorworx/g' apps/web/package.json)",
+      "Bash(sed -i '' -e 's/\"name\": \"steelbox-api\"/\"name\": \"gatorworx-api\"/' -e 's/SteelBox/Gatorworx/g' apps/api/package.json)",
+      "Bash(sed -i '' -e 's/SteelBox/Gatorworx/g' apps/api/server.mjs)",
+      "Bash(node --check /Users/tmoore/Documents/GitHub/SteelBox/dev.mjs)",
+      "Bash(node /Users/tmoore/Documents/GitHub/SteelBox/apps/api/server.mjs)",
+      "Bash(curl -s -m 5 http://localhost:4000/health)",
+      "Bash(curl -s -o /dev/null -w \"web:%{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(curl -s -o /dev/null -w \"storefront:%{http_code} \" http://localhost:3000/SteelBox/)",
+      "Bash(curl -s -o /dev/null -w \"admin:%{http_code} \" http://localhost:3000/SteelBox/admin)",
+      "Bash(curl -s -o /dev/null -w \"field:%{http_code}\\\\n\" http://localhost:3000/SteelBox/field)"
     ],
     "additionalDirectories": [
-      "/private/tmp/claude-501/-Users-tmoore-Documents-GitHub-SteelBox/8bc4a042-4d10-4d19-90cb-3295d19f3bb6/scratchpad/csvbak"
+      "/private/tmp/claude-501/-Users-tmoore-Documents-GitHub-SteelBox/8bc4a042-4d10-4d19-90cb-3295d19f3bb6/scratchpad/csvbak",
+      "/Users/tmoore/Documents/GitHub/SteelBox/apps/web/src/lib"
     ]
   }
 }

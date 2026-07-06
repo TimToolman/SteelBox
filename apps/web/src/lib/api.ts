@@ -1,5 +1,5 @@
 // ============================================================
-// SteelBox API Client
+// Gatorworx API Client
 // Wraps all fetch calls to the Railway-hosted Express API
 // ============================================================
 
@@ -28,8 +28,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     // never set at build time; say so instead of the cryptic "Failed to fetch".
     const deployedButLocal = BASE.includes('localhost') && !['localhost', '127.0.0.1'].includes(window.location.hostname)
     throw new Error(deployedButLocal
-      ? 'This site is not connected to a SteelBox API server yet — please call us at (504) 555-0190.'
-      : 'Could not reach the SteelBox server. Check your connection and try again.')
+      ? 'This site is not connected to a Gatorworx API server yet — please call us at (504) 555-0190.'
+      : 'Could not reach the Gatorworx server. Check your connection and try again.')
   }
 
   if (!res.ok) {

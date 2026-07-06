@@ -1,5 +1,5 @@
 // ============================================================
-// SteelBox UI Primitives
+// Gatorworx UI Primitives
 // Shared across Marketplace, Admin, and Field surfaces
 // ============================================================
 
