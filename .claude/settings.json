@@ -180,7 +180,16 @@
       "Bash(curl -s -m 15 https://steelbox-production.up.railway.app/health)",
       "Bash(curl -s -m 15 https://steelbox-production.up.railway.app/containers)",
       "Bash(gh workflow *)",
-      "Bash(git commit -m 'Admin portal: collapsible left-nav drawer + tighter layout on phones *)"
+      "Bash(git commit -m 'Admin portal: collapsible left-nav drawer + tighter layout on phones *)",
+      "Bash(curl -s -o /dev/null -w \"web:%{http_code}\\\\n\" http://localhost:3000/SteelBox/)",
+      "Bash(curl -s -o /dev/null -w \"api:%{http_code}\\\\n\" http://localhost:4000/health)",
+      "Bash(curl -s -o /dev/null -w \"api-health:%{http_code}\\\\n\" http://localhost:4000/health)",
+      "Bash(node /private/tmp/claude-501/-Users-tmoore-Documents-GitHub-SteelBox/cf851879-f97a-4b8c-bbed-24f3a536b597/scratchpad/seed-inventory.mjs)",
+      "Bash(curl -s -i http://localhost:4000/containers)",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{JSON.parse\\(d\\).forEach\\(x=>console.log\\(x.code+' | '+x.name+' | '+x.destination\\)\\)}\\)\")",
+      "Bash(curl -s http://localhost:4000/depots)",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{JSON.parse\\(d\\).forEach\\(x=>console.log\\(' ', x.code, '|', x.name, '|', x.destination, '| addr:', x.address ?? '\\(omitted\\)', '| cell:', x.attendantCell ?? '\\(omitted\\)'\\)\\)}\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/SteelBox/)"
     ],
     "additionalDirectories": [
       "/private/tmp/claude-501/-Users-tmoore-Documents-GitHub-SteelBox/8bc4a042-4d10-4d19-90cb-3295d19f3bb6/scratchpad/csvbak"

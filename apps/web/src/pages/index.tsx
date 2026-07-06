@@ -8,12 +8,12 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { GradeBadge, StatusBadge, Button, Modal, Snackbar, Input, Select, BuildClipart } from '../components/ui'
 import { useContainers, useSnackbar, useAuth, useIsMobile } from '../hooks'
 import { LoginForm } from '../lib/auth'
-import { auth as authApi, containers, quotes, orders, isZipCovered, estimateDelivery, drivers as driversApi, messages as messagesApi, customers as customersApi, customBuilds as customBuildsApi, photoUrl, SHOT_LABELS, CUSTOM_STAGES, type Container, type ContainerGrade, type ContainerSize, type Driver, type Customer, type Order, type Message, type AuthUser, type CustomBuild } from '../lib/api'
+import { auth as authApi, containers, quotes, orders, isZipCovered, estimateDelivery, drivers as driversApi, messages as messagesApi, customers as customersApi, customBuilds as customBuildsApi, depots as depotsApi, photoUrl, SHOT_LABELS, CUSTOM_STAGES, type Container, type ContainerGrade, type ContainerSize, type Driver, type Customer, type Order, type Message, type AuthUser, type CustomBuild, type ContainerCondition, type Depot, SIZE_LABEL } from '../lib/api'
 
 // ── Types ─────────────────────────────────────────────────
 
 type Tab = 'buy' | 'rent' | 'custom' | 'bulk'
-type SortKey = 'price-asc' | 'price-desc' | 'condition' | 'newest'
+type SortKey = 'price-asc' | 'price-desc' | 'condition' | 'newest' | 'new-first'
 type CartMode = 'buy' | 'rent'
 interface CartItem { container: Container; mode: CartMode; rentTerm: number }
 
@@ -33,16 +33,15 @@ const GRADE_META: Record<ContainerGrade, { label: string; desc: string; color: s
   X: { label: 'Custom Build', desc: 'Modified to specification.', color: '#374151' },
 }
 
-const SIZE_LABELS: Record<ContainerSize, string> = {
-  '10ft-std': '10ft Standard',
-  '20ft-std': '20ft Standard',
-  '20ft-hc':  '20ft High Cube',
-  '40ft-std': '40ft Standard',
-  '40ft-hc':  '40ft High Cube',
-}
+// Canonical labels live in lib/api (SIZE_LABEL) so admin + storefront stay in sync.
+const SIZE_LABELS = SIZE_LABEL
 
 // Canonical ordered size list for filters and forms.
 const SIZE_OPTIONS = Object.entries(SIZE_LABELS) as [ContainerSize, string][]
+
+// Every unit is either factory-new or pre-owned; rows missing the field
+// (pre-migration data) are treated as used.
+const condOf = (c: Container): ContainerCondition => c.condition === 'new' ? 'new' : 'used'
 
 // Custom Builds are data-driven (custombuilds.csv, managed in Admin →
 // Settings). Each card shows the uploaded product photo, or clean clipart
@@ -225,7 +224,9 @@ function ContainerCard({ container, onSelect, mode = 'buy', inCart = false, onAd
         </div>
         <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--ink3)', letterSpacing: '0.3px' }}>{sku}</div>
         <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+          <span style={{ background: condOf(container) === 'new' ? 'var(--green-cont)' : 'var(--surf1)', color: condOf(container) === 'new' ? 'var(--green)' : 'var(--ink2)', borderRadius: 'var(--r4)', padding: '3px 7px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px' }}>{condOf(container) === 'new' ? 'New' : 'Used'}</span>
           <span style={{ background: 'var(--surf1)', borderRadius: 'var(--r4)', padding: '3px 7px', fontSize: '10px', color: 'var(--ink2)', fontFamily: 'var(--mono)' }}>{gradeMeta.label}</span>
+          {container.color && <span style={{ background: 'var(--surf1)', borderRadius: 'var(--r4)', padding: '3px 7px', fontSize: '10px', color: 'var(--ink2)' }}>{container.color}</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: 'auto', paddingTop: '10px', borderTop: '1px solid var(--div)' }}>
           {rentLead ? (
@@ -434,7 +435,7 @@ function DetailModal({ container, onClose, onAddToCart, mode, inCart, onNavigate
             <div style={{ width: '48px', height: '48px', borderRadius: 'var(--r12)', background: gradeMeta.color, display: 'grid', placeItems: 'center', fontSize: '24px', fontWeight: 700, color: '#fff', flexShrink: 0 }}>{grade}</div>
             <div>
               <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--ink3)', fontWeight: 700 }}>Condition Grade</div>
-              <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px' }}>Grade {grade} — {gradeMeta.label}</div>
+              <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px' }}>{condOf(container) === 'new' ? 'New' : 'Used'} · Grade {grade} — {gradeMeta.label}{container.color ? ` · ${container.color}` : ''}</div>
               <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '2px', lineHeight: 1.5 }}>{gradeMeta.desc}</div>
             </div>
           </div>
@@ -1442,8 +1443,25 @@ function CustomerProfileModal({ open, initialTab, onClose, onMessageDriver, onSa
 export default function MarketplacePage() {
   const [activeTab, setActiveTab] = useState<Tab>('buy')
   const ALL_SIZES = SIZE_OPTIONS.map(([v]) => v)
+  // Top-level gate: shoppers first pick New or Used ('all' = grouped view);
+  // the remaining filters only appear once a condition is chosen.
+  const [condFilter, setCondFilter] = useState<'all' | ContainerCondition>('all')
   const [sizeFilters, setSizeFilters] = useState<Set<ContainerSize>>(new Set(ALL_SIZES))
   const [gradeFilters, setGradeFilters] = useState<Set<ContainerGrade>>(new Set(['A', 'B', 'C', 'R', 'X']))
+  // null = no color restriction (all colors checked)
+  const [colorSel, setColorSel] = useState<Set<string> | null>(null)
+  // Depot filter — shoppers may only want stock at nearby yards. null = all depots.
+  const [depotSel, setDepotSel] = useState<Set<string> | null>(null)
+  const [depotList, setDepotList] = useState<Depot[]>([])
+  useEffect(() => { depotsApi.list().then(setDepotList).catch(() => {}) }, [])
+  // Compact combo-box: the depot list lives in a dropdown; closed state shows a summary.
+  const [depotDdOpen, setDepotDdOpen] = useState(false)
+  const depotDdRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => { if (depotDdRef.current && !depotDdRef.current.contains(e.target as Node)) setDepotDdOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [])
   const [minPrice, setMinPrice] = useState('')
   const [maxPrice, setMaxPrice] = useState('')
   const [sort, setSort] = useState<SortKey>('price-asc')
@@ -1521,22 +1539,57 @@ export default function MarketplacePage() {
     return true
   })
 
+  // Colors present in the currently browsable new stock — drives the Color filter.
+  const colorOptions = [...new Set(tabListable.filter(c => condOf(c) === 'new').map(c => c.color || 'Unspecified'))].sort()
+
   // Filter containers. On the Rent tab, "price" means the monthly rate.
+  // Sub-filters are condition-scoped: grade applies when browsing Used,
+  // color when browsing New (they're hidden otherwise, so they can't strand results).
   const priceOf = (c: Container) => activeTab === 'rent' ? (c.rentMonthly ?? c.buyPrice) : c.buyPrice
   const filtered = tabListable.filter(c => {
+    if (condFilter !== 'all' && condOf(c) !== condFilter) return false
+    if (depotSel && !depotSel.has(c.depotLocation)) return false
     if (!sizeFilters.has(c.size)) return false
-    if (!gradeFilters.has(c.grade)) return false
+    if (condFilter === 'used' && !gradeFilters.has(c.grade)) return false
+    if (condFilter === 'new' && colorSel && !colorSel.has(c.color || 'Unspecified')) return false
     if (minPrice && priceOf(c) < Number(minPrice)) return false
     if (maxPrice && priceOf(c) > Number(maxPrice)) return false
     return true
   }).sort((a, b) => {
+    if (sort === 'new-first') return (condOf(a) === condOf(b)) ? priceOf(a) - priceOf(b) : (condOf(a) === 'new' ? -1 : 1)
     if (sort === 'price-asc') return priceOf(a) - priceOf(b)
     if (sort === 'price-desc') return priceOf(b) - priceOf(a)
     if (sort === 'condition') return (b.conditionScore || 0) - (a.conditionScore || 0)
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   })
 
-  const countBySize = (s: ContainerSize) => tabListable.filter(c => c.size === s).length
+  const countBySize = (s: ContainerSize) => tabListable.filter(c => c.size === s && (condFilter === 'all' || condOf(c) === condFilter)).length
+  const countByCond = (k: ContainerCondition) => tabListable.filter(c => condOf(c) === k).length
+
+  const toggleColor = (col: string) => {
+    setColorSel(prev => {
+      const next = new Set(prev ?? colorOptions)
+      next.has(col) ? next.delete(col) : next.add(col)
+      return next
+    })
+  }
+
+  // Depots with browsable stock in the current tab/condition scope, grouped by
+  // the market they serve ("Atlanta, GA" → its two yards). Unknown/legacy
+  // depotLocation strings fall under "Other locations".
+  const countByDepot = (name: string) => tabListable.filter(c => c.depotLocation === name && (condFilter === 'all' || condOf(c) === condFilter)).length
+  const stockedDepotNames = [...new Set(tabListable.map(c => c.depotLocation).filter(Boolean))].filter(n => countByDepot(n) > 0)
+  const depotGroups = [...new Set(stockedDepotNames.map(n => depotList.find(d => d.name === n)?.destination || 'Other locations'))]
+    .sort()
+    .map(dest => ({ dest, names: stockedDepotNames.filter(n => (depotList.find(d => d.name === n)?.destination || 'Other locations') === dest).sort() }))
+
+  const toggleDepot = (name: string) => {
+    setDepotSel(prev => {
+      const next = new Set(prev ?? stockedDepotNames)
+      next.has(name) ? next.delete(name) : next.add(name)
+      return next
+    })
+  }
 
   const toggleGrade = (g: ContainerGrade) => {
     setGradeFilters(prev => {
@@ -1719,8 +1772,70 @@ export default function MarketplacePage() {
             : { width: 'var(--sb-w)', flexShrink: 0, borderRight: '1px solid var(--div)', padding: '14px 10px', position: 'sticky', top: 'var(--nav-h)', height: 'calc(100vh - var(--nav-h))', overflowY: 'auto', background: 'var(--surf-w)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.4px' }}>Filters</span>
-              <button onClick={() => { setSizeFilters(new Set(ALL_SIZES)); setGradeFilters(new Set(['A','B','C','R','X'])) }} style={{ background: 'none', border: 'none', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>Select All</button>
+              <button onClick={() => { setCondFilter('all'); setSizeFilters(new Set(ALL_SIZES)); setGradeFilters(new Set(['A','B','C','R','X'])); setColorSel(null); setDepotSel(null) }} style={{ background: 'none', border: 'none', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>Reset</button>
             </div>
+
+            {/* Condition gate — pick New or Used first; sub-filters follow */}
+            <div style={{ marginBottom: '10px' }}>
+              <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Condition</span>
+              <div style={{ display: 'flex', gap: '5px' }}>
+                {([['all', 'All'], ['new', 'New'], ['used', 'Used']] as ['all' | ContainerCondition, string][]).map(([val, label]) => (
+                  <button key={val} onClick={() => setCondFilter(val)} style={{
+                    flex: 1, padding: '7px 4px', borderRadius: 'var(--r8)', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--sans)',
+                    border: `1.5px solid ${condFilter === val ? 'var(--primary)' : 'var(--div)'}`,
+                    background: condFilter === val ? 'var(--primary)' : 'var(--surf-w)',
+                    color: condFilter === val ? '#fff' : 'var(--ink2)',
+                  }}>
+                    {label}{val !== 'all' && <span style={{ fontSize: '10px', fontWeight: 600, opacity: 0.75 }}> {countByCond(val)}</span>}
+                  </button>
+                ))}
+              </div>
+              {condFilter === 'all' && (
+                <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '6px', lineHeight: 1.45 }}>Choose New or Used to unlock size, {`condition & color`} filters.</div>
+              )}
+            </div>
+
+            {/* Depot — location matters no matter New or Used, so it's not behind the gate.
+                Rendered as a combo-box: closed shows a summary, open shows the grouped list. */}
+            {depotGroups.length > 0 && (() => {
+              const selCount = depotSel ? [...depotSel].filter(n => stockedDepotNames.includes(n)).length : stockedDepotNames.length
+              const allOn = !depotSel || selCount === stockedDepotNames.length
+              return (
+                <div style={{ marginBottom: '10px' }}>
+                  <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Depot</span>
+                  <div ref={depotDdRef} style={{ position: 'relative' }}>
+                    <button onClick={() => setDepotDdOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', width: '100%', padding: '8px 10px', borderRadius: 'var(--r8)', border: `1.5px solid ${allOn ? 'var(--div)' : 'var(--primary)'}`, background: 'var(--surf-w)', fontSize: '12px', fontWeight: allOn ? 400 : 600, color: allOn ? 'var(--ink2)' : 'var(--primary)', cursor: 'pointer', fontFamily: 'var(--sans)' }}>
+                      <span>{allOn ? 'All depots' : `${selCount} of ${stockedDepotNames.length} depots`}</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0, transform: depotDdOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}><polyline points="6 9 12 15 18 9" /></svg>
+                    </button>
+                    {depotDdOpen && (
+                      <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 60, background: 'var(--surf-w)', border: '1px solid var(--div)', borderRadius: 'var(--r8)', boxShadow: 'var(--sh2)', maxHeight: '280px', overflowY: 'auto', padding: '6px 10px 8px' }}>
+                        <button onClick={() => setDepotSel(null)} style={{ background: 'none', border: 'none', padding: '4px 0', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer', fontFamily: 'var(--sans)' }}>Select all</button>
+                        {depotGroups.map(({ dest, names }) => (
+                          <div key={dest}>
+                            <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ink3)', padding: '5px 0 2px' }}>{dest}</div>
+                            {names.map(name => {
+                              const on = !depotSel || depotSel.has(name)
+                              return (
+                                <div key={name} onClick={() => toggleDepot(name)} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid var(--div)', cursor: 'pointer' }}>
+                                  <div style={{ width: '17px', height: '17px', borderRadius: 'var(--r4)', background: on ? 'var(--primary)' : 'var(--surf-w)', border: `1.5px solid ${on ? 'var(--primary)' : 'var(--div)'}`, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                                    {on && <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><polyline points="2,6 5,9 10,3" /></svg>}
+                                  </div>
+                                  <span style={{ fontSize: '12px', color: 'var(--ink2)', flex: 1, lineHeight: 1.3 }}>{name}</span>
+                                  <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', fontWeight: 700, color: 'var(--ink3)' }}>{countByDepot(name)}</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
+
+            <hr style={{ border: 'none', borderTop: '1px solid var(--div)', margin: '8px 0' }} />
 
             {/* Sort */}
             <div style={{ marginBottom: '10px' }}>
@@ -1728,55 +1843,86 @@ export default function MarketplacePage() {
               <select value={sort} onChange={e => setSort(e.target.value as SortKey)} style={{ width: '100%', padding: '8px 10px', borderRadius: 'var(--r8)', border: '1.5px solid var(--div)', background: 'var(--surf-w)', fontSize: '12px', cursor: 'pointer', outline: 'none', fontFamily: 'var(--sans)' }}>
                 <option value="price-asc">Price: Low → High</option>
                 <option value="price-desc">Price: High → Low</option>
+                <option value="new-first">New → Used</option>
                 <option value="condition">Best Condition First</option>
                 <option value="newest">Newest Listed</option>
               </select>
             </div>
 
-            <hr style={{ border: 'none', borderTop: '1px solid var(--div)', margin: '8px 0' }} />
+            {/* Sub-filters appear once the shopper has decided New vs Used */}
+            {condFilter !== 'all' && (
+              <>
+                <hr style={{ border: 'none', borderTop: '1px solid var(--div)', margin: '8px 0' }} />
 
-            {/* Size filters */}
-            <div style={{ marginBottom: '10px' }}>
-              <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Size</span>
-              {SIZE_OPTIONS.map(([val, label]) => (
-                <div key={val} onClick={() => toggleSize(val)} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid var(--div)', cursor: 'pointer' }}>
-                  <div style={{ width: '17px', height: '17px', borderRadius: 'var(--r4)', background: sizeFilters.has(val) ? 'var(--primary)' : 'var(--surf-w)', border: `1.5px solid ${sizeFilters.has(val) ? 'var(--primary)' : 'var(--div)'}`, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-                    {sizeFilters.has(val) && <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><polyline points="2,6 5,9 10,3" /></svg>}
-                  </div>
-                  <span style={{ fontSize: '12px', color: 'var(--ink2)', flex: 1 }}>{label}</span>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', fontWeight: 700, color: 'var(--ink3)' }}>{countBySize(val)}</span>
+                {/* Size filters */}
+                <div style={{ marginBottom: '10px' }}>
+                  <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Size</span>
+                  {SIZE_OPTIONS.filter(([val]) => countBySize(val) > 0).map(([val, label]) => (
+                    <div key={val} onClick={() => toggleSize(val)} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid var(--div)', cursor: 'pointer' }}>
+                      <div style={{ width: '17px', height: '17px', borderRadius: 'var(--r4)', background: sizeFilters.has(val) ? 'var(--primary)' : 'var(--surf-w)', border: `1.5px solid ${sizeFilters.has(val) ? 'var(--primary)' : 'var(--div)'}`, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                        {sizeFilters.has(val) && <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><polyline points="2,6 5,9 10,3" /></svg>}
+                      </div>
+                      <span style={{ fontSize: '12px', color: 'var(--ink2)', flex: 1 }}>{label}</span>
+                      <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', fontWeight: 700, color: 'var(--ink3)' }}>{countBySize(val)}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            <hr style={{ border: 'none', borderTop: '1px solid var(--div)', margin: '8px 0' }} />
+                {/* Used stock varies by inspected grade; new stock is all one-trip */}
+                {condFilter === 'used' && (
+                  <>
+                    <hr style={{ border: 'none', borderTop: '1px solid var(--div)', margin: '8px 0' }} />
+                    <div style={{ marginBottom: '10px' }}>
+                      <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Condition Grade</span>
+                      {(['A','B','C','R','X'] as ContainerGrade[]).map(g => (
+                        <div key={g} onClick={() => toggleGrade(g)} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid var(--div)', cursor: 'pointer' }}>
+                          <div style={{ width: '17px', height: '17px', borderRadius: 'var(--r4)', background: gradeFilters.has(g) ? 'var(--primary)' : 'var(--surf-w)', border: `1.5px solid ${gradeFilters.has(g) ? 'var(--primary)' : 'var(--div)'}`, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                            {gradeFilters.has(g) && <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><polyline points="2,6 5,9 10,3" /></svg>}
+                          </div>
+                          <span style={{ fontSize: '12px', color: 'var(--ink2)', flex: 1 }}>
+                            <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: '3px', fontSize: '9px', fontWeight: 700, background: GRADE_META[g].color, color: '#fff', marginRight: '5px' }}>{g}</span>
+                            {GRADE_META[g].label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
 
-            {/* Grade filters */}
-            <div style={{ marginBottom: '10px' }}>
-              <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Condition Grade</span>
-              {(['A','B','C','R','X'] as ContainerGrade[]).map(g => (
-                <div key={g} onClick={() => toggleGrade(g)} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid var(--div)', cursor: 'pointer' }}>
-                  <div style={{ width: '17px', height: '17px', borderRadius: 'var(--r4)', background: gradeFilters.has(g) ? 'var(--primary)' : 'var(--surf-w)', border: `1.5px solid ${gradeFilters.has(g) ? 'var(--primary)' : 'var(--div)'}`, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-                    {gradeFilters.has(g) && <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><polyline points="2,6 5,9 10,3" /></svg>}
+                {/* New stock comes in factory colors */}
+                {condFilter === 'new' && colorOptions.length > 0 && (
+                  <>
+                    <hr style={{ border: 'none', borderTop: '1px solid var(--div)', margin: '8px 0' }} />
+                    <div style={{ marginBottom: '10px' }}>
+                      <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Color</span>
+                      {colorOptions.map(col => {
+                        const on = !colorSel || colorSel.has(col)
+                        return (
+                          <div key={col} onClick={() => toggleColor(col)} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid var(--div)', cursor: 'pointer' }}>
+                            <div style={{ width: '17px', height: '17px', borderRadius: 'var(--r4)', background: on ? 'var(--primary)' : 'var(--surf-w)', border: `1.5px solid ${on ? 'var(--primary)' : 'var(--div)'}`, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                              {on && <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><polyline points="2,6 5,9 10,3" /></svg>}
+                            </div>
+                            <span style={{ fontSize: '12px', color: 'var(--ink2)', flex: 1 }}>{col}</span>
+                            <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', fontWeight: 700, color: 'var(--ink3)' }}>{tabListable.filter(c => condOf(c) === 'new' && (c.color || 'Unspecified') === col).length}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
+
+                <hr style={{ border: 'none', borderTop: '1px solid var(--div)', margin: '8px 0' }} />
+
+                {/* Price range */}
+                <div style={{ marginBottom: '10px' }}>
+                  <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Price Range</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <input value={minPrice} onChange={e => setMinPrice(e.target.value)} placeholder="Min $" type="number" style={{ padding: '7px 9px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontFamily: 'var(--mono)', fontSize: '12px', outline: 'none' }} />
+                    <input value={maxPrice} onChange={e => setMaxPrice(e.target.value)} placeholder="Max $" type="number" style={{ padding: '7px 9px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontFamily: 'var(--mono)', fontSize: '12px', outline: 'none' }} />
                   </div>
-                  <span style={{ fontSize: '12px', color: 'var(--ink2)', flex: 1 }}>
-                    <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: '3px', fontSize: '9px', fontWeight: 700, background: GRADE_META[g].color, color: '#fff', marginRight: '5px' }}>{g}</span>
-                    {GRADE_META[g].label}
-                  </span>
                 </div>
-              ))}
-            </div>
-
-            <hr style={{ border: 'none', borderTop: '1px solid var(--div)', margin: '8px 0' }} />
-
-            {/* Price range */}
-            <div style={{ marginBottom: '10px' }}>
-              <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Price Range</span>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <input value={minPrice} onChange={e => setMinPrice(e.target.value)} placeholder="Min $" type="number" style={{ padding: '7px 9px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontFamily: 'var(--mono)', fontSize: '12px', outline: 'none' }} />
-                <input value={maxPrice} onChange={e => setMaxPrice(e.target.value)} placeholder="Max $" type="number" style={{ padding: '7px 9px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontFamily: 'var(--mono)', fontSize: '12px', outline: 'none' }} />
-              </div>
-            </div>
+              </>
+            )}
           </aside>
 
           {/* Grid area */}
@@ -1798,6 +1944,25 @@ export default function MarketplacePage() {
                 <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '4px' }}>No containers match your filters</div>
                 <div style={{ fontSize: '13px' }}>Try adjusting grade or price filters, or call us directly.</div>
               </div>
+            ) : condFilter === 'all' ? (
+              // No condition picked yet — group the results into New and Used sections.
+              (['new', 'used'] as ContainerCondition[]).map(k => {
+                const group = filtered.filter(c => condOf(c) === k)
+                if (!group.length) return null
+                return (
+                  <div key={k} style={{ marginBottom: '26px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                      <span style={{ fontSize: '15px', fontWeight: 700 }}>{k === 'new' ? 'New Containers' : 'Used Containers'}</span>
+                      <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, color: 'var(--ink3)', background: 'var(--surf1)', border: '1px solid var(--div)', borderRadius: 'var(--pill)', padding: '1px 9px' }}>{group.length}</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
+                      {group.map(c => (
+                        <ContainerCard key={c.id} container={c} onSelect={setSelectedContainer} mode={activeTab === 'rent' ? 'rent' : 'buy'} inCart={inCart(c.id)} onAddToCart={addToCart} />
+                      ))}
+                    </div>
+                  </div>
+                )
+              })
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
                 {filtered.map(c => (

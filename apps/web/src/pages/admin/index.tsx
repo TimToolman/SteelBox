@@ -8,7 +8,10 @@ import React, { useState, useCallback, useEffect } from 'react'
 import { GradeBadge, StatusBadge, Button, Modal, Snackbar, BuildClipart } from '../../components/ui'
 import { ShowPasswordButton } from '../../lib/auth'
 import { useContainers, useOrders, useDrivers, useSnackbar, useAuth, useFavicon, useIsMobile } from '../../hooks'
-import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, customBuilds as customBuildsApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, SHOT_LABELS, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role, type CustomBuild, CUSTOM_STAGES } from '../../lib/api'
+import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, customBuilds as customBuildsApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, SHOT_LABELS, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role, type CustomBuild, CUSTOM_STAGES, SIZE_LABEL } from '../../lib/api'
+
+// Every size/type code, for the container add/edit selects.
+const SIZE_SELECT_OPTIONS = Object.entries(SIZE_LABEL) as [ContainerSize, string][]
 
 // Container sizes a truck can be certified to pull.
 const TRUCK_SIZES: { value: ContainerSize; label: string }[] = [
@@ -231,8 +234,16 @@ function ListingBadge({ listingType }: { listingType?: Container['listingType'] 
   )
 }
 
+// New = factory one-trip stock; Used = pre-owned. Orthogonal to grade + listing type.
+function ConditionBadge({ condition }: { condition?: Container['condition'] }) {
+  const isNew = condition === 'new'
+  return (
+    <span style={{ display: 'inline-block', padding: '2px 9px', borderRadius: 'var(--r4)', fontSize: '10px', fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase', background: isNew ? 'var(--green-cont, #DCFCE7)' : 'var(--surf1)', color: isNew ? 'var(--green)' : 'var(--ink2)' }}>{isNew ? 'New' : 'Used'}</span>
+  )
+}
+
 function AddContainerModal({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: (msg: string) => void }) {
-  const [form, setForm] = useState({ size: '20ft-std', grade: 'A', listingType: 'both', status: 'available', buyPrice: '', rentMonthly: '', purchaseCost: '', depot: '', bay: '' })
+  const [form, setForm] = useState({ size: '20ft-std', grade: 'A', condition: 'new', color: '', listingType: 'both', status: 'available', buyPrice: '', rentMonthly: '', purchaseCost: '', depot: '', bay: '' })
   const [errField, setErrField] = useState<string | null>(null)  // field flagged red by validation
   const [saving, setSaving] = useState(false)
   const [depots, setDepots] = useState<Depot[]>([])
@@ -262,6 +273,8 @@ function AddContainerModal({ open, onClose, onAdded }: { open: boolean; onClose:
       const created = await containersApi.create({
         size: form.size as Container['size'],
         grade: form.grade as Container['grade'],
+        condition: form.condition as Container['condition'],
+        color: form.color.trim(),
         listingType: form.listingType as Container['listingType'],
         status: form.status as Container['status'],
         buyPrice: form.buyPrice ? Number(form.buyPrice) : 0,
@@ -271,7 +284,7 @@ function AddContainerModal({ open, onClose, onAdded }: { open: boolean; onClose:
         bayNumber: form.bay,
       })
       onAdded(`Container ${created.sku} added to inventory (${form.size} · Grade ${form.grade})`)
-      setForm({ size: '20ft-std', grade: 'A', listingType: 'both', status: 'available', buyPrice: '', rentMonthly: '', purchaseCost: '', depot: '', bay: '' })
+      setForm({ size: '20ft-std', grade: 'A', condition: 'new', color: '', listingType: 'both', status: 'available', buyPrice: '', rentMonthly: '', purchaseCost: '', depot: '', bay: '' })
       onClose()
     } catch (e) {
       onAdded(`Failed to add container — ${e instanceof Error ? e.message : 'please try again'}`)
@@ -300,11 +313,14 @@ function AddContainerModal({ open, onClose, onAdded }: { open: boolean; onClose:
       <div style={{ marginBottom: '12px' }}>
         <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '5px' }}>Size</label>
         <select value={form.size} onChange={e => setForm(p => ({ ...p, size: e.target.value }))} style={{ width: '100%', padding: '10px 12px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '13px', outline: 'none', fontFamily: 'var(--sans)', marginBottom: '12px' }}>
-          <option value="10ft-std">10ft Standard</option>
-          <option value="20ft-std">20ft Standard</option>
-          <option value="20ft-hc">20ft High Cube</option>
-          <option value="40ft-std">40ft Standard</option>
-          <option value="40ft-hc">40ft High Cube</option>
+          {SIZE_SELECT_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+      </div>
+      <div style={{ marginBottom: '12px' }}>
+        <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '5px' }}>Condition</label>
+        <select value={form.condition} onChange={e => setForm(p => ({ ...p, condition: e.target.value }))} style={{ width: '100%', padding: '10px 12px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '13px', outline: 'none', fontFamily: 'var(--sans)', marginBottom: '12px' }}>
+          <option value="new">New</option>
+          <option value="used">Used</option>
         </select>
       </div>
       <div style={{ marginBottom: '12px' }}>
@@ -347,6 +363,7 @@ function AddContainerModal({ open, onClose, onAdded }: { open: boolean; onClose:
           Containers are purchased from a depot. {skuPreview ? <>SKU will be <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--ink2)' }}>{skuPreview}</span>.</> : 'Add a depot with a code in Settings to enable SKUs.'}
         </div>
       </div>
+      {field('Color', 'color', 'text', 'Beige')}
       {field('Bay Number', 'bay', 'text', 'Bay 4')}
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '20px' }}>
         <Button variant="ghost" onClick={onClose}>Cancel</Button>
@@ -364,7 +381,7 @@ function EditContainerModal({ container, onClose, onSaved }: {
   // lands in a different inventory group and should animate on arrival.
   onSaved: (msg: string, moved?: Container) => void
 }) {
-  const [form, setForm] = useState({ size: '20ft-std', grade: 'A', status: 'draft', listingType: 'both', buyPrice: '', rentMonthly: '', purchaseCost: '', depot: '', bay: '', inspector: '' })
+  const [form, setForm] = useState({ size: '20ft-std', grade: 'A', condition: 'used', color: '', status: 'draft', listingType: 'both', buyPrice: '', rentMonthly: '', purchaseCost: '', depot: '', bay: '', inspector: '' })
   const [errField, setErrField] = useState<string | null>(null)  // field flagged red by validation
   const [saving, setSaving] = useState(false)
 
@@ -375,6 +392,8 @@ function EditContainerModal({ container, onClose, onSaved }: {
     setForm({
       size: container.size,
       grade: container.grade,
+      condition: container.condition ?? 'used',
+      color: container.color ?? '',
       status: container.status,
       listingType: container.listingType ?? 'both',
       buyPrice: String(container.buyPrice ?? ''),
@@ -400,6 +419,8 @@ function EditContainerModal({ container, onClose, onSaved }: {
       const updated = await containersApi.update(container.id, {
         size: form.size as Container['size'],
         grade: form.grade as Container['grade'],
+        condition: form.condition as Container['condition'],
+        color: form.color.trim(),
         status: form.status as Container['status'],
         listingType: form.listingType as Container['listingType'],
         buyPrice: form.buyPrice ? Number(form.buyPrice) : 0,
@@ -452,11 +473,14 @@ function EditContainerModal({ container, onClose, onSaved }: {
       <div style={{ marginBottom: '12px' }}>
         <label style={lblStyle}>Size</label>
         <select value={form.size} onChange={e => setForm(p => ({ ...p, size: e.target.value }))} style={selStyle}>
-          <option value="10ft-std">10ft Standard</option>
-          <option value="20ft-std">20ft Standard</option>
-          <option value="20ft-hc">20ft High Cube</option>
-          <option value="40ft-std">40ft Standard</option>
-          <option value="40ft-hc">40ft High Cube</option>
+          {SIZE_SELECT_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+      </div>
+      <div style={{ marginBottom: '12px' }}>
+        <label style={lblStyle}>Condition</label>
+        <select value={form.condition} onChange={e => setForm(p => ({ ...p, condition: e.target.value }))} style={selStyle}>
+          <option value="new">New</option>
+          <option value="used">Used</option>
         </select>
       </div>
       <div style={{ marginBottom: '12px' }}>
@@ -493,6 +517,7 @@ function EditContainerModal({ container, onClose, onSaved }: {
       {form.listingType !== 'rent' && field('Buy Price ($)', 'buyPrice', 'number', '3500')}
       {form.listingType !== 'buy' && field('Rent / Month ($)', 'rentMonthly', 'number', '150')}
       {field('Purchase Cost ($ from depot)', 'purchaseCost', 'number', '2100')}
+      {field('Color', 'color', 'text', 'Beige')}
       {field('Depot Location', 'depot', 'text', 'NOLA Depot')}
       {field('Bay Number', 'bay', 'text', 'Bay 4')}
       {field('Inspector', 'inspector', 'text', 'T. Rivera')}
@@ -1325,9 +1350,22 @@ export default function AdminPage() {
 
   // Only active (non-archived) drivers appear in lists and are schedulable.
   const activeDrivers = driverList.filter(d => d.active !== false)
+  const archivedDrivers = driverList.filter(d => d.active === false)
   const wageById = (id?: string) => driverList.find(d => d.id === id)?.hourlyWage ?? 0
   const [addDriverOpen, setAddDriverOpen] = useState(false)
   const [removeDriver, setRemoveDriver] = useState<Driver | null>(null)
+  const [archiveOpen, setArchiveOpen] = useState(false)
+
+  const restoreDriver = async (driver: Driver) => {
+    if (!window.confirm(`Bring ${driver.name} back to work?`)) return
+    try {
+      await driversApi.update(driver.id, { active: true, status: 'off_duty' })
+      toast(`${driver.name} is back on the roster`)
+      refetchDrivers().catch(() => {})
+    } catch (e) {
+      toast(`Failed to restore — ${e instanceof Error ? e.message : 'try again'}`)
+    }
+  }
 
   const reserved = containerList.filter(c => c.status === 'sale_in_progress')
   const available = containerList.filter(c => c.status === 'available')
@@ -1689,6 +1727,7 @@ export default function AdminPage() {
   const EditIcon = <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13.5 3.5l3 3L7 16H4v-3z" /><path d="M12 5l3 3" /></svg>
   const DeleteIcon = <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 5.5h13" /><path d="M8 5V3.5h4V5" /><path d="M5 5.5l.8 11a1 1 0 001 .9h6.4a1 1 0 001-.9l.8-11" /><path d="M8.5 8.5v6M11.5 8.5v6" /></svg>
   const Spinner = <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ animation: 'sbxspin 0.7s linear infinite' }}><path d="M10 2a8 8 0 018 8" /></svg>
+  const CameraIcon = <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 7h2.5L6 5h8l1.5 2H18a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V8a1 1 0 011-1z" /><circle cx="10" cy="11" r="3" /></svg>
 
   return (
     <div style={{ display: 'flex', height: '100vh', width: '100%', overflow: 'hidden', fontFamily: 'var(--sans)', background: 'var(--surf)' }}>
@@ -2138,7 +2177,11 @@ export default function AdminPage() {
                   <tr key={c.id} id={`inv-${c.id}`} style={movedRowId === c.id ? { animation: 'rowArrive 1.8s ease' } : undefined}>
                     <Td mono><span style={{ color: 'var(--ink3)', fontSize: '10px' }}>{i + 1}</span></Td>
                     <Td mono>{c.sku}</Td>
-                    <Td>{c.size}</Td>
+                    <Td>
+                      <div style={{ whiteSpace: 'nowrap' }}>{SIZE_LABEL[c.size] ?? c.size}</div>
+                      {c.color && <div style={{ fontSize: '10px', color: 'var(--ink3)' }}>{c.color}</div>}
+                    </Td>
+                    <Td><ConditionBadge condition={c.condition} /></Td>
                     <Td><GradeBadge grade={c.grade as any} showLabel /></Td>
                     <Td><ListingBadge listingType={c.listingType} /></Td>
                     <Td>
@@ -2175,6 +2218,7 @@ export default function AdminPage() {
                     <Td>
                       <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
                         <TblBtn iconOnly title="Edit" onClick={() => setEditContainer(c)}>{EditIcon}</TblBtn>
+                        <TblBtn iconOnly title="Photos — review, replace, or remove shots" onClick={() => setPhotosFor(c)}>{CameraIcon}</TblBtn>
                         {c.status !== 'sale_in_progress' && <TblBtn iconOnly variant="danger" title="Delete" onClick={() => handleDelete(c)}>{deletingId === c.id ? Spinner : DeleteIcon}</TblBtn>}
                       </div>
                     </Td>
@@ -2194,7 +2238,7 @@ export default function AdminPage() {
                       <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', overflow: 'hidden' }}>
                         <div style={{ overflowX: 'auto' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '860px' }}>
-                            <thead><tr><Th>{''}</Th><Th>SKU</Th><Th>Size</Th><Th>Grade</Th><Th>Listing</Th><Th>Photos</Th><Th>Inspector</Th><Th>Depot</Th><Th>Cost</Th><Th>Pricing</Th><Th>Actions</Th></tr></thead>
+                            <thead><tr><Th>{''}</Th><Th>SKU</Th><Th>Size</Th><Th>Condition</Th><Th>Grade</Th><Th>Listing</Th><Th>Photos</Th><Th>Inspector</Th><Th>Depot</Th><Th>Cost</Th><Th>Pricing</Th><Th>Actions</Th></tr></thead>
                             <tbody>{[...s.items].sort(byListing).map((c, i) => row(c, i, s.key === 'live'))}</tbody>
                           </table>
                         </div>
@@ -2364,6 +2408,75 @@ export default function AdminPage() {
                   )}
                 </div>
               </div>
+
+              {/* Orphaned jobs — archived (or deleted) drivers' still-scheduled work
+                  across ALL days, so it can't hide behind the day picker above. */}
+              {(() => {
+                const orphaned = scheduleEvents.filter(e => {
+                  const d = driverList.find(x => x.id === e.driverId)
+                  return !d || d.active === false
+                })
+                if (!orphaned.length) return null
+                const byDriver = [...new Set(orphaned.map(e => e.driverId))].map(id =>
+                  driverList.find(d => d.id === id)
+                    ?? ({ id, name: 'Unknown driver', initials: '?', colorHex: '#9CA3AF', vehicle: '', active: false } as Driver))
+                return (
+                  <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px dashed var(--amber)', boxShadow: 'var(--sh1)', overflow: 'hidden', marginTop: '18px' }}>
+                    <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--div)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '15px', fontWeight: 700 }}>Orphaned jobs</span>
+                      <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, color: 'var(--amber)', background: 'var(--surf1)', border: '1px solid var(--amber)', borderRadius: 'var(--pill)', padding: '1px 9px' }}>{orphaned.length}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--ink3)' }}>Booked to archived drivers — reassign so they still get done. Shows every day, not just the one selected above.</span>
+                    </div>
+                    <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      {byDriver.map(drv => {
+                        const jobs = orphaned.filter(e => e.driverId === drv.id).sort((a, b) => (a.dayOffset - b.dayOffset) || (a.startMin - b.startMin))
+                        return (
+                          <div key={drv.id} style={{ border: '1px solid var(--amber)', borderRadius: 'var(--r12)', overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'var(--amb-c,#FEF3C7)', borderBottom: '1px solid var(--div)', flexWrap: 'wrap' }}>
+                              <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: drv.colorHex, color: '#fff', fontSize: '11px', fontWeight: 700, display: 'grid', placeItems: 'center', opacity: 0.6 }}>{drv.initials}</span>
+                              <div style={{ fontSize: '13px', fontWeight: 700 }}>{drv.name}</div>
+                              <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--amber)', background: 'var(--surf-w)', border: '1px solid var(--amber)', padding: '2px 9px', borderRadius: 'var(--pill)', letterSpacing: '0.4px' }}>ARCHIVED — jobs need a new driver</span>
+                              <span style={{ marginLeft: 'auto', fontSize: '11px', fontWeight: 600, color: 'var(--amber)' }}>{jobs.length} orphaned job{jobs.length > 1 ? 's' : ''}</span>
+                              <select
+                                value=""
+                                onChange={e => {
+                                  const newId = e.target.value
+                                  if (!newId) return
+                                  jobs.forEach(j => reassignJob(j.id, newId))
+                                  toast(`${drv.name}'s jobs reassigned to ${activeDrivers.find(d => d.id === newId)?.name ?? 'driver'}`)
+                                }}
+                                style={{ padding: '5px 10px', border: '1.5px solid var(--amber)', borderRadius: 'var(--r8)', fontSize: '11px', fontWeight: 600, outline: 'none', fontFamily: 'var(--sans)', background: 'var(--surf-w)', cursor: 'pointer' }}
+                              >
+                                <option value="">Reassign all to…</option>
+                                {activeDrivers.map(d => <option key={d.id} value={d.id}>{d.name} · {d.vehicle}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              {jobs.map((e, i) => {
+                                const end = e.startMin + jobMinutes(e.miles)
+                                const meta = SCHED_META[e.type]
+                                return (
+                                  <div key={e.id} onClick={() => setDetailEvent(e)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '11px 14px', borderBottom: i < jobs.length - 1 ? '1px solid var(--div)' : 'none', cursor: 'pointer' }}>
+                                    <div style={{ minWidth: '128px', flexShrink: 0 }}>
+                                      <div style={{ fontSize: '11px', fontWeight: 700 }}>{dayDate(e.dayOffset).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>
+                                      <div style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--ink3)' }}>{fmtMin(e.startMin)} – {fmtMin(end)}</div>
+                                    </div>
+                                    <span style={{ display: 'inline-block', padding: '2px 9px', borderRadius: 'var(--r4)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', background: meta.bg, color: meta.color, flexShrink: 0 }}>{meta.label}</span>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ fontSize: '13px', fontWeight: 600 }}><span style={{ fontFamily: 'var(--mono)', fontSize: '11px' }}>{e.sku}</span> · {e.customer}</div>
+                                      <div style={{ fontSize: '11px', color: 'var(--ink3)' }}>{e.origin} → {e.destination}</div>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           )}
 
@@ -2409,12 +2522,37 @@ export default function AdminPage() {
           {view === 'drivers' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                <div style={{ fontSize: '15px', fontWeight: 700 }}>Driver Management <span style={{ fontSize: '12px', fontWeight: 400, color: 'var(--ink3)' }}>· {activeDrivers.length} active</span></div>
+                <div style={{ fontSize: '15px', fontWeight: 700 }}>Driver Management <span style={{ fontSize: '12px', fontWeight: 400, color: 'var(--ink3)' }}>· {activeDrivers.length} active{archivedDrivers.length ? ` · ${archivedDrivers.length} archived` : ''}</span></div>
                 <Button variant="primary" size="md" onClick={() => setAddDriverOpen(true)} icon={<span>+</span>}>Add Driver</Button>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: '14px' }}>
                 {activeDrivers.map(d => <DriverCard key={d.id} driver={d} onAssign={() => { setAssignDriverId(d.id); setAssignOpen(true) }} onToast={toast} onSchedule={() => setSchedModal({ driverId: d.id })} onRemove={() => setRemoveDriver(d)} />)}
               </div>
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '18px' }}>
+                <Button variant="ghost" onClick={() => setArchiveOpen(true)}>Archive{archivedDrivers.length ? ` (${archivedDrivers.length})` : ''}</Button>
+              </div>
+              <Modal open={archiveOpen} onClose={() => setArchiveOpen(false)} maxWidth={560}>
+                <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '4px' }}>Archived drivers</h2>
+                <p style={{ fontSize: '12px', color: 'var(--ink3)', marginBottom: '16px' }}>Drivers removed from the roster stay here — bring someone back after a leave of absence.</p>
+                {archivedDrivers.length === 0 ? (
+                  <div style={{ fontSize: '13px', color: 'var(--ink3)', background: 'var(--surf1)', border: '1px solid var(--div)', borderRadius: 'var(--r8)', padding: '14px' }}>No archived drivers.</div>
+                ) : (
+                  <div style={{ display: 'grid', gap: '10px' }}>
+                    {archivedDrivers.map(d => (
+                      <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid var(--div)', borderRadius: 'var(--r12)', padding: '12px 14px', background: 'var(--surf1)' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '13px', fontWeight: 700 }}>{d.name}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '2px', fontFamily: 'var(--mono)' }}>{d.driverCode} · {d.vehicle || 'No truck listed'}</div>
+                        </div>
+                        <button onClick={() => restoreDriver(d)} style={{ padding: '6px 12px', borderRadius: 'var(--pill)', border: '1.5px solid var(--green)', background: 'var(--green-cont)', color: 'var(--green)', fontSize: '11px', fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>Bring Back</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '18px' }}>
+                  <Button variant="ghost" onClick={() => setArchiveOpen(false)}>Close</Button>
+                </div>
+              </Modal>
             </div>
           )}
 

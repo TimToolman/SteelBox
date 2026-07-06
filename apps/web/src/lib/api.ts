@@ -112,7 +112,36 @@ export const outbox = {
 
 // ── Containers ────────────────────────────────────────────
 
-export type ContainerSize = '10ft-std' | '20ft-std' | '20ft-hc' | '40ft-std' | '40ft-hc'
+export type ContainerSize =
+  | '10ft-std' | '20ft-std' | '20ft-hc' | '40ft-std' | '40ft-hc'
+  // Specialty type codes from depot inventory sheets
+  | '20ft-dd'      // 20' Double Door
+  | '20ft-dvq'     // 20' DV Quad
+  | '20ft-dvos'    // 20' DV Open Side
+  | '20ft-dvosnf'  // 20' DV Open Side No Frame
+  | '40ft-hcq'     // 40' HC Quad
+  | '40ft-hcdd'    // 40' HC Double Door
+  | '40ft-hcos'    // 40' HC Open Side
+
+// Canonical display labels for every size/type code.
+export const SIZE_LABEL: Record<ContainerSize, string> = {
+  '10ft-std': '10ft Standard',
+  '20ft-std': '20ft Standard',
+  '20ft-hc': '20ft High Cube',
+  '40ft-std': '40ft Standard',
+  '40ft-hc': '40ft High Cube',
+  '20ft-dd': "20' Double Door",
+  '20ft-dvq': "20' DV Quad",
+  '20ft-dvos': "20' DV Open Side",
+  '20ft-dvosnf': "20' DV Open Side NF",
+  '40ft-hcq': "40' HC Quad",
+  '40ft-hcdd': "40' HC Double Door",
+  '40ft-hcos': "40' HC Open Side",
+}
+
+// Factory condition — separate from the field-inspected grade. Both new and
+// used units can be listed to buy, rent, or both.
+export type ContainerCondition = 'new' | 'used'
 export type ContainerStatus =
   | 'draft'
   | 'available'
@@ -144,6 +173,8 @@ export interface Container {
   stockNumber: string
   size: ContainerSize
   grade: ContainerGrade
+  condition: ContainerCondition
+  color: string              // exterior color (e.g. Beige, Gray); '' if unspecified
   status: ContainerStatus
   listingType: ListingType
   buyPrice: number
@@ -166,6 +197,7 @@ export interface Container {
 export interface ContainerFilters {
   size?: ContainerSize
   grade?: ContainerGrade[]
+  condition?: ContainerCondition
   status?: ContainerStatus[]
   minPrice?: number
   maxPrice?: number
@@ -414,6 +446,7 @@ export const activity = {
 export interface Depot {
   id: string
   name: string
+  destination: string // delivery market the depot serves, e.g. "Atlanta, GA"
   address: string
   attendantName: string
   attendantCell: string

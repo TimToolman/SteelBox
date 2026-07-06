@@ -1,4 +1,7 @@
-id,name,address,attendantName,attendantCell,code
-dep_nola,NOLA Depot,"4200 Chef Menteur Hwy, New Orleans, LA 70126",Marcus Boudreaux,(504) 555-0142,NOLA
-dep_br,Baton Rouge Depot,"9800 Airline Hwy, Baton Rouge, LA 70815",Tanya Guidry,(225) 555-0177,BR
-dep_hou,Houston Depot,"1100 Port Rd, Houston, TX 77029",Carlos Reyes,(713) 555-0129,HOU
+id,name,destination,address,attendantName,attendantCell,code
+dep_nola,NOLA Depot,"New Orleans, LA","4200 Chef Menteur Hwy, New Orleans, LA 70126",Marcus Boudreaux,(504) 555-0142,NOLA
+dep_br,Baton Rouge Depot,"Baton Rouge, LA","9800 Airline Hwy, Baton Rouge, LA 70815",Tanya Guidry,(225) 555-0177,BR
+dep_hou,Houston Depot,"Houston, TX","1100 Port Rd, Houston, TX 77029",Carlos Reyes,(713) 555-0129,HOU
+dep_fc,FIRST COAST,"Atlanta, GA","Atlanta, GA",,,FC
+dep_iti,"ITI Intermodal of Georgia, LLC","Atlanta, GA","Atlanta, GA",,,ITI
+dep_cdi,"Container Depot Industries, Inc.","Baltimore, MD","Baltimore, MD",,,CDI

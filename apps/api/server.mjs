@@ -91,7 +91,7 @@ const SCHEMAS = {
     // customEta/customBuildName only apply to custom-build orders
     // (status custom_in_progress): the promised completion date + which
     // catalog build the unit is being fabricated as.
-    headers: ['id','sku','guid','stockNumber','size','grade','status','buyPrice','rentMonthly','photos','photoCount','has360','depotLocation','bayNumber','inspectorName','inspectedAt','deliveryIncluded','listingType','createdAt','purchaseCost','conditionScore','customEta','customBuildName'],
+    headers: ['id','sku','guid','stockNumber','size','grade','condition','color','status','buyPrice','rentMonthly','photos','photoCount','has360','depotLocation','bayNumber','inspectorName','inspectedAt','deliveryIncluded','listingType','createdAt','purchaseCost','conditionScore','customEta','customBuildName'],
     types: {
       buyPrice: 'number', rentMonthly: 'numberOrNull', photoCount: 'number', purchaseCost: 'number', conditionScore: 'number',
       has360: 'boolean', deliveryIncluded: 'boolean',
@@ -125,7 +125,7 @@ const SCHEMAS = {
   // Pickup depots — physical yards with a lot attendant contact.
   depots: {
     file: 'depots.csv',
-    headers: ['id','name','address','attendantName','attendantCell','code'],
+    headers: ['id','name','destination','address','attendantName','attendantCell','code'],
     types: {},
   },
   // Pickup/delivery/return/transfer schedule — shared by admin Schedule + field app.
@@ -631,6 +631,10 @@ async function handleRequest(req, res) {
           stockNumber: `STK-${seq}`,
           size: body.size,
           grade: body.grade,
+          // Factory condition (new/used) — orthogonal to grade and listingType:
+          // both new and used units can be listed to buy, rent, or both.
+          condition: ['new', 'used'].includes(body.condition) ? body.condition : 'used',
+          color: body.color || '',
           // New containers start as draft — awaiting field photo documentation.
           status: body.status || 'draft',
           // How the unit may be transacted: 'buy', 'rent', or 'both'.
@@ -1236,8 +1240,10 @@ async function handleRequest(req, res) {
       const depots = readTable('depots')
 
       if (seg.length === 1 && method === 'GET') {
-        if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Staff access required')
-        return send(res, 200, depots)
+        // Staff see the full record; shoppers get a sanitized list (no yard
+        // address or attendant contact) so the marketplace can filter by depot.
+        if (hasRole('admin', 'driver')) return send(res, 200, depots)
+        return send(res, 200, depots.map(d => ({ id: d.id, name: d.name, destination: d.destination || '', code: d.code })))
       }
 
       if (seg.length === 1 && method === 'POST') {
@@ -1247,6 +1253,8 @@ async function handleRequest(req, res) {
         const record = {
           id: uid('dep'),
           name: body.name,
+          // Delivery market the depot serves, e.g. "Atlanta, GA".
+          destination: body.destination || '',
           address: body.address || '',
           attendantName: body.attendantName || '',
           attendantCell: body.attendantCell || '',
