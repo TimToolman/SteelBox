@@ -695,7 +695,7 @@ export default function FieldAppPage() {
     <div>
       {/* Hero — compact (≈half height) */}
       <div style={{ background: onDuty ? 'linear-gradient(135deg,#0057B8,#003882)' : 'linear-gradient(135deg,#374151,#1F2937)', padding: '22px 20px 14px', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '130px', height: '130px', borderRadius: '50%', background: 'rgba(255,255,255,.06)' }} />
+        <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '130px', height: '130px', borderRadius: '50%', background: 'rgba(255,255,255,.06)', pointerEvents: 'none' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{ width: '20px', height: '20px', borderRadius: '5px', background: 'rgba(255,255,255,.15)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
             <Icon name="box" size={12} color="#fff" />
