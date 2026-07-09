@@ -1,5 +1,5 @@
 // ============================================================
-// Gatorworx Auth — shared context, login screens, route guards
+// MVP Container Auth — shared context, login screens, route guards
 // Roles: admin (portal), driver (field app), customer (marketplace
 // checkout + profile). Guests may browse the marketplace freely.
 // ============================================================
@@ -156,7 +156,7 @@ export function LoginForm({ onDone, allowRegister = false, subtitle }: {
       {allowRegister && (
         <div style={{ textAlign: 'center', marginTop: '12px', fontSize: '12px', color: '#6B7280' }}>
           {mode === 'login' ? (
-            <>New to Gatorworx? <button onClick={() => { setMode('register'); setError('') }} style={{ background: 'none', border: 'none', color: '#0057B8', fontWeight: 700, cursor: 'pointer', fontSize: '12px', padding: 0 }}>Create an account</button></>
+            <>New to MVP Container? <button onClick={() => { setMode('register'); setError('') }} style={{ background: 'none', border: 'none', color: '#0057B8', fontWeight: 700, cursor: 'pointer', fontSize: '12px', padding: 0 }}>Create an account</button></>
           ) : (
             <>Already have an account? <button onClick={() => { setMode('login'); setError('') }} style={{ background: 'none', border: 'none', color: '#0057B8', fontWeight: 700, cursor: 'pointer', fontSize: '12px', padding: 0 }}>Sign in</button></>
           )}
@@ -188,7 +188,7 @@ export function RequireRole({ roles, title, children }: {
           <div style={{ width: '34px', height: '34px', borderRadius: '9px', background: '#0057B8', display: 'grid', placeItems: 'center' }}>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><rect x="1" y="6" width="22" height="14" rx="2" /><line x1="6" y1="6" x2="6" y2="20" /><line x1="11" y1="6" x2="11" y2="20" /><line x1="16" y1="6" x2="16" y2="20" /></svg>
           </div>
-          <span style={{ fontSize: '19px', fontWeight: 700 }}><span style={{ color: '#2B7FD4' }}>Gator</span><span style={{ color: '#E65100' }}>worx</span></span>
+          <span style={{ fontSize: '19px', fontWeight: 700 }}><span style={{ color: '#2B7FD4' }}>MVP&nbsp;</span><span style={{ color: '#E65100' }}>Container</span></span>
         </div>
         <h1 style={{ fontSize: '18px', fontWeight: 700, margin: '10px 0 2px' }}>{title}</h1>
         {user ? (

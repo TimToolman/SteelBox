@@ -1,5 +1,5 @@
 // ============================================================
-// Gatorworx API — zero-dependency Node HTTP server
+// MVP Container API — zero-dependency Node HTTP server
 // Data is stored in plain CSV files under ./data (human-editable).
 // Swap this for a real DB/API when a more robust solution is needed.
 // ============================================================
@@ -510,8 +510,8 @@ async function handleRequest(req, res) {
       }
       users.push(rec)
       writeTable('users', users)
-      queueMessage('email', email, 'Welcome to Gatorworx',
-        `Hi ${rec.name}, your Gatorworx account is ready. Browse containers and order any time — you'll verify your mobile number at checkout.`,
+      queueMessage('email', email, 'Welcome to MVP Container',
+        `Hi ${rec.name}, your MVP Container account is ready. Browse containers and order any time — you'll verify your mobile number at checkout.`,
         'user', rec.id)
       return send(res, 201, { token: signToken(rec.id), user: publicUser(rec) })
     }
@@ -530,7 +530,7 @@ async function handleRequest(req, res) {
       const code = String(randomInt(100000, 1000000))
       twoFactor.set(user.id, { code, phone: cleaned, expires: Date.now() + TWOFA_CODE_TTL, verifiedAt: null })
       queueMessage('sms', cleaned, 'Verification code',
-        `Your Gatorworx verification code is ${code}. It expires in 10 minutes.`, 'user', user.id)
+        `Your MVP Container verification code is ${code}. It expires in 10 minutes.`, 'user', user.id)
       // Dev convenience: no real SMS gateway, so surface the code to the client.
       return send(res, 200, { sent: true, devCode: code })
     }
@@ -693,7 +693,7 @@ async function handleRequest(req, res) {
               const cust = readTable('customers').find(c => c.id === o.customerId)
               if (cust?.notifySms && o.customerPhone) {
                 queueMessage('sms', o.customerPhone, 'Custom build update',
-                  `Gatorworx: your ${o.containerSku} custom build is estimated complete ${nice}.`, 'order', o.id)
+                  `MVP Container: your ${o.containerSku} custom build is estimated complete ${nice}.`, 'order', o.id)
               }
             }
           }
@@ -830,7 +830,7 @@ async function handleRequest(req, res) {
           'order', record.id)
         if (body.notifySms === true && record.customerPhone) {
           queueMessage('sms', record.customerPhone, 'Order confirmed',
-            `Gatorworx: order ${record.orderNumber} (${record.containerSku}) confirmed. We'll text delivery updates to this number.`,
+            `MVP Container: order ${record.orderNumber} (${record.containerSku}) confirmed. We'll text delivery updates to this number.`,
             'order', record.id)
         }
         return send(res, 201, record)
@@ -886,12 +886,12 @@ async function handleRequest(req, res) {
           queueMessage('email', o.customerEmail, `Your estimate — ${buildName}: $${amount.toLocaleString()}`,
             `Hi ${o.customerName}, your ${buildName} (${o.containerSku}) estimate is $${amount.toLocaleString()}, delivery included. We'll call to walk through it — approval happens right on the call.`,
             'order', o.id)
-          sms('Estimate ready', `Gatorworx: your ${buildName} estimate is $${amount.toLocaleString()}. We'll call to review and confirm.`)
+          sms('Estimate ready', `MVP Container: your ${buildName} estimate is $${amount.toLocaleString()}. We'll call to review and confirm.`)
         } else if (body.stage === 'estimate_approved') {
           queueMessage('email', o.customerEmail, `Estimate approved — ${buildName} ($${(o.amount || 0).toLocaleString()})`,
             `Great news ${o.customerName} — your ${buildName} (${o.containerSku}) estimate of $${(o.amount || 0).toLocaleString()} is approved. We're scheduling fabrication and will send your build completion date next.`,
             'order', o.id)
-          sms('Estimate approved', `Gatorworx: ${o.containerSku} approved at $${(o.amount || 0).toLocaleString()}. Build date coming soon.`)
+          sms('Estimate approved', `MVP Container: ${o.containerSku} approved at $${(o.amount || 0).toLocaleString()}. Build date coming soon.`)
         } else if (body.stage === 'custom_in_progress') {
           queueMessage('email', o.customerEmail, `Fabrication started — ${buildName}`,
             `Your ${buildName} (${o.containerSku}) is in the shop! We'll send the estimated completion date as soon as it's scheduled.`,
@@ -935,7 +935,7 @@ async function handleRequest(req, res) {
         const cust = readTable('customers').find(c => c.id === o.customerId)
         if (cust?.notifySms && o.customerPhone) {
           queueMessage('sms', o.customerPhone, 'Delivery scheduled',
-            `Gatorworx: ${o.containerSku} delivery scheduled${when}. Driver: ${driver.name}.`, 'order', o.id)
+            `MVP Container: ${o.containerSku} delivery scheduled${when}. Driver: ${driver.name}.`, 'order', o.id)
         }
         return send(res, 200, orders[idx])
       }
@@ -947,7 +947,7 @@ async function handleRequest(req, res) {
         writeTable('orders', orders)
         const o = orders[idx]
         queueMessage('email', o.customerEmail, `Delivered — ${o.containerSku} · receipt`,
-          `Your container ${o.containerSku} was delivered. Amount: $${(o.amount || 0).toLocaleString()} (${o.saleType === 'rent' ? 'rental' : 'purchase'}). Thanks for choosing Gatorworx!`,
+          `Your container ${o.containerSku} was delivered. Amount: $${(o.amount || 0).toLocaleString()} (${o.saleType === 'rent' ? 'rental' : 'purchase'}). Thanks for choosing MVP Container!`,
           'order', o.id)
         return send(res, 200, orders[idx])
       }
@@ -1153,7 +1153,7 @@ async function handleRequest(req, res) {
         const record = {
           id: uid('msg'),
           fromRole: ['admin', 'customer', 'driver'].includes(body.fromRole) ? body.fromRole : 'admin',
-          fromName: body.fromName || 'Gatorworx',
+          fromName: body.fromName || 'MVP Container',
           fromEmail: body.fromEmail || '',
           toDriverId: body.toDriverId,
           toRole: ['admin', 'customer', 'driver'].includes(body.toRole) ? body.toRole : 'driver',
@@ -1172,7 +1172,7 @@ async function handleRequest(req, res) {
           queueMessage('email', record.toEmail, record.subject, record.body, 'message', record.id)
           const cust = readTable('customers').find(c => (c.email || '').toLowerCase() === record.toEmail.toLowerCase())
           if (cust?.notifySms && cust.phone) {
-            queueMessage('sms', cust.phone, record.subject, `Gatorworx (${record.fromName}): ${record.body}`.slice(0, 300), 'message', record.id)
+            queueMessage('sms', cust.phone, record.subject, `MVP Container (${record.fromName}): ${record.body}`.slice(0, 300), 'message', record.id)
           }
         }
         return send(res, 201, record)
@@ -1452,7 +1452,7 @@ async function handleRequest(req, res) {
           'order', order.id)
         if (body.notifySms === true && order.customerPhone) {
           queueMessage('sms', order.customerPhone, 'Estimate requested',
-            `Gatorworx: got your ${build.name} estimate request (${sku}). Expect a call from our team shortly.`, 'order', order.id)
+            `MVP Container: got your ${build.name} estimate request (${sku}). Expect a call from our team shortly.`, 'order', order.id)
         }
         return send(res, 201, { order, container: record })
       }
@@ -1544,7 +1544,7 @@ ensureSeedUsers()
 ensureSeedCustomBuilds()
 
 server.listen(PORT, () => {
-  console.log(`Gatorworx API (CSV-backed) listening on http://localhost:${PORT}`)
+  console.log(`MVP Container API (CSV-backed) listening on http://localhost:${PORT}`)
   console.log(`Data directory: ${DATA_DIR}`)
   console.log(`Default admin: tgmoore@gmail.com / test1234`)
 })

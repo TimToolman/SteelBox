@@ -1,5 +1,5 @@
 // ============================================================
-// Gatorworx React Hooks
+// MVP Container React Hooks
 // ============================================================
 
 import { useState, useEffect, useCallback, useRef } from 'react'

@@ -26,7 +26,7 @@ jobs:
 
       - name: Install & Build
         env:
-          # Where the deployed frontend should reach the Gatorworx API.
+          # Where the deployed frontend should reach the MVP Container API.
           # Set a repository variable named VITE_API_URL (Settings → Secrets
           # and variables → Actions → Variables) once the API is hosted;
           # left unset, the site falls back to http://localhost:4000.

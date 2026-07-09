@@ -1,5 +1,5 @@
 // ============================================================
-// Gatorworx UI Primitives
+// MVP Container UI Primitives
 // Shared across Marketplace, Admin, and Field surfaces
 // ============================================================
 

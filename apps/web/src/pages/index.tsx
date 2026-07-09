@@ -1,5 +1,5 @@
 // ============================================================
-// Gatorworx Marketplace — Public storefront
+// MVP Container Marketplace — Public storefront
 // Route: / (public, no auth required)
 // Design source: Marketplace.dc.html
 // ============================================================
@@ -870,7 +870,7 @@ function CartModal({ open, cart, user, onClose, onRemove, onUpdateItem, onLongTe
             /* ── Step 0: checkout requires an account ── */
             <div style={{ borderTop: '1px solid var(--div)', paddingTop: '12px' }}>
               <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '4px' }}>Sign in to complete your order</div>
-              <LoginForm allowRegister subtitle="Orders are tied to your Gatorworx account so you can track delivery and message your driver." />
+              <LoginForm allowRegister subtitle="Orders are tied to your MVP Container account so you can track delivery and message your driver." />
             </div>
           ) : !needsTwoFa ? (
             <button onClick={place} disabled={!canPlace || placing} style={{ width: '100%', padding: '14px', borderRadius: 'var(--pill)', background: canPlace ? 'var(--cta)' : 'var(--surf-w)', color: canPlace ? '#fff' : 'var(--ink3)', fontSize: '14px', fontWeight: 700, border: canPlace ? 'none' : '1.5px solid var(--div)', cursor: canPlace ? 'pointer' : 'not-allowed', boxShadow: canPlace ? '0 4px 14px rgba(230,81,0,.3)' : 'none' }}>
@@ -1308,7 +1308,7 @@ function CustomerProfileModal({ open, initialTab, onClose, onMessageDriver, onSa
 
       {/* ── Signed out: account sign-in / registration required ── */}
       {!user && (
-        <LoginForm allowRegister subtitle="Your profile, saved info, and order history are tied to your Gatorworx account." />
+        <LoginForm allowRegister subtitle="Your profile, saved info, and order history are tied to your MVP Container account." />
       )}
       {user && !customer && !error && (
         <div style={{ textAlign: 'center', padding: '20px', color: 'var(--ink3)', fontSize: '13px' }}>Loading your profile…</div>
@@ -1679,7 +1679,7 @@ export default function MarketplacePage() {
           <div style={{ width: '32px', height: '32px', borderRadius: 'var(--r8)', background: 'var(--primary)', display: 'grid', placeItems: 'center' }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><rect x="1" y="6" width="22" height="14" rx="2" /><line x1="6" y1="6" x2="6" y2="20" /><line x1="11" y1="6" x2="11" y2="20" /><line x1="16" y1="6" x2="16" y2="20" /></svg>
           </div>
-          {!isMobile && <span style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.4px' }}><span style={{ color: '#2B7FD4' }}>Gator</span><span style={{ color: 'var(--cta)' }}>worx</span></span>}
+          {!isMobile && <span style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.4px' }}><span style={{ color: '#2B7FD4' }}>MVP&nbsp;</span><span style={{ color: 'var(--cta)' }}>Container</span></span>}
         </a>
         <nav style={{ display: 'flex', gap: '2px', marginLeft: isMobile ? 0 : '12px', overflowX: 'auto', scrollbarWidth: 'none', minWidth: 0 }}>
           {(['buy', 'rent', 'custom', 'bulk'] as Tab[]).map(t => (
