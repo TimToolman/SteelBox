@@ -354,7 +354,7 @@ function ensureSeedUsers() {
   for (const d of readTable('drivers')) {
     if (d.active === false) continue
     const first = (d.name || 'driver').trim().split(/\s+/)[0].toLowerCase()
-    ensure(`${first}@steelbox.co`, { role: 'driver', name: d.name, driverId: d.id, phone: d.cellPhone || '' })
+    ensure(`${first}@mvpcontainer.com`, { role: 'driver', name: d.name, driverId: d.id, phone: d.cellPhone || '' })
   }
   if (changed) writeTable('users', users)
 }
