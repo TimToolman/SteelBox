@@ -10,6 +10,7 @@
     "lint": "eslint src --ext ts,tsx"
   },
   "dependencies": {
+    "@imgly/background-removal": "^1.7.0",
     "heic2any": "^0.0.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

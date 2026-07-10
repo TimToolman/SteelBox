@@ -25,8 +25,10 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 4000
 
 // A container stays in `draft` until its full photo set is uploaded,
 // at which point it auto-promotes to `available` (listable on the marketplace).
-// The standard set is 12 labelled shots (see the field app photo session).
-const PHOTO_TARGET = 12
+// The standard set is 8 labelled shots (see the field app photo session).
+// Slot 8 holds the AI-stitched 3D render ("image 9"); slots 9+ are extras.
+const PHOTO_TARGET = 8
+const RENDER_SLOT = 8
 
 // Promote a draft to available once photo documentation is complete.
 function withPhotoPromotion(c) {
@@ -403,8 +405,9 @@ function queueMessage(channel, to, subject, body, relatedType = '', relatedId = 
 
 // ── Photo storage ─────────────────────────────────────────
 // Real image files live under data/photos and are served at /photos/<file>.
-// containers.csv `photos` keeps one slot per shot (index 0–11 = the 12-shot
-// standard), so field app, marketplace spinner, and admin stay aligned.
+// containers.csv `photos` keeps one slot per shot (index 0–7 = the 8-shot
+// standard, 8 = AI render, 9+ = extras), so field app, marketplace gallery,
+// and admin stay aligned.
 
 const PHOTO_DIR = join(DATA_DIR, 'photos')
 const PHOTO_MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' }
@@ -419,6 +422,93 @@ function savePhoto(sku, slot, dataUrl) {
   const fname = `${sku}-${String(slot + 1).padStart(2, '0')}-${Date.now().toString(36)}.${ext}`
   writeFileSync(join(PHOTO_DIR, fname), buf)
   return { url: `/photos/${fname}` }
+}
+
+// ── AI 3D render ("image 9") ──────────────────────────────
+// Stitches the 8 documentation shots into one photorealistic hero render of
+// the actual container using Google's Gemini image model. Requires
+// GEMINI_API_KEY on the server; the model is overridable via GEMINI_IMAGE_MODEL.
+
+const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
+const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image'
+const SHOT_NAMES = [
+  'front doors closed', 'front doors open', 'right hand side', 'back',
+  'left hand side', 'inside back', 'inside looking out', 'stock number sticker',
+]
+
+async function generateRender(container) {
+  if (!GEMINI_KEY) return { error: 'AI rendering is not configured — set GEMINI_API_KEY on the API server' }
+  const photos = Array.isArray(container.photos) ? container.photos : []
+  const shots = photos.slice(0, PHOTO_TARGET)
+  if (shots.filter(Boolean).length < PHOTO_TARGET) {
+    return { error: `All ${PHOTO_TARGET} documentation shots are required before rendering` }
+  }
+  const parts = []
+  for (let i = 0; i < PHOTO_TARGET; i++) {
+    const file = basename(String(shots[i]).replace(/^\/photos\//, ''))
+    const full = join(PHOTO_DIR, file)
+    if (!existsSync(full)) return { error: `Photo file missing for shot ${i + 1} (${SHOT_NAMES[i]})` }
+    const ext = file.split('.').pop().toLowerCase()
+    parts.push({ text: `Photo ${i + 1} — ${SHOT_NAMES[i]}:` })
+    parts.push({ inline_data: { mime_type: PHOTO_MIME[ext] || 'image/jpeg', data: readFileSync(full).toString('base64') } })
+  }
+  parts.push({
+    text: `These ${PHOTO_TARGET} photos document one real shipping container (${container.size || ''} ${container.color || ''}, SKU ${container.sku}). ` +
+      'Stitch them into ONE photorealistic three-quarter hero render of this exact container — front doors and right side visible, slightly elevated camera, ' +
+      'clean white studio background with a soft ground shadow. Faithfully preserve the true paint color, weathering, dents, rust, decals, markings, and door hardware ' +
+      'visible in the photos. Do not add text, logos, watermarks, or props. Return a single image.',
+  })
+  try {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_KEY },
+        body: JSON.stringify({ contents: [{ parts }] }),
+      },
+    )
+    if (!resp.ok) {
+      const detail = await resp.text().catch(() => '')
+      console.warn(`Gemini render failed (${resp.status}): ${detail.slice(0, 300)}`)
+      return { error: `AI render service error (${resp.status})` }
+    }
+    const data = await resp.json()
+    const outParts = data?.candidates?.[0]?.content?.parts || []
+    const img = outParts.find(p => p.inlineData?.data || p.inline_data?.data)
+    if (!img) return { error: 'AI render returned no image — try again' }
+    const b64 = img.inlineData?.data || img.inline_data.data
+    const mime = img.inlineData?.mimeType || img.inline_data?.mime_type || 'image/png'
+    const ext = mime === 'image/jpeg' ? 'jpg' : mime === 'image/webp' ? 'webp' : 'png'
+    mkdirSync(PHOTO_DIR, { recursive: true })
+    const fname = `${container.sku}-render-${Date.now().toString(36)}.${ext}`
+    writeFileSync(join(PHOTO_DIR, fname), Buffer.from(b64, 'base64'))
+    return { url: `/photos/${fname}` }
+  } catch (e) {
+    console.warn('Gemini render failed:', e.message)
+    return { error: 'Could not reach the AI render service' }
+  }
+}
+
+// Fire-and-forget render once the 8th shot lands (called from the photo
+// upload route). Re-reads the table on completion so concurrent uploads
+// that landed while the render was generating are not clobbered.
+function triggerAutoRender(containerId) {
+  ;(async () => {
+    const containers = readTable('containers')
+    const c = containers.find(x => x.id === containerId)
+    if (!c) return
+    const result = await generateRender(c)
+    if (result.error) { console.warn(`Auto-render skipped for ${c.sku}: ${result.error}`); return }
+    const fresh = readTable('containers')
+    const idx = fresh.findIndex(x => x.id === containerId)
+    if (idx === -1) return
+    const photos = Array.isArray(fresh[idx].photos) ? [...fresh[idx].photos] : []
+    while (photos.length <= RENDER_SLOT) photos.push('')
+    photos[RENDER_SLOT] = result.url
+    fresh[idx] = { ...fresh[idx], photos, has360: true }
+    writeTable('containers', fresh)
+    console.log(`Auto-rendered 3D view for ${fresh[idx].sku}`)
+  })().catch(e => console.warn('Auto-render failed:', e.message))
 }
 
 // ── HTTP plumbing ─────────────────────────────────────────
@@ -722,8 +812,10 @@ async function handleRequest(req, res) {
         return send(res, 200, { lockExpiresAt })
       }
 
-      // Upload one shot into a photo slot (0–11 = the 12-shot standard; 12+ =
-      // extras like proof-of-delivery). Field drivers document, admin fixes.
+      // Upload one shot into a photo slot (0–7 = the 8-shot standard; 8 = the
+      // AI render; 9+ = extras like proof-of-delivery). Field drivers
+      // document, admin fixes. When the 8th shot lands, the AI render is
+      // generated automatically in the background.
       if (seg.length === 3 && seg[2] === 'photos' && method === 'POST') {
         if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Admin or driver access required')
         if (idx === -1) return send(res, 404, { message: 'Container not found' })
@@ -743,6 +835,25 @@ async function handleRequest(req, res) {
           inspectedAt: new Date().toISOString(),
         })
         writeTable('containers', containers)
+        // Full 8-shot set just completed and no render exists yet → stitch one.
+        if (slot < PHOTO_TARGET && !photos[RENDER_SLOT] && GEMINI_KEY
+            && photos.slice(0, PHOTO_TARGET).filter(Boolean).length === PHOTO_TARGET) {
+          triggerAutoRender(containers[idx].id)
+        }
+        return send(res, 200, containers[idx])
+      }
+
+      // Generate (or regenerate) the AI-stitched 3D render into slot 8.
+      if (seg.length === 3 && seg[2] === 'render' && method === 'POST') {
+        if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Admin or driver access required')
+        if (idx === -1) return send(res, 404, { message: 'Container not found' })
+        const result = await generateRender(containers[idx])
+        if (result.error) return send(res, 422, { message: result.error })
+        const photos = Array.isArray(containers[idx].photos) ? [...containers[idx].photos] : []
+        while (photos.length <= RENDER_SLOT) photos.push('')
+        photos[RENDER_SLOT] = result.url
+        containers[idx] = { ...containers[idx], photos, has360: true }
+        writeTable('containers', containers)
         return send(res, 200, containers[idx])
       }
 
@@ -759,6 +870,7 @@ async function handleRequest(req, res) {
           ...containers[idx],
           photos,
           photoCount: photos.slice(0, PHOTO_TARGET).filter(Boolean).length,
+          ...(slot === RENDER_SLOT ? { has360: false } : {}),
         }
         writeTable('containers', containers)
         return send(res, 200, containers[idx])

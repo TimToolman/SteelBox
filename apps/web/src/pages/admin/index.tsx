@@ -5,10 +5,10 @@
 // ============================================================
 
 import React, { useState, useCallback, useEffect } from 'react'
-import { GradeBadge, StatusBadge, Button, Modal, Snackbar, BuildClipart } from '../../components/ui'
+import { GradeBadge, StatusBadge, Button, Modal, Snackbar, BuildClipart, ProgressRing } from '../../components/ui'
 import { ShowPasswordButton } from '../../lib/auth'
 import { useContainers, useOrders, useDrivers, useSnackbar, useAuth, useFavicon, useIsMobile } from '../../hooks'
-import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, customBuilds as customBuildsApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, SHOT_LABELS, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role, type CustomBuild, CUSTOM_STAGES, SIZE_LABEL } from '../../lib/api'
+import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, customBuilds as customBuildsApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, cutoutContainer, SHOT_LABELS, RENDER_SLOT, RENDER_LABEL, EXTRA_SLOT_START, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role, type CustomBuild, CUSTOM_STAGES, SIZE_LABEL } from '../../lib/api'
 
 // Every size/type code, for the container add/edit selects.
 const SIZE_SELECT_OPTIONS = Object.entries(SIZE_LABEL) as [ContainerSize, string][]
@@ -530,7 +530,7 @@ function EditContainerModal({ container, onClose, onSaved }: {
 }
 
 // ── Photo Review Modal ─────────────────────────────────────
-// Admin view of a container's 12-shot documentation — the same slot layout
+// Admin view of a container's 8-shot documentation — the same slot layout
 // the field app captures and the marketplace spinner plays. Admin can upload,
 // replace, or remove any shot to fix a bad set.
 
@@ -540,11 +540,31 @@ function PhotosModal({ container, onClose, onChanged }: {
   onChanged: (updated: Container, msg: string) => void
 }) {
   const [busySlot, setBusySlot] = useState<number | null>(null)
+  const [slotProgress, setSlotProgress] = useState<{ pct: number; stage: string } | null>(null) // crop/upload progress
+  const [batch, setBatch] = useState<{ done: number; total: number } | null>(null) // multi-file upload progress
 
   if (!container) return null
   const photos = container.photos ?? []
-  const realCount = photos.slice(0, 12).filter(Boolean).length
-  const extras = photos.slice(12).map((p, i) => ({ slot: i + 12, url: p })).filter(x => x.url)
+  const realCount = photos.slice(0, SHOT_LABELS.length).filter(Boolean).length
+  const renderUrl = photos[RENDER_SLOT]
+  // Image 9's interactive 3D wrap is built from shots 1–7 (the stock-number
+  // shot, 8, is not part of it). The wrapped faces are 1 front / 3 right /
+  // 4 back / 5 left — once those exist the 3D view is live on the marketplace.
+  const texReady = [0, 2, 3, 4].every(i => !!photos[i])
+  const updating3d = busySlot != null && busySlot < SHOT_LABELS.length - 1 // shots 1–7 feed the 3D view
+  const extras = photos.slice(EXTRA_SLOT_START).map((p, i) => ({ slot: i + EXTRA_SLOT_START, url: p })).filter(x => x.url)
+
+  const generateRender = async () => {
+    setBusySlot(RENDER_SLOT)
+    try {
+      const updated = await containersApi.render(container.id)
+      onChanged(updated, `3D render ${renderUrl ? 'regenerated' : 'generated'} for ${container.sku}`)
+    } catch (e) {
+      onChanged(container, `Render failed — ${e instanceof Error ? e.message : 'try again'}`)
+    } finally {
+      setBusySlot(null)
+    }
+  }
 
   const replaceSlot = (slot: number, label: string) => {
     const input = document.createElement('input')
@@ -554,15 +574,66 @@ function PhotosModal({ container, onClose, onChanged }: {
       const file = input.files?.[0]
       if (!file) return
       setBusySlot(slot)
+      setSlotProgress({ pct: 2, stage: 'Reading photo' })
       try {
-        const dataUrl = await fileToDataUrl(file)
+        // Documentation slots get the background cut away so only the
+        // container shows in the gallery and 3D wrap.
+        const dataUrl = await cutoutContainer(
+          await fileToDataUrl(file),
+          (pct, stage) => setSlotProgress({ pct, stage }),
+        )
+        setSlotProgress({ pct: 95, stage: 'Uploading' })
         const updated = await containersApi.uploadPhoto(container.id, { slot, label, dataUrl })
         onChanged(updated, `${label} photo updated for ${container.sku}`)
       } catch (e) {
         onChanged(container, `Upload failed — ${e instanceof Error ? e.message : 'try again'}`)
       } finally {
         setBusySlot(null)
+        setSlotProgress(null)
       }
+    }
+    input.click()
+  }
+
+  // Select several photos at once — they fill the empty documentation slots
+  // in order (1→8); if the set is already complete, they replace 1→8 in order.
+  // Files are processed sequentially (each is cropped, then uploaded).
+  const bulkUpload = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*,.heic,.heif'
+    input.multiple = true
+    input.onchange = async () => {
+      const files = Array.from(input.files ?? [])
+      if (!files.length) return
+      const empty = SHOT_LABELS.map((_, i) => i).filter(i => !photos[i])
+      const slots = empty.length ? empty : SHOT_LABELS.map((_, i) => i)
+      const n = Math.min(files.length, slots.length)
+      let latest = container
+      let uploaded = 0
+      for (let k = 0; k < n; k++) {
+        const slot = slots[k]
+        setBusySlot(slot)
+        setBatch({ done: k, total: n })
+        setSlotProgress({ pct: 2, stage: 'Reading photo' })
+        try {
+          const dataUrl = await cutoutContainer(
+            await fileToDataUrl(files[k]),
+            (pct, stage) => setSlotProgress({ pct, stage }),
+          )
+          setSlotProgress({ pct: 95, stage: 'Uploading' })
+          latest = await containersApi.uploadPhoto(container.id, { slot, label: SHOT_LABELS[slot], dataUrl })
+          uploaded++
+          onChanged(latest, `${SHOT_LABELS[slot]} photo updated (${uploaded}/${n})`)
+        } catch (e) {
+          onChanged(latest, `${SHOT_LABELS[slot]} upload failed — ${e instanceof Error ? e.message : 'try again'}`)
+        }
+      }
+      setBusySlot(null)
+      setSlotProgress(null)
+      setBatch(null)
+      const skipped = files.length - n
+      onChanged(latest, `${uploaded} photo${uploaded === 1 ? '' : 's'} uploaded for ${container.sku}${skipped > 0 ? ` (${skipped} extra file${skipped === 1 ? '' : 's'} ignored)` : ''}`)
     }
     input.click()
   }
@@ -585,18 +656,23 @@ function PhotosModal({ container, onClose, onChanged }: {
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '2px' }}>
         <h2 style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'var(--mono)' }}>{container.sku}</h2>
         <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--ink3)' }}>{container.stockNumber}</span>
-        <span style={{ marginLeft: 'auto', fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: 'var(--pill)', background: realCount >= 12 ? 'var(--green-cont)' : 'var(--amb-c,#FEF3C7)', color: realCount >= 12 ? 'var(--green)' : 'var(--amber)' }}>
-          {realCount}/12 photos
+        <button onClick={bulkUpload} disabled={busySlot != null}
+          style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '5px 12px', borderRadius: 'var(--pill)', border: 'none', background: busySlot != null ? 'var(--div)' : 'var(--primary)', color: busySlot != null ? 'var(--ink3)' : '#fff', fontSize: '11px', fontWeight: 700, cursor: busySlot != null ? 'wait' : 'pointer' }}>
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13V3" /><polyline points="6,7 10,3 14,7" /><path d="M3 13v3a1 1 0 001 1h12a1 1 0 001-1v-3" /></svg>
+          {batch ? `Uploading ${batch.done + 1}/${batch.total}…` : 'Upload Multiple'}
+        </button>
+        <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: 'var(--pill)', background: realCount >= SHOT_LABELS.length ? 'var(--green-cont)' : 'var(--amb-c,#FEF3C7)', color: realCount >= SHOT_LABELS.length ? 'var(--green)' : 'var(--amber)' }}>
+          {realCount}/{SHOT_LABELS.length} photos
         </span>
       </div>
       <p style={{ fontSize: '12px', color: 'var(--ink3)', marginBottom: '16px' }}>
-        Slots match the field app's 12-shot standard and drive the marketplace 360° spinner. Slots 6 & 12 are the stock-number (SKU sticker) shots.
+        Slots match the field app's 8-shot standard and drive the marketplace gallery. Slot 8 is the stock-number (SKU sticker) shot; the AI-stitched 3D render below is image 9.
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '10px' }}>
         {SHOT_LABELS.map((label, i) => {
           const p = photos[i]
           const busy = busySlot === i
-          const isSkuShot = i === 5 || i === 11
+          const isSkuShot = i === SHOT_LABELS.length - 1
           return (
             <div key={i} style={{ border: `1.5px solid ${p ? 'var(--green)' : 'var(--div)'}`, borderRadius: 'var(--r12)', overflow: 'hidden', background: 'var(--surf1)' }}>
               <div style={{ aspectRatio: '4/3', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#EEF2F8', position: 'relative' }}>
@@ -604,13 +680,19 @@ function PhotosModal({ container, onClose, onChanged }: {
                   ? <a href={photoUrl(p)} target="_blank" rel="noreferrer" title="Open full size"><img src={photoUrl(p)} alt={label} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} /></a>
                   : <span style={{ fontSize: '20px', color: 'var(--ink3)' }}>{i + 1}</span>}
                 {isSkuShot && <span style={{ position: 'absolute', top: '4px', left: '4px', background: 'var(--primary)', color: '#fff', fontSize: '8px', fontWeight: 700, padding: '2px 6px', borderRadius: 'var(--r4)', letterSpacing: '0.4px' }}>STOCK #</span>}
+                {busy && (
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,.82)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', zIndex: 2 }}>
+                    <ProgressRing pct={slotProgress?.pct ?? 0} size={38} />
+                    <span style={{ fontSize: '9px', fontWeight: 700, color: 'var(--primary)' }}>{slotProgress?.stage ?? 'Working'}…</span>
+                  </div>
+                )}
               </div>
               <div style={{ padding: '7px 8px' }}>
                 <div style={{ fontSize: '10px', fontWeight: 700, marginBottom: '6px', lineHeight: 1.3 }}>{i + 1}. {label}</div>
                 <div style={{ display: 'flex', gap: '4px' }}>
                   <button onClick={() => replaceSlot(i, label)} disabled={busy}
                     style={{ flex: 1, padding: '4px 0', borderRadius: 'var(--r4)', border: 'none', background: 'var(--primary)', color: '#fff', fontSize: '10px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer' }}>
-                    {busy ? '…' : p ? 'Replace' : 'Upload'}
+                    {busy ? `${Math.round(slotProgress?.pct ?? 0)}%` : p ? 'Replace' : 'Upload'}
                   </button>
                   {p && (
                     <button onClick={() => removeSlot(i, label)} disabled={busy}
@@ -623,6 +705,47 @@ function PhotosModal({ container, onClose, onChanged }: {
             </div>
           )
         })}
+      </div>
+      {/* Image 9 — the marketplace 3D view: photo-wrapped box (live), or the AI render when generated */}
+      <div style={{ marginTop: '14px', border: `1.5px solid ${renderUrl || texReady ? 'var(--green)' : 'var(--div)'}`, borderRadius: 'var(--r12)', overflow: 'hidden', background: 'var(--surf1)', display: 'flex', gap: '12px', alignItems: 'stretch' }}>
+        <div style={{ width: '180px', minHeight: '110px', background: texReady && !renderUrl ? 'var(--green-cont)' : '#EEF2F8', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', position: 'relative', flexShrink: 0 }}>
+          {renderUrl
+            ? <a href={photoUrl(renderUrl)} target="_blank" rel="noreferrer" title="Open full size"><img src={photoUrl(renderUrl)} alt={RENDER_LABEL} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} /></a>
+            : texReady
+              ? <>
+                  <svg width="30" height="30" viewBox="0 0 20 20" fill="none" stroke="var(--green)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2 3 6v8l7 4 7-4V6l-7-4Z" /><path d="M3 6l7 4 7-4" /><path d="M10 10v8" /></svg>
+                  <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--green)' }}>3D view live</span>
+                </>
+              : <span style={{ fontSize: '20px', color: 'var(--ink3)' }}>9</span>}
+          <span style={{ position: 'absolute', top: '4px', left: '4px', background: renderUrl ? 'var(--primary)' : texReady ? 'var(--green)' : 'var(--ink3)', color: '#fff', fontSize: '8px', fontWeight: 700, padding: '2px 6px', borderRadius: 'var(--r4)', letterSpacing: '0.4px' }}>{renderUrl ? 'AI 3D' : '3D VIEW'}</span>
+          {/* Uploading any of shots 1–7 rebuilds the 3D wrap — mirror the progress here */}
+          {updating3d && (
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', zIndex: 2 }}>
+              <ProgressRing pct={slotProgress?.pct ?? 0} size={38} />
+              <span style={{ fontSize: '9px', fontWeight: 700, color: 'var(--primary)' }}>Updating 3D view…</span>
+            </div>
+          )}
+        </div>
+        <div style={{ padding: '10px 12px 10px 0', display: 'flex', flexDirection: 'column', gap: '4px', justifyContent: 'center' }}>
+          <div style={{ fontSize: '11px', fontWeight: 700 }}>9. {RENDER_LABEL}</div>
+          <div style={{ fontSize: '11px', color: 'var(--ink3)', lineHeight: 1.5 }}>
+            The marketplace 3D view wraps shots 1–7 around an interactive model (the stock-number shot isn't used) — it updates the moment those photos change.
+            Optionally, an AI-stitched photorealistic render can replace it{renderUrl ? '' : ' — generate one below'}.
+          </div>
+          <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+            <button onClick={generateRender} disabled={busySlot === RENDER_SLOT || realCount < SHOT_LABELS.length}
+              title={realCount < SHOT_LABELS.length ? `All ${SHOT_LABELS.length} shots are required first` : undefined}
+              style={{ padding: '5px 14px', borderRadius: 'var(--r4)', border: 'none', background: realCount < SHOT_LABELS.length ? 'var(--div)' : 'var(--primary)', color: realCount < SHOT_LABELS.length ? 'var(--ink3)' : '#fff', fontSize: '11px', fontWeight: 700, cursor: busySlot === RENDER_SLOT ? 'wait' : realCount < SHOT_LABELS.length ? 'not-allowed' : 'pointer' }}>
+              {busySlot === RENDER_SLOT ? 'Generating…' : renderUrl ? 'Regenerate 3D Render' : 'Generate 3D Render'}
+            </button>
+            {renderUrl && (
+              <button onClick={() => removeSlot(RENDER_SLOT, RENDER_LABEL)} disabled={busySlot === RENDER_SLOT}
+                style={{ padding: '5px 10px', borderRadius: 'var(--r4)', border: '1.5px solid var(--cta-cont)', background: 'transparent', color: 'var(--cta)', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>
+                Remove
+              </button>
+            )}
+          </div>
+        </div>
       </div>
       {extras.length > 0 && (
         <div style={{ marginTop: '14px' }}>
@@ -2155,7 +2278,7 @@ export default function AdminPage() {
                   },
                   {
                     key: 'photos', title: 'Hidden — Awaiting Photos', color: 'var(--amber)',
-                    desc: 'Drafts — hidden from shoppers until the 12-shot photo set is complete, then they list automatically',
+                    desc: 'Drafts — hidden from shoppers until the 8-shot photo set is complete, then they list automatically',
                     items: containerList.filter(c => c.status === 'draft'),
                   },
                   {
@@ -2187,11 +2310,11 @@ export default function AdminPage() {
                     <Td>
                       {/* Compact: camera icon + count, click to review/fix */}
                       <div onClick={() => setPhotosFor(c)} title="Review & fix photos" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke={c.photoCount >= 12 ? 'var(--green)' : c.photoCount > 0 ? 'var(--amber)' : 'var(--ink3)'} strokeWidth="1.6" strokeLinecap="round"><path d="M2 7h2.5L6 5h8l1.5 2H18a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V8a1 1 0 011-1z" /><circle cx="10" cy="11" r="3" /></svg>
-                        <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, color: c.photoCount >= 12 ? 'var(--green)' : c.photoCount > 0 ? 'var(--amber)' : 'var(--ink3)' }}>{c.photoCount}/12</span>
+                        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke={c.photoCount >= SHOT_LABELS.length ? 'var(--green)' : c.photoCount > 0 ? 'var(--amber)' : 'var(--ink3)'} strokeWidth="1.6" strokeLinecap="round"><path d="M2 7h2.5L6 5h8l1.5 2H18a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V8a1 1 0 011-1z" /><circle cx="10" cy="11" r="3" /></svg>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, color: c.photoCount >= SHOT_LABELS.length ? 'var(--green)' : c.photoCount > 0 ? 'var(--amber)' : 'var(--ink3)' }}>{c.photoCount}/{SHOT_LABELS.length}</span>
                       </div>
                       {/* A live listing without its full photo set looks bad to shoppers — flag it */}
-                      {live && c.photoCount < 12 && (
+                      {live && c.photoCount < SHOT_LABELS.length && (
                         <div style={{ fontSize: '10px', color: 'var(--amber)', fontWeight: 700, marginTop: '2px', whiteSpace: 'nowrap' }}>⚠ live without photos</div>
                       )}
                       {/* Rent-capable but no rate → can't render on the Rent tab */}

@@ -8,7 +8,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { GradeBadge, StatusBadge, Button, Modal, Snackbar, Input, Select, BuildClipart } from '../components/ui'
 import { useContainers, useSnackbar, useAuth, useIsMobile } from '../hooks'
 import { LoginForm } from '../lib/auth'
-import { auth as authApi, containers, quotes, orders, isZipCovered, estimateDelivery, drivers as driversApi, messages as messagesApi, customers as customersApi, customBuilds as customBuildsApi, depots as depotsApi, photoUrl, SHOT_LABELS, CUSTOM_STAGES, type Container, type ContainerGrade, type ContainerSize, type Driver, type Customer, type Order, type Message, type AuthUser, type CustomBuild, type ContainerCondition, type Depot, SIZE_LABEL } from '../lib/api'
+import { auth as authApi, containers, quotes, orders, isZipCovered, estimateDelivery, drivers as driversApi, messages as messagesApi, customers as customersApi, customBuilds as customBuildsApi, depots as depotsApi, photoUrl, SHOT_LABELS, RENDER_SLOT, RENDER_LABEL, CUSTOM_STAGES, type Container, type ContainerGrade, type ContainerSize, type Driver, type Customer, type Order, type Message, type AuthUser, type CustomBuild, type ContainerCondition, type Depot, SIZE_LABEL } from '../lib/api'
 
 // ── Types ─────────────────────────────────────────────────
 
@@ -278,24 +278,31 @@ function ContainerSVGIcon({ size }: { size: ContainerSize }) {
   )
 }
 
-// ── 360° / 3D viewer ───────────────────────────────────────
-// The 12 field photos are the frames of a 360° spin; missing frames fall
-// back to a rotatable 3D container model (drag to rotate around it).
+// ── Photo gallery + 3D render viewer ───────────────────────
+// The 8 field photos plus the AI-stitched 3D render ("image 9") make up the
+// gallery; missing slots fall back to a 3D container model placeholder.
 // SHOT_LABELS comes from lib/api so slots match the field app + admin exactly.
 
-function Container3D({ size, grade, rotY, rotX }: { size: ContainerSize; grade: ContainerGrade; rotY: number; rotX: number }) {
+// Optional per-face photo textures — the real field shots wrapped onto the
+// box faces make an interactive 3D view of the actual container (no AI key).
+interface FaceTextures { front?: string; right?: string; back?: string; left?: string }
+
+function Container3D({ size, grade, rotY, rotX, tex }: { size: ContainerSize; grade: ContainerGrade; rotY: number; rotX: number; tex?: FaceTextures }) {
   const is40 = size.startsWith('40'), is10 = size.startsWith('10')
   const W = is40 ? 300 : is10 ? 110 : 180, H = 118, D = 118
   const accent = GRADE_META[grade].color
   const steel = 'repeating-linear-gradient(90deg,#4a6ea5 0,#4a6ea5 5px,#3d5c8c 5px,#3d5c8c 11px)'
   const corr = 'repeating-linear-gradient(0deg,#5578ad 0,#5578ad 5px,#48699a 5px,#48699a 11px)'
   const faceBase: React.CSSProperties = { position: 'absolute', left: '50%', top: '50%', boxSizing: 'border-box', border: '1px solid rgba(0,0,0,.3)' }
+  const skin = (fallback: string, photo?: string): React.CSSProperties =>
+    // Cutout photos have transparent backgrounds — back them with a steel tone.
+    photo ? { backgroundColor: '#31517e', backgroundImage: `url(${photo})`, backgroundSize: 'cover', backgroundPosition: 'center' } : { background: fallback }
   return (
     <div style={{ perspective: '1200px', width: '100%', height: '100%', display: 'grid', placeItems: 'center' }}>
       <div style={{ position: 'relative', width: `${W}px`, height: `${H}px`, transformStyle: 'preserve-3d', transform: `rotateX(${rotX}deg) rotateY(${rotY}deg)` }}>
-        {/* front — doors */}
-        <div style={{ ...faceBase, width: W, height: H, marginLeft: -W / 2, marginTop: -H / 2, transform: `translateZ(${D / 2}px)`, background: steel, display: 'flex' }}>
-          {[0, 1].map(k => (
+        {/* front — doors (painted door detail only when no photo texture) */}
+        <div style={{ ...faceBase, width: W, height: H, marginLeft: -W / 2, marginTop: -H / 2, transform: `translateZ(${D / 2}px)`, ...skin(steel, tex?.front), display: 'flex' }}>
+          {!tex?.front && [0, 1].map(k => (
             <div key={k} style={{ flex: 1, borderRight: k === 0 ? '2px solid rgba(0,0,0,.35)' : 'none', position: 'relative' }}>
               <div style={{ position: 'absolute', top: '12%', bottom: '12%', left: k === 0 ? 'auto' : '10%', right: k === 0 ? '10%' : 'auto', width: '4px', background: 'rgba(0,0,0,.35)', borderRadius: '2px' }} />
             </div>
@@ -303,11 +310,11 @@ function Container3D({ size, grade, rotY, rotX }: { size: ContainerSize; grade: 
           <div style={{ position: 'absolute', top: '8px', left: '8px', background: '#fff', color: accent, fontFamily: 'var(--mono)', fontSize: is10 ? '7px' : '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '2px' }}>{grade}</div>
         </div>
         {/* back */}
-        <div style={{ ...faceBase, width: W, height: H, marginLeft: -W / 2, marginTop: -H / 2, transform: `rotateY(180deg) translateZ(${D / 2}px)`, background: steel }} />
+        <div style={{ ...faceBase, width: W, height: H, marginLeft: -W / 2, marginTop: -H / 2, transform: `rotateY(180deg) translateZ(${D / 2}px)`, ...skin(steel, tex?.back) }} />
         {/* right */}
-        <div style={{ ...faceBase, width: D, height: H, marginLeft: -D / 2, marginTop: -H / 2, transform: `rotateY(90deg) translateZ(${W / 2}px)`, background: corr }} />
+        <div style={{ ...faceBase, width: D, height: H, marginLeft: -D / 2, marginTop: -H / 2, transform: `rotateY(90deg) translateZ(${W / 2}px)`, ...skin(corr, tex?.right) }} />
         {/* left */}
-        <div style={{ ...faceBase, width: D, height: H, marginLeft: -D / 2, marginTop: -H / 2, transform: `rotateY(-90deg) translateZ(${W / 2}px)`, background: corr }} />
+        <div style={{ ...faceBase, width: D, height: H, marginLeft: -D / 2, marginTop: -H / 2, transform: `rotateY(-90deg) translateZ(${W / 2}px)`, ...skin(corr, tex?.left) }} />
         {/* top */}
         <div style={{ ...faceBase, width: W, height: D, marginLeft: -W / 2, marginTop: -D / 2, transform: `rotateX(90deg) translateZ(${H / 2}px)`, background: '#2f466a', borderTop: `3px solid ${accent}` }} />
         {/* bottom */}
@@ -317,42 +324,105 @@ function Container3D({ size, grade, rotY, rotX }: { size: ContainerSize; grade: 
   )
 }
 
-function Spin360Gallery({ container }: { container: Container }) {
-  const [rotY, setRotY] = useState(-28)
-  const [rotX, setRotX] = useState(-12)
-  const drag = useRef<{ x: number; y: number; ry: number; rx: number } | null>(null)
+function PhotoGallery({ container }: { container: Container }) {
   const photos = container.photos || []
-  const frame = ((Math.round(rotY / 30) % 12) + 12) % 12
+  // Gallery = the 8 labelled shots (slots 0–7) + the AI render (slot 8) as image 9.
+  const items = [
+    ...SHOT_LABELS.map((label, i) => ({ label, url: photos[i], isRender: false })),
+    { label: RENDER_LABEL, url: photos[RENDER_SLOT], isRender: true },
+  ]
+  const [idx, setIdx] = useState(0)
+  const item = items[idx]
+
+  // Texture-map the real field shots onto the 3D box: the long W-wide faces
+  // carry the side photos, the square end faces carry the doors + back shots.
+  // (The stock-number shot, slot 7, is not part of the 3D view.)
+  const tex: FaceTextures = {
+    front: photos[2] ? photoUrl(photos[2]) : undefined, // right hand side → long face
+    back: photos[4] ? photoUrl(photos[4]) : undefined,  // left hand side → far long face
+    right: photos[0] ? photoUrl(photos[0]) : undefined, // front doors closed → end face
+    left: photos[3] ? photoUrl(photos[3]) : undefined,  // back → other end face
+  }
+  const texReady = !!(tex.front && tex.back && tex.right && tex.left)
+
+  // While a slot's photo is pending (and for the 3D view), the box stands in —
+  // each square snaps it to that shot's viewing angle, and it stays drag-rotatable.
+  const SHOT_ANGLES = [-70, -50, -12, 70, 192, 110, -110, -85, -30]
+  const [rotY, setRotY] = useState(SHOT_ANGLES[0])
+  const [rotX, setRotX] = useState(-12)
+  const [imgAspect, setImgAspect] = useState<number | null>(null)
+  const drag = useRef<{ x: number; y: number; ry: number; rx: number } | null>(null)
+  const goTo = (i: number) => { setIdx(i); setRotY(SHOT_ANGLES[i] ?? -18); setRotX(-12); setImgAspect(null); drag.current = null }
+  useEffect(() => { goTo(0) }, [container.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const step = (dir: -1 | 1) => goTo((idx + dir + items.length) % items.length)
+
   const pt = (e: React.MouseEvent | React.TouchEvent) => 'touches' in e ? e.touches[0] : e as React.MouseEvent
   const onDown = (e: React.MouseEvent | React.TouchEvent) => { const p = pt(e); drag.current = { x: p.clientX, y: p.clientY, ry: rotY, rx: rotX } }
   const onMove = (e: React.MouseEvent | React.TouchEvent) => { if (!drag.current) return; const p = pt(e); setRotY(drag.current.ry + (p.clientX - drag.current.x) * 0.7); setRotX(Math.max(-45, Math.min(15, drag.current.rx - (p.clientY - drag.current.y) * 0.3))) }
   const onUp = () => { drag.current = null }
+  const dragHandlers = item.url ? {} : {
+    onMouseDown: onDown, onMouseMove: onMove, onMouseUp: onUp, onMouseLeave: onUp,
+    onTouchStart: onDown, onTouchMove: onMove, onTouchEnd: onUp,
+  }
+
+  // Hug the arrows to the displayed image's edge (objectFit: contain leaves
+  // side gutters on portrait shots) — 8px gap outside the image, clamped to
+  // the stage edge for full-width images and the 3D placeholder.
+  const halfW = item.url && imgAspect ? Math.round((230 * imgAspect) / 2) : null
+  const arrowOffset = halfW != null ? `max(8px, calc(50% - ${halfW + 46}px))` : '10px'
+  const arrowStyle = (side: 'left' | 'right'): React.CSSProperties => ({
+    position: 'absolute', top: '50%', [side]: arrowOffset, transform: 'translateY(-50%)', zIndex: 4,
+    width: '38px', height: '38px', borderRadius: '50%', border: 'none', cursor: 'pointer',
+    background: 'rgba(255,255,255,.92)', boxShadow: '0 2px 10px rgba(0,0,0,.35)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  })
   return (
     <div style={{ background: '#0B1629' }}>
-      <div
-        onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
-        onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
-        style={{ position: 'relative', height: '230px', overflow: 'hidden', background: 'radial-gradient(circle at 50% 38%,#1a2b47,#0a1526)', cursor: 'grab', touchAction: 'none', userSelect: 'none' }}
-      >
+      <div {...dragHandlers} style={{ position: 'relative', height: '230px', overflow: 'hidden', background: 'radial-gradient(circle at 50% 38%,#1a2b47,#0a1526)', userSelect: 'none', cursor: item.url ? 'default' : 'grab', touchAction: item.url ? 'auto' : 'none' }}>
         <div style={{ position: 'absolute', inset: 0 }}>
-          {photos[frame]
-            ? <img src={photoUrl(photos[frame])} alt={SHOT_LABELS[frame]} draggable={false} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-            : <Container3D size={container.size} grade={container.grade} rotY={rotY} rotX={rotX} />}
+          {item.url
+            ? <img src={photoUrl(item.url)} alt={item.label} draggable={false}
+                onLoad={e => { const el = e.currentTarget; if (el.naturalHeight) setImgAspect(el.naturalWidth / el.naturalHeight) }}
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            : <Container3D size={container.size} grade={container.grade} rotY={rotY} rotX={rotX} tex={tex} />}
         </div>
-        <div style={{ position: 'absolute', top: '10px', left: '10px', display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(0,87,184,.9)', color: '#fff', borderRadius: 'var(--r4)', padding: '4px 10px', fontSize: '10px', fontWeight: 700 }}>
-          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round"><path d="M3 10a7 7 0 0 1 12-5" /><path d="M17 10a7 7 0 0 1-12 5" /><polyline points="15,2 15,5 12,5" /><polyline points="5,18 5,15 8,15" /></svg>
-          360° · drag to rotate
+        {/* Previous / next — step through the 9 images */}
+        <button aria-label="Previous photo" onClick={() => step(-1)} style={arrowStyle('left')}>
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="12.5,4 6.5,10 12.5,16" /></svg>
+        </button>
+        <button aria-label="Next photo" onClick={() => step(1)} style={arrowStyle('right')}>
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="7.5,4 13.5,10 7.5,16" /></svg>
+        </button>
+        {item.isRender && (
+          <div style={{ position: 'absolute', top: '10px', left: '10px', display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(0,87,184,.9)', color: '#fff', borderRadius: 'var(--r4)', padding: '4px 10px', fontSize: '10px', fontWeight: 700 }}>
+            <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2 3 6v8l7 4 7-4V6l-7-4Z" /><path d="M3 6l7 4 7-4" /><path d="M10 10v8" /></svg>
+            {item.url ? 'AI 3D render · stitched from the 8 shots' : '3D view · your photos · drag to rotate'}
+          </div>
+        )}
+        {!item.url && !item.isRender && (
+          <div style={{ position: 'absolute', top: '10px', left: '10px', display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(0,0,0,.5)', color: '#fff', borderRadius: 'var(--r4)', padding: '4px 10px', fontSize: '10px', fontWeight: 700 }}>
+            <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round"><path d="M3 10a7 7 0 0 1 12-5" /><path d="M17 10a7 7 0 0 1-12 5" /><polyline points="15,2 15,5 12,5" /><polyline points="5,18 5,15 8,15" /></svg>
+            Drag to rotate
+          </div>
+        )}
+        <div style={{ position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,.55)', borderRadius: 'var(--pill)', padding: '3px 10px', fontFamily: 'var(--mono)', fontSize: '10px', color: '#fff', whiteSpace: 'nowrap' }}>
+          {idx + 1} / {items.length} · {item.label}{!item.url && !item.isRender ? ' · photo pending' : ''}
         </div>
-        <div style={{ position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,.55)', borderRadius: 'var(--pill)', padding: '3px 10px', fontFamily: 'var(--mono)', fontSize: '10px', color: '#fff', whiteSpace: 'nowrap' }}>{frame + 1} / 12 · {SHOT_LABELS[frame]}{photos.filter(Boolean).length ? ` · ${photos.slice(0, 12).filter(Boolean).length} field photos` : ''}</div>
       </div>
-      {/* 12 photo frames — slot i is always the same labelled shot as the field app */}
+      {/* 9 thumbnails — slot i is always the same labelled shot as the field app */}
       <div style={{ display: 'flex', gap: '3px', padding: '6px', background: '#060F1E', overflowX: 'auto' }}>
-        {SHOT_LABELS.map((label, i) => (
-          <button key={i} onClick={() => { setRotY(i * 30); setRotX(-12) }} title={label}
-            style={{ width: '74px', height: '52px', flexShrink: 0, borderRadius: 'var(--r4)', overflow: 'hidden', cursor: 'pointer', border: `2px solid ${i === frame ? 'var(--cta)' : 'transparent'}`, background: '#162030', color: 'rgba(255,255,255,.65)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px', padding: '3px' }}>
-            {photos[i]
-              ? <img src={photoUrl(photos[i])} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : <><span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, color: '#fff' }}>{i + 1}</span><span style={{ fontSize: '7px', lineHeight: 1.1, textAlign: 'center' }}>{label}</span></>}
+        {items.map((it, i) => (
+          <button key={i} onClick={() => goTo(i)} title={it.label}
+            style={{ width: '74px', height: '52px', flexShrink: 0, borderRadius: 'var(--r4)', overflow: 'hidden', cursor: 'pointer', border: `2px solid ${i === idx ? 'var(--cta)' : 'transparent'}`, background: '#162030', color: 'rgba(255,255,255,.65)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px', padding: '3px', position: 'relative' }}>
+            {it.url
+              ? <img src={photoUrl(it.url)} alt={it.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : it.isRender && texReady
+                ? <>
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#4ADE80" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2 3 6v8l7 4 7-4V6l-7-4Z" /><path d="M3 6l7 4 7-4" /><path d="M10 10v8" /></svg>
+                    <span style={{ fontSize: '7px', lineHeight: 1.1, textAlign: 'center', color: '#4ADE80', fontWeight: 700 }}>3D view</span>
+                  </>
+                : <><span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, color: '#fff' }}>{i + 1}</span><span style={{ fontSize: '7px', lineHeight: 1.1, textAlign: 'center' }}>{it.isRender ? '3D render' : it.label}</span></>}
+            {it.isRender && it.url && <span style={{ position: 'absolute', bottom: '2px', right: '2px', background: 'rgba(0,87,184,.95)', color: '#fff', fontSize: '7px', fontWeight: 700, padding: '1px 4px', borderRadius: '2px' }}>3D</span>}
           </button>
         ))}
       </div>
@@ -406,7 +476,7 @@ function DetailModal({ container, onClose, onAddToCart, mode, inCart, onNavigate
   if (!container) return null
   const hasPrev = index > 0
   const hasNext = index >= 0 && index < total - 1
-  const { sku, grade, size, buyPrice, rentMonthly, photos, photoCount, has360 } = container
+  const { sku, grade, size, buyPrice, rentMonthly } = container
   const gradeMeta = GRADE_META[grade]
   const isLocked = container.status === 'sale_in_progress'
   const isDraft = container.status === 'draft' // admin-only preview — not purchasable
@@ -420,8 +490,8 @@ function DetailModal({ container, onClose, onAddToCart, mode, inCart, onNavigate
 
   return (
     <Modal open={!!container} onClose={onClose} maxWidth={940} noPadding closeVariant="dark">
-      {/* Gallery — 360° / 3D spin stitched from the 12 field photos */}
-      <Spin360Gallery container={container} />
+      {/* Gallery — the 8 field photos + the AI-stitched 3D render (image 9) */}
+      <PhotoGallery container={container} />
 
       {/* Body */}
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 300px', gap: '22px', padding: isMobile ? '18px 18px 22px' : '22px 26px 26px' }}>
@@ -1682,7 +1752,8 @@ export default function MarketplacePage() {
           {!isMobile && <span style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.4px' }}><span style={{ color: '#2B7FD4' }}>MVP&nbsp;</span><span style={{ color: 'var(--cta)' }}>Container</span></span>}
         </a>
         <nav style={{ display: 'flex', gap: '2px', marginLeft: isMobile ? 0 : '12px', overflowX: 'auto', scrollbarWidth: 'none', minWidth: 0 }}>
-          {(['buy', 'rent', 'custom', 'bulk'] as Tab[]).map(t => (
+          {/* 'custom' (Custom Builds) is hidden for now — page code kept, just not linked */}
+          {(['buy', 'rent', 'bulk'] as Tab[]).map(t => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}

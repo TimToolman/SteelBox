@@ -539,3 +539,31 @@ export function BuildClipart({ name, style }: { name: string; style?: React.CSSP
     </svg>
   )
 }
+
+// ── ProgressRing ───────────────────────────────────────────
+// Circular percent indicator for photo upload + AI cropping progress.
+
+export function ProgressRing({ pct, size = 36, stroke = 3.5, color = 'var(--primary, #0057B8)' }: {
+  pct: number
+  size?: number
+  stroke?: number
+  color?: string
+}) {
+  const r = (size - stroke) / 2
+  const c = 2 * Math.PI * r
+  const p = Math.max(0, Math.min(100, pct))
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="progressbar" aria-valuenow={Math.round(p)}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(120,130,150,.25)" strokeWidth={stroke} />
+      <circle
+        cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round"
+        strokeDasharray={c} strokeDashoffset={c * (1 - p / 100)}
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        style={{ transition: 'stroke-dashoffset .25s ease' }}
+      />
+      <text x="50%" y="50%" textAnchor="middle" dominantBaseline="central" fontSize={size * 0.3} fontWeight={700} fill={color} fontFamily="var(--mono, monospace)">
+        {Math.round(p)}
+      </text>
+    </svg>
+  )
+}

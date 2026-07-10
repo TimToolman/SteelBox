@@ -238,6 +238,9 @@ export const containers = {
     request<Container>(`/containers/${id}/photos`, { method: 'POST', body: JSON.stringify(data) }),
   deletePhoto: (id: string, slot: number) =>
     request<Container>(`/containers/${id}/photos/${slot}`, { method: 'DELETE' }),
+  // Generate the AI-stitched 3D render (slot 8) from the 8 documentation shots.
+  render: (id: string) =>
+    request<Container>(`/containers/${id}/render`, { method: 'POST' }),
 }
 
 // Photo URLs in CSV are API-relative (/photos/x.jpg) — resolve against the API host.
@@ -246,14 +249,21 @@ export function photoUrl(p: string | undefined | null): string {
   return /^https?:|^data:/.test(p) ? p : `${BASE}${p}`
 }
 
-// The 12-shot documentation standard — one slot per labelled shot. Shared by
-// the field app (capture), marketplace (360° spinner frames), and admin
-// portal (review/fix) so slot i always means the same photo everywhere.
-// Slots 5 and 11 are the stock-number (SKU sticker) shots.
+// The 8-shot documentation standard — one slot per labelled shot. Shared by
+// the field app (capture), marketplace (gallery), and admin portal
+// (review/fix) so slot i always means the same photo everywhere.
+// Slot 7 is the stock-number (SKU sticker) shot.
+// Slot 8 (RENDER_SLOT) holds the AI-stitched 3D render generated from the 8
+// shots — "image 9" in the marketplace gallery. Slots 9+ are extras
+// (proof of delivery, return condition).
 export const SHOT_LABELS = [
-  'Front doors closed', 'Front doors open', 'Right side', 'Back', 'Left side', 'SKU sticker · outside',
-  'Inside back', 'Inside right', 'Inside left', 'Inside ceiling', 'Inside floor', 'SKU sticker · inside',
+  'Front doors closed', 'Front doors open', 'Right hand side', 'Back', 'Left hand side',
+  'Inside back', 'Inside out', 'Stock number',
 ] as const
+
+export const RENDER_SLOT = 8
+export const RENDER_LABEL = 'Rendered 3D view'
+export const EXTRA_SLOT_START = 9
 
 // HEIC/HEIF (iPhone camera default) can't be decoded by <img> outside Safari —
 // convert to JPEG first with a lazy-loaded wasm decoder so the bundle only
@@ -269,6 +279,73 @@ async function heicToJpegBlob(file: File): Promise<Blob> {
     return Array.isArray(out) ? out[0] : out
   } catch {
     throw new Error('Could not convert that HEIC photo — try exporting it as JPEG')
+  }
+}
+
+// Cut the container out of a shot — background removed and the image trimmed
+// to the container's bounding box — so galleries and the 3D texture wrap show
+// only the actual unit. Segmentation runs in the browser via a lazy-loaded
+// wasm model (downloaded once, then cached); if it fails or produces an
+// implausible mask, the original photo is uploaded unchanged.
+// onProgress reports 0–100 plus a human stage label ("Downloading AI model",
+// "Cropping container", …) so upload UIs can show a live progress indicator.
+export async function cutoutContainer(
+  dataUrl: string,
+  onProgress?: (pct: number, stage: string) => void,
+): Promise<string> {
+  try {
+    onProgress?.(4, 'Preparing photo')
+    const { removeBackground } = await import('@imgly/background-removal')
+    const blob = await removeBackground(dataUrl, {
+      output: { format: 'image/png' },
+      progress: (key, current, total) => {
+        if (!onProgress) return
+        const frac = total ? current / total : 0
+        // Asset downloads (model is ~40 MB on first use, then cached) map to
+        // 5–55%; inference maps to 55–88%.
+        if (key.startsWith('fetch')) onProgress(5 + frac * 50, 'Downloading AI model')
+        else onProgress(55 + frac * 33, 'Cropping container')
+      },
+    })
+    onProgress?.(90, 'Trimming')
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image()
+      el.onload = () => resolve(el)
+      el.onerror = () => reject(new Error('decode failed'))
+      el.src = URL.createObjectURL(blob)
+    })
+    const canvas = document.createElement('canvas')
+    canvas.width = img.width; canvas.height = img.height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return dataUrl
+    ctx.drawImage(img, 0, 0)
+    URL.revokeObjectURL(img.src)
+    // Trim to the opaque bounding box so the container fills the frame.
+    const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    let minX = width, minY = height, maxX = -1, maxY = -1
+    for (let y = 0; y < height; y += 2) {
+      for (let x = 0; x < width; x += 2) {
+        if (data[(y * width + x) * 4 + 3] > 24) {
+          if (x < minX) minX = x; if (x > maxX) maxX = x
+          if (y < minY) minY = y; if (y > maxY) maxY = y
+        }
+      }
+    }
+    const w = maxX - minX, h = maxY - minY
+    // Sanity check — a mask that kept almost nothing means segmentation missed.
+    if (w < width * 0.2 || h < height * 0.2) return dataUrl
+    const pad = Math.round(Math.max(w, h) * 0.02)
+    const cx = Math.max(0, minX - pad), cy = Math.max(0, minY - pad)
+    const cw = Math.min(width - cx, w + pad * 2), ch = Math.min(height - cy, h + pad * 2)
+    const out = document.createElement('canvas')
+    out.width = cw; out.height = ch
+    out.getContext('2d')!.drawImage(canvas, cx, cy, cw, ch, 0, 0, cw, ch)
+    // WebP keeps the alpha channel at a fraction of PNG's size.
+    const webp = out.toDataURL('image/webp', 0.85)
+    onProgress?.(94, 'Uploading')
+    return webp.startsWith('data:image/webp') ? webp : out.toDataURL('image/png')
+  } catch {
+    return dataUrl
   }
 }
 

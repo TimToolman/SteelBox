@@ -7,8 +7,8 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import { useSnackbar, useAuth, useFavicon } from '../../hooks'
-import { Snackbar } from '../../components/ui'
-import { activity, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, containers as containersApi, availability as availabilityApi, messages as messagesApi, customers as customersApi, orders as ordersApi, parseTrucks, parseWorkHours, encodeWorkHours, photoUrl, fileToDataUrl, type ActivityEvent, type Depot, type Driver, type SchedJob, type DayHours, type Availability, type Message, type Customer, type Container, type Order } from '../../lib/api'
+import { Snackbar, ProgressRing } from '../../components/ui'
+import { activity, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, containers as containersApi, availability as availabilityApi, messages as messagesApi, customers as customersApi, orders as ordersApi, parseTrucks, parseWorkHours, encodeWorkHours, photoUrl, fileToDataUrl, cutoutContainer, type ActivityEvent, type Depot, type Driver, type SchedJob, type DayHours, type Availability, type Message, type Customer, type Container, type Order } from '../../lib/api'
 
 // Fallback driver when an admin opens the field app (admin accounts have no
 // linked driver record). Driver logins use their own drivers.csv row.
@@ -149,26 +149,24 @@ interface PhotoShot {
   tip: string
 }
 
-// ── Photo checklist — the 12-shot standard ────────────────
-// Every container gets exactly these 12 labelled photos.
+// ── Photo checklist — the 8-shot standard ─────────────────
+// Every container gets exactly these 8 labelled photos (slots 0–7). The API
+// stitches them into an AI 3D render (slot 8, "image 9") once all 8 are in.
 
-const PHOTO_TARGET = 12
+const PHOTO_TARGET = 8
 
 const SHOT_LIST: PhotoShot[] = [
   // Exterior
-  { id: 1,  group: 'exterior', label: 'Front doors closed',        required: true, done: false, tip: 'Center the doors. Capture full door height.' },
-  { id: 2,  group: 'exterior', label: 'Front doors open',          required: true, done: false, tip: 'Open both doors fully. Capture the inside threshold.' },
-  { id: 3,  group: 'exterior', label: 'Right hand side',           required: true, done: false, tip: 'Step back to frame the complete right side panel.' },
-  { id: 4,  group: 'exterior', label: 'Back',                      required: true, done: false, tip: 'Frame the entire rear panel end-on.' },
-  { id: 5,  group: 'exterior', label: 'Left hand side',            required: true, done: false, tip: 'Step back to frame the complete left side panel.' },
-  { id: 6,  group: 'exterior', label: 'SKU sticker — outside door', required: true, done: false, tip: 'Close-up of the SKU sticker on the exterior door. Must be legible.' },
+  { id: 1, group: 'exterior', label: 'Front doors closed', required: true, done: false, tip: 'Center the doors. Capture full door height.' },
+  { id: 2, group: 'exterior', label: 'Front doors open',   required: true, done: false, tip: 'Open both doors fully. Capture the inside threshold.' },
+  { id: 3, group: 'exterior', label: 'Right hand side',    required: true, done: false, tip: 'Step back to frame the complete right side panel.' },
+  { id: 4, group: 'exterior', label: 'Back',               required: true, done: false, tip: 'Frame the entire rear panel end-on.' },
+  { id: 5, group: 'exterior', label: 'Left hand side',     required: true, done: false, tip: 'Step back to frame the complete left side panel.' },
   // Interior
-  { id: 7,  group: 'interior', label: 'Inside back',              required: true, done: false, tip: 'Stand at the doors. Capture the full back wall.' },
-  { id: 8,  group: 'interior', label: 'Inside right',             required: true, done: false, tip: 'Capture the full right interior wall.' },
-  { id: 9,  group: 'interior', label: 'Inside left',              required: true, done: false, tip: 'Capture the full left interior wall.' },
-  { id: 10, group: 'interior', label: 'Inside ceiling',          required: true, done: false, tip: 'Point up. Capture the full ceiling / roof panel.' },
-  { id: 11, group: 'interior', label: 'Inside floor',            required: true, done: false, tip: 'Show the full floor surface including corners.' },
-  { id: 12, group: 'interior', label: 'SKU sticker — inside door', required: true, done: false, tip: 'Close-up of the SKU sticker on the inside of the door. Must be legible.' },
+  { id: 6, group: 'interior', label: 'Inside back',        required: true, done: false, tip: 'Stand at the doors. Capture the full back wall.' },
+  { id: 7, group: 'interior', label: 'Inside out',         required: true, done: false, tip: 'Stand at the back wall. Shoot toward the open doors.' },
+  // Stock number
+  { id: 8, group: 'exterior', label: 'Stock number',       required: true, done: false, tip: 'Close-up of the stock-number (SKU) sticker. Must be legible.' },
 ]
 
 const CHIP_COLORS = {
@@ -261,6 +259,8 @@ export default function FieldAppPage() {
   const [screen, setScreen] = useState<Screen>('dashboard')
   const [shots, setShots] = useState<PhotoShot[]>(SHOT_LIST.map(s => ({ ...s })))
   const [uploadingShot, setUploadingShot] = useState<number | null>(null)  // shot id mid-upload
+  const [shotProgress, setShotProgress] = useState<{ pct: number; stage: string } | null>(null) // crop/upload progress
+  const [batchShots, setBatchShots] = useState<{ done: number; total: number } | null>(null)     // multi-file upload progress
   const [onDuty, setOnDuty] = useState(true)
   const [activityLog, setActivityLog] = useState<ActivityEvent[]>([])
   // Driver Inbox/Sent/Trash messaging
@@ -442,11 +442,19 @@ export default function FieldAppPage() {
     const file = await pickImage(useCamera)
     if (!file) return
     setUploadingShot(shot.id)
+    setShotProgress({ pct: 2, stage: 'Reading photo' })
     try {
-      const dataUrl = await fileToDataUrl(file)
+      // Documentation shots are cut out to just the container (background
+      // removed) so the marketplace gallery and 3D wrap show only the unit.
+      const dataUrl = await cutoutContainer(
+        await fileToDataUrl(file),
+        (pct, stage) => setShotProgress({ pct, stage }),
+      )
+      setShotProgress({ pct: 95, stage: 'Uploading' })
       const updated = await containersApi.uploadPhoto(target, {
         slot: shot.id - 1, label: shot.label, dataUrl, inspectorName: me?.name ?? ACTOR,
       })
+      setShotProgress({ pct: 100, stage: 'Done' })
       setShots(prev => prev.map(s => s.id === shot.id ? { ...s, done: true, url: updated.photos[shot.id - 1] } : s))
       setContainerList(prev => prev.map(c => c.id === updated.id ? updated : c))
       if (shots.filter(s => s.done).length === 0) logActivity(job, 'photos_started', `Photo session started (${shot.label})`)
@@ -455,7 +463,58 @@ export default function FieldAppPage() {
       toast(`Upload failed — ${e instanceof Error ? e.message : 'check connection and retry'}`)
     } finally {
       setUploadingShot(null)
+      setShotProgress(null)
     }
+  }
+
+  // Pick several photos at once — they fill the remaining shots in order
+  // (each is cropped to the container, then uploaded, one after another).
+  const bulkCaptureShots = () => {
+    const job = activeJob
+    if (!job || uploadingShot) return
+    const target = job.containerId || job.sku
+    if (!target) { toast('No container record linked to this job'); return }
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*,.heic,.heif'
+    input.multiple = true
+    input.onchange = async () => {
+      const files = Array.from(input.files ?? [])
+      if (!files.length) return
+      const pending = shots.filter(s => !s.done)
+      const targets = pending.length ? pending : shots
+      const n = Math.min(files.length, targets.length)
+      let started = shots.some(s => s.done)
+      let uploaded = 0
+      for (let k = 0; k < n; k++) {
+        const shot = targets[k]
+        setUploadingShot(shot.id)
+        setBatchShots({ done: k, total: n })
+        setShotProgress({ pct: 2, stage: 'Reading photo' })
+        try {
+          const dataUrl = await cutoutContainer(
+            await fileToDataUrl(files[k]),
+            (pct, stage) => setShotProgress({ pct, stage }),
+          )
+          setShotProgress({ pct: 95, stage: 'Uploading' })
+          const updated = await containersApi.uploadPhoto(target, {
+            slot: shot.id - 1, label: shot.label, dataUrl, inspectorName: me?.name ?? ACTOR,
+          })
+          setShots(prev => prev.map(s => s.id === shot.id ? { ...s, done: true, url: updated.photos[shot.id - 1] } : s))
+          setContainerList(prev => prev.map(c => c.id === updated.id ? updated : c))
+          if (!started) { logActivity(job, 'photos_started', `Photo session started (${shot.label})`); started = true }
+          uploaded++
+        } catch (e) {
+          toast(`${shot.label} failed — ${e instanceof Error ? e.message : 'retry'}`)
+        }
+      }
+      setUploadingShot(null)
+      setShotProgress(null)
+      setBatchShots(null)
+      const skipped = files.length - n
+      toast(`${uploaded} photo${uploaded === 1 ? '' : 's'} uploaded${skipped > 0 ? ` · ${skipped} extra file${skipped === 1 ? '' : 's'} ignored` : ''}`)
+    }
+    input.click()
   }
 
   // Hydrate the checklist from photos already on the container (resume a
@@ -467,7 +526,8 @@ export default function FieldAppPage() {
   }
 
   // Single proof photo (delivery proof / return condition) — a real capture,
-  // stored after the 12 documentation slots so the spinner stays aligned.
+  // stored after the 8 documentation slots + AI render (slot 9+) so the
+  // marketplace gallery stays aligned.
   const capturePhoto1 = async (job: Job) => {
     if (uploadingShot) return
     const file = await pickImage(true)
@@ -477,7 +537,7 @@ export default function FieldAppPage() {
       const dataUrl = await fileToDataUrl(file)
       const target = job.containerId || job.sku
       const label = job.kind === 'return' ? 'Return condition' : 'Proof of delivery'
-      if (target) await containersApi.uploadPhoto(target, { slot: 12, label, dataUrl, inspectorName: me?.name ?? ACTOR })
+      if (target) await containersApi.uploadPhoto(target, { slot: 9, label, dataUrl, inspectorName: me?.name ?? ACTOR })
       setReturnPhoto(true)
       logActivity(job, 'photos_submitted', `${label} photo captured`)
       toast(`${label} photo uploaded`)
@@ -969,6 +1029,13 @@ export default function FieldAppPage() {
         </div>
       </div>
 
+      {/* Bulk upload — photos taken earlier fill the remaining shots in order */}
+      <button onClick={bulkCaptureShots} disabled={!!uploadingShot}
+        style={{ margin: '10px 12px 0', width: 'calc(100% - 24px)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: '12px', border: '1.5px solid #0057B8', background: '#fff', color: uploadingShot ? '#44475A' : '#0057B8', fontFamily: "'Google Sans', sans-serif", fontSize: '13px', fontWeight: 700, cursor: uploadingShot ? 'wait' : 'pointer' }}>
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13V3" /><polyline points="6,7 10,3 14,7" /><path d="M3 13v3a1 1 0 001 1h12a1 1 0 001-1v-3" /></svg>
+        {batchShots ? `Uploading ${batchShots.done + 1} of ${batchShots.total}…` : 'Upload Multiple Photos'}
+      </button>
+
       {/* Shot list */}
       {(['exterior', 'interior'] as const).map(group => (
         <div key={group}>
@@ -986,15 +1053,16 @@ export default function FieldAppPage() {
                 {/* Thumbnail — the uploaded shot, or an empty slot */}
                 <div style={{ width: '46px', height: '36px', borderRadius: '6px', overflow: 'hidden', background: shot.done ? '#B7F0DA' : '#EEF2FF', border: `1.5px solid ${shot.done ? '#1B7A5A' : '#E1E2EC'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   {busy
-                    ? <span style={{ fontSize: '9px', color: '#0057B8', fontWeight: 700 }}>…</span>
+                    ? <ProgressRing pct={shotProgress?.pct ?? 0} size={30} stroke={3} color="#0057B8" />
                     : shot.url
                       ? <img src={photoUrl(shot.url)} alt={shot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       : <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="#44475A" strokeWidth="1.4" strokeLinecap="round"><path d="M2 7h2.5L6 5h8l1.5 2H18a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V8a1 1 0 011-1z" /><circle cx="10" cy="11" r="3" /></svg>}
                 </div>
                 <span style={{ flex: 1, fontSize: '12px', fontWeight: 500, minWidth: 0 }}>
                   {shot.label}
-                  {shot.required && !shot.done && <span style={{ color: '#E65100', fontWeight: 700 }}> *</span>}
-                  {shot.done && <span style={{ display: 'block', fontSize: '10px', color: '#1B7A5A', fontWeight: 700 }}>✓ uploaded · retake anytime</span>}
+                  {shot.required && !shot.done && !busy && <span style={{ color: '#E65100', fontWeight: 700 }}> *</span>}
+                  {busy && <span style={{ display: 'block', fontSize: '10px', color: '#0057B8', fontWeight: 700 }}>{shotProgress?.stage ?? 'Working'}…</span>}
+                  {!busy && shot.done && <span style={{ display: 'block', fontSize: '10px', color: '#1B7A5A', fontWeight: 700 }}>✓ uploaded · retake anytime</span>}
                 </span>
                 {/* Take with camera / upload from library */}
                 <button onClick={() => captureShot(shot, true)} disabled={busy} title="Take photo with camera"
