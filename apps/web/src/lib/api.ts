@@ -255,10 +255,30 @@ export const SHOT_LABELS = [
   'Inside back', 'Inside right', 'Inside left', 'Inside ceiling', 'Inside floor', 'SKU sticker · inside',
 ] as const
 
+// HEIC/HEIF (iPhone camera default) can't be decoded by <img> outside Safari —
+// convert to JPEG first with a lazy-loaded wasm decoder so the bundle only
+// pays for it when a HEIC file is actually picked.
+function isHeic(file: File): boolean {
+  return /image\/hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name)
+}
+
+async function heicToJpegBlob(file: File): Promise<Blob> {
+  try {
+    const { default: heic2any } = await import('heic2any')
+    const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 })
+    return Array.isArray(out) ? out[0] : out
+  } catch {
+    throw new Error('Could not convert that HEIC photo — try exporting it as JPEG')
+  }
+}
+
 // Downscale a camera/library image file to a JPEG data URL ready to upload.
-export function fileToDataUrl(file: File, maxDim = 1400, quality = 0.78): Promise<string> {
+// 1600px covers the 940px detail modal / 360° spinner at retina density while
+// cutting a 4000px phone original to a fraction of its size.
+export async function fileToDataUrl(file: File, maxDim = 1600, quality = 0.8): Promise<string> {
+  const blob: Blob = isHeic(file) ? await heicToJpegBlob(file) : file
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file)
+    const url = URL.createObjectURL(blob)
     const img = new Image()
     img.onload = () => {
       URL.revokeObjectURL(url)

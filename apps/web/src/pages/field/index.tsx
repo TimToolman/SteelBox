@@ -425,7 +425,7 @@ export default function FieldAppPage() {
   const pickImage = (useCamera: boolean): Promise<File | null> => new Promise(resolve => {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = 'image/*'
+    input.accept = 'image/*,.heic,.heif'
     if (useCamera) input.setAttribute('capture', 'environment')
     input.onchange = () => resolve(input.files?.[0] ?? null)
     // If the user cancels, no change event fires — fall back to reading the

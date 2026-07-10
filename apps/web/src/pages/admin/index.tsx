@@ -549,7 +549,7 @@ function PhotosModal({ container, onClose, onChanged }: {
   const replaceSlot = (slot: number, label: string) => {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = 'image/*'
+    input.accept = 'image/*,.heic,.heif'
     input.onchange = async () => {
       const file = input.files?.[0]
       if (!file) return
@@ -2756,7 +2756,7 @@ export default function AdminPage() {
                         <TblBtn onClick={() => setEditBuild(b)}>Edit</TblBtn>
                         <TblBtn variant="primary" onClick={() => {
                           const input = document.createElement('input')
-                          input.type = 'file'; input.accept = 'image/*'
+                          input.type = 'file'; input.accept = 'image/*,.heic,.heif'
                           input.onchange = async () => {
                             const file = input.files?.[0]
                             if (!file) return
