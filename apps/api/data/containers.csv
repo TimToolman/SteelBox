@@ -1,6 +1,6 @@
 id,sku,guid,stockNumber,size,grade,condition,color,status,buyPrice,rentMonthly,photos,photoCount,has360,depotLocation,bayNumber,inspectorName,inspectedAt,deliveryIncluded,listingType,createdAt,purchaseCost,conditionScore,customEta,customBuildName
 ctr_0041,NOLA-20-0001,7f3a1c20-0041-4a1b-9c11-000000000041,STK-0041,20ft-std,A,new,,available,3850,566,,8,true,NOLA Depot,Bay 2,T. Rivera,2026-07-10T01:37:55.045Z,true,rent,2026-06-18T09:12:00.000Z,2100,5,,
-ctr_0052,NOLA-20-0002,7f3a1c20-0052-4a1b-9c11-000000000052,STK-0052,20ft-hc,A,new,,assigned,4850,180,,8,true,NOLA Depot,Bay 4,T. Rivera,2026-06-22T10:30:00.000Z,true,both,2026-06-19T11:40:00.000Z,2700,5,,
+ctr_0052,NOLA-20-0002,7f3a1c20-0052-4a1b-9c11-000000000052,STK-0052,20ft-hc,A,new,,assigned,4850,180,,8,true,NOLA Depot,Bay 4,T. Rivera,2026-07-10T02:34:29.236Z,true,both,2026-06-19T11:40:00.000Z,2700,5,,
 ctr_0038,HOU-40-0001,7f3a1c20-0038-4a1b-9c11-000000000038,STK-0038,40ft-hc,B,used,,in_transit,5600,240,,8,false,Houston Depot,Bay 1,M. Chen,2026-06-15T16:20:00.000Z,true,buy,2026-06-12T08:05:00.000Z,3200,4,,
 ctr_0029,HOU-20-0001,7f3a1c20-0029-4a1b-9c11-000000000029,STK-0029,20ft-std,C,used,,delivered,2950,110,,8,false,Houston Depot,Bay 3,M. Chen,2026-06-10T13:00:00.000Z,true,both,2026-06-08T15:22:00.000Z,1650,3,,
 ctr_0061,NOLA-20-0003,7f3a1c20-0061-4a1b-9c11-000000000061,STK-0061,20ft-std,A,new,,delivered,3990,150,,8,true,NOLA Depot,Bay 5,T. Rivera,2026-06-28T09:00:00.000Z,true,rent,2026-06-26T10:15:00.000Z,2200,5,,

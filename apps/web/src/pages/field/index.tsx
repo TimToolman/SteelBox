@@ -141,7 +141,7 @@ type Screen = 'dashboard' | 'jobs' | 'flow' | 'camera' | 'review' | 'success' | 
 
 interface PhotoShot {
   id: number
-  group: 'exterior' | 'interior'
+  group: 'exterior' | 'interior' | 'stock'
   label: string
   required: boolean
   done: boolean
@@ -165,8 +165,8 @@ const SHOT_LIST: PhotoShot[] = [
   // Interior
   { id: 6, group: 'interior', label: 'Inside back',        required: true, done: false, tip: 'Stand at the doors. Capture the full back wall.' },
   { id: 7, group: 'interior', label: 'Inside out',         required: true, done: false, tip: 'Stand at the back wall. Shoot toward the open doors.' },
-  // Stock number
-  { id: 8, group: 'exterior', label: 'Stock number',       required: true, done: false, tip: 'Close-up of the stock-number (SKU) sticker. Must be legible.' },
+  // Stock number — its own section, captured last
+  { id: 8, group: 'stock', label: 'Stock number',          required: true, done: false, tip: 'Close-up of the stock-number (SKU) sticker. Must be legible.' },
 ]
 
 const CHIP_COLORS = {
@@ -258,9 +258,20 @@ export default function FieldAppPage() {
   const DRIVER_ID = user?.driverId || FALLBACK_DRIVER_ID
   const [screen, setScreen] = useState<Screen>('dashboard')
   const [shots, setShots] = useState<PhotoShot[]>(SHOT_LIST.map(s => ({ ...s })))
-  const [uploadingShot, setUploadingShot] = useState<number | null>(null)  // shot id mid-upload
-  const [shotProgress, setShotProgress] = useState<{ pct: number; stage: string } | null>(null) // crop/upload progress
-  const [batchShots, setBatchShots] = useState<{ done: number; total: number } | null>(null)     // multi-file upload progress
+  // Per-shot progress — uploads run concurrently, so a driver can start the
+  // next shot while the previous one is still cropping/uploading. A shot is
+  // busy while it has an entry here; key -1 = the single proof/return photo.
+  const [shotProgress, setShotProgress] = useState<Record<number, { pct: number; stage: string }>>({})
+  const setShotProg = (id: number, p: { pct: number; stage: string } | null) =>
+    setShotProgress(prev => {
+      const next = { ...prev }
+      if (p) next[id] = p
+      else delete next[id]
+      return next
+    })
+  // Auto-crop can be turned off when the scene confuses the cutout model
+  // (tight yards, open doors, low light) — photos then upload as taken.
+  const [autoCrop, setAutoCrop] = useState(true)
   const [onDuty, setOnDuty] = useState(true)
   const [activityLog, setActivityLog] = useState<ActivityEvent[]>([])
   // Driver Inbox/Sent/Trash messaging
@@ -436,25 +447,25 @@ export default function FieldAppPage() {
 
   const captureShot = async (shot: PhotoShot, useCamera: boolean) => {
     const job = activeJob
-    if (!job || uploadingShot) return
+    if (!job || shotProgress[shot.id]) return // this shot is already mid-upload
     const target = job.containerId || job.sku
     if (!target) { toast('No container record linked to this job'); return }
     const file = await pickImage(useCamera)
     if (!file) return
-    setUploadingShot(shot.id)
-    setShotProgress({ pct: 2, stage: 'Reading photo' })
+    setShotProg(shot.id, { pct: 2, stage: 'Reading photo' })
     try {
-      // Documentation shots are cut out to just the container (background
-      // removed) so the marketplace gallery and 3D wrap show only the unit.
-      const dataUrl = await cutoutContainer(
-        await fileToDataUrl(file),
-        (pct, stage) => setShotProgress({ pct, stage }),
-      )
-      setShotProgress({ pct: 95, stage: 'Uploading' })
+      // With auto-crop on, documentation shots are cut out to just the
+      // container (background removed) so the marketplace gallery and 3D wrap
+      // show only the unit. Shots process independently — start the next one
+      // while this runs.
+      const base = await fileToDataUrl(file)
+      const dataUrl = autoCrop
+        ? await cutoutContainer(base, (pct, stage) => setShotProg(shot.id, { pct, stage }))
+        : base
+      setShotProg(shot.id, { pct: 95, stage: 'Uploading' })
       const updated = await containersApi.uploadPhoto(target, {
         slot: shot.id - 1, label: shot.label, dataUrl, inspectorName: me?.name ?? ACTOR,
       })
-      setShotProgress({ pct: 100, stage: 'Done' })
       setShots(prev => prev.map(s => s.id === shot.id ? { ...s, done: true, url: updated.photos[shot.id - 1] } : s))
       setContainerList(prev => prev.map(c => c.id === updated.id ? updated : c))
       if (shots.filter(s => s.done).length === 0) logActivity(job, 'photos_started', `Photo session started (${shot.label})`)
@@ -462,59 +473,8 @@ export default function FieldAppPage() {
     } catch (e) {
       toast(`Upload failed — ${e instanceof Error ? e.message : 'check connection and retry'}`)
     } finally {
-      setUploadingShot(null)
-      setShotProgress(null)
+      setShotProg(shot.id, null)
     }
-  }
-
-  // Pick several photos at once — they fill the remaining shots in order
-  // (each is cropped to the container, then uploaded, one after another).
-  const bulkCaptureShots = () => {
-    const job = activeJob
-    if (!job || uploadingShot) return
-    const target = job.containerId || job.sku
-    if (!target) { toast('No container record linked to this job'); return }
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = 'image/*,.heic,.heif'
-    input.multiple = true
-    input.onchange = async () => {
-      const files = Array.from(input.files ?? [])
-      if (!files.length) return
-      const pending = shots.filter(s => !s.done)
-      const targets = pending.length ? pending : shots
-      const n = Math.min(files.length, targets.length)
-      let started = shots.some(s => s.done)
-      let uploaded = 0
-      for (let k = 0; k < n; k++) {
-        const shot = targets[k]
-        setUploadingShot(shot.id)
-        setBatchShots({ done: k, total: n })
-        setShotProgress({ pct: 2, stage: 'Reading photo' })
-        try {
-          const dataUrl = await cutoutContainer(
-            await fileToDataUrl(files[k]),
-            (pct, stage) => setShotProgress({ pct, stage }),
-          )
-          setShotProgress({ pct: 95, stage: 'Uploading' })
-          const updated = await containersApi.uploadPhoto(target, {
-            slot: shot.id - 1, label: shot.label, dataUrl, inspectorName: me?.name ?? ACTOR,
-          })
-          setShots(prev => prev.map(s => s.id === shot.id ? { ...s, done: true, url: updated.photos[shot.id - 1] } : s))
-          setContainerList(prev => prev.map(c => c.id === updated.id ? updated : c))
-          if (!started) { logActivity(job, 'photos_started', `Photo session started (${shot.label})`); started = true }
-          uploaded++
-        } catch (e) {
-          toast(`${shot.label} failed — ${e instanceof Error ? e.message : 'retry'}`)
-        }
-      }
-      setUploadingShot(null)
-      setShotProgress(null)
-      setBatchShots(null)
-      const skipped = files.length - n
-      toast(`${uploaded} photo${uploaded === 1 ? '' : 's'} uploaded${skipped > 0 ? ` · ${skipped} extra file${skipped === 1 ? '' : 's'} ignored` : ''}`)
-    }
-    input.click()
   }
 
   // Hydrate the checklist from photos already on the container (resume a
@@ -529,10 +489,10 @@ export default function FieldAppPage() {
   // stored after the 8 documentation slots + AI render (slot 9+) so the
   // marketplace gallery stays aligned.
   const capturePhoto1 = async (job: Job) => {
-    if (uploadingShot) return
+    if (shotProgress[-1]) return
     const file = await pickImage(true)
     if (!file) return
-    setUploadingShot(-1)
+    setShotProg(-1, { pct: 50, stage: 'Uploading' })
     try {
       const dataUrl = await fileToDataUrl(file)
       const target = job.containerId || job.sku
@@ -545,7 +505,7 @@ export default function FieldAppPage() {
     } catch (e) {
       toast(`Photo upload failed — ${e instanceof Error ? e.message : 'try again'}`)
     } finally {
-      setUploadingShot(null)
+      setShotProg(-1, null)
     }
   }
 
@@ -1029,21 +989,27 @@ export default function FieldAppPage() {
         </div>
       </div>
 
-      {/* Bulk upload — photos taken earlier fill the remaining shots in order */}
-      <button onClick={bulkCaptureShots} disabled={!!uploadingShot}
-        style={{ margin: '10px 12px 0', width: 'calc(100% - 24px)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: '12px', border: '1.5px solid #0057B8', background: '#fff', color: uploadingShot ? '#44475A' : '#0057B8', fontFamily: "'Google Sans', sans-serif", fontSize: '13px', fontWeight: 700, cursor: uploadingShot ? 'wait' : 'pointer' }}>
-        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13V3" /><polyline points="6,7 10,3 14,7" /><path d="M3 13v3a1 1 0 001 1h12a1 1 0 001-1v-3" /></svg>
-        {batchShots ? `Uploading ${batchShots.done + 1} of ${batchShots.total}…` : 'Upload Multiple Photos'}
-      </button>
+      {/* Auto-crop toggle — background removal isn't right for every scene */}
+      <div style={{ margin: '10px 12px 0', background: '#fff', borderRadius: '12px', border: '1px solid #E1E2EC', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '12px', fontWeight: 700 }}>Auto-crop to container</div>
+          <div style={{ fontSize: '10px', color: '#44475A', lineHeight: 1.4 }}>{autoCrop ? 'Background is removed so only the unit shows' : 'Photos upload exactly as taken'}</div>
+        </div>
+        <button onClick={() => setAutoCrop(v => !v)} role="switch" aria-checked={autoCrop}
+          style={{ width: '42px', height: '24px', borderRadius: '12px', border: 'none', cursor: 'pointer', background: autoCrop ? '#0057B8' : '#C4C6D0', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
+          <span style={{ position: 'absolute', top: '3px', left: autoCrop ? '21px' : '3px', width: '18px', height: '18px', borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.3)' }} />
+        </button>
+      </div>
 
       {/* Shot list */}
-      {(['exterior', 'interior'] as const).map(group => (
+      {(['exterior', 'interior', 'stock'] as const).map(group => (
         <div key={group}>
           <div style={{ padding: '12px 16px 6px', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: '#44475A' }}>
-            {group === 'exterior' ? 'Exterior — Required' : 'Interior — Required'}
+            {group === 'exterior' ? 'Exterior — Required' : group === 'interior' ? 'Interior — Required' : 'Stock Number — Required'}
           </div>
           {shots.filter(s => s.group === group).map(shot => {
-            const busy = uploadingShot === shot.id
+            const prog = shotProgress[shot.id]
+            const busy = !!prog
             return (
               <div
                 key={shot.id}
@@ -1053,7 +1019,7 @@ export default function FieldAppPage() {
                 {/* Thumbnail — the uploaded shot, or an empty slot */}
                 <div style={{ width: '46px', height: '36px', borderRadius: '6px', overflow: 'hidden', background: shot.done ? '#B7F0DA' : '#EEF2FF', border: `1.5px solid ${shot.done ? '#1B7A5A' : '#E1E2EC'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   {busy
-                    ? <ProgressRing pct={shotProgress?.pct ?? 0} size={30} stroke={3} color="#0057B8" />
+                    ? <ProgressRing pct={prog?.pct ?? 0} size={30} stroke={3} color="#0057B8" />
                     : shot.url
                       ? <img src={photoUrl(shot.url)} alt={shot.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       : <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="#44475A" strokeWidth="1.4" strokeLinecap="round"><path d="M2 7h2.5L6 5h8l1.5 2H18a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V8a1 1 0 011-1z" /><circle cx="10" cy="11" r="3" /></svg>}
@@ -1061,7 +1027,7 @@ export default function FieldAppPage() {
                 <span style={{ flex: 1, fontSize: '12px', fontWeight: 500, minWidth: 0 }}>
                   {shot.label}
                   {shot.required && !shot.done && !busy && <span style={{ color: '#E65100', fontWeight: 700 }}> *</span>}
-                  {busy && <span style={{ display: 'block', fontSize: '10px', color: '#0057B8', fontWeight: 700 }}>{shotProgress?.stage ?? 'Working'}…</span>}
+                  {busy && <span style={{ display: 'block', fontSize: '10px', color: '#0057B8', fontWeight: 700 }}>{prog?.stage ?? 'Working'}…</span>}
                   {!busy && shot.done && <span style={{ display: 'block', fontSize: '10px', color: '#1B7A5A', fontWeight: 700 }}>✓ uploaded · retake anytime</span>}
                 </span>
                 {/* Take with camera / upload from library */}

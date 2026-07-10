@@ -824,23 +824,29 @@ async function handleRequest(req, res) {
         if (!Number.isInteger(slot) || slot < 0 || slot > 23) return send(res, 400, { message: 'slot must be 0–23' })
         const saved = savePhoto(containers[idx].sku, slot, body.dataUrl)
         if (saved.error) return send(res, 400, { message: saved.error })
-        const photos = Array.isArray(containers[idx].photos) ? [...containers[idx].photos] : []
+        // Re-read the table now that the request body has been awaited —
+        // concurrent uploads interleave at that await, and the read-modify-
+        // write below must be atomic so parallel slots don't clobber each other.
+        const fresh = readTable('containers')
+        const fidx = fresh.findIndex(c => c.id === containers[idx].id)
+        if (fidx === -1) return send(res, 404, { message: 'Container not found' })
+        const photos = Array.isArray(fresh[fidx].photos) ? [...fresh[fidx].photos] : []
         while (photos.length <= slot) photos.push('')
         photos[slot] = saved.url
-        containers[idx] = withPhotoPromotion({
-          ...containers[idx],
+        fresh[fidx] = withPhotoPromotion({
+          ...fresh[fidx],
           photos,
           photoCount: photos.slice(0, PHOTO_TARGET).filter(Boolean).length,
-          inspectorName: body.inspectorName || containers[idx].inspectorName,
+          inspectorName: body.inspectorName || fresh[fidx].inspectorName,
           inspectedAt: new Date().toISOString(),
         })
-        writeTable('containers', containers)
+        writeTable('containers', fresh)
         // Full 8-shot set just completed and no render exists yet → stitch one.
         if (slot < PHOTO_TARGET && !photos[RENDER_SLOT] && GEMINI_KEY
             && photos.slice(0, PHOTO_TARGET).filter(Boolean).length === PHOTO_TARGET) {
-          triggerAutoRender(containers[idx].id)
+          triggerAutoRender(fresh[fidx].id)
         }
-        return send(res, 200, containers[idx])
+        return send(res, 200, fresh[fidx])
       }
 
       // Generate (or regenerate) the AI-stitched 3D render into slot 8.
@@ -849,12 +855,17 @@ async function handleRequest(req, res) {
         if (idx === -1) return send(res, 404, { message: 'Container not found' })
         const result = await generateRender(containers[idx])
         if (result.error) return send(res, 422, { message: result.error })
-        const photos = Array.isArray(containers[idx].photos) ? [...containers[idx].photos] : []
+        // Re-read after the await so photo uploads that landed while the
+        // render was generating are not clobbered.
+        const fresh = readTable('containers')
+        const fidx = fresh.findIndex(c => c.id === containers[idx].id)
+        if (fidx === -1) return send(res, 404, { message: 'Container not found' })
+        const photos = Array.isArray(fresh[fidx].photos) ? [...fresh[fidx].photos] : []
         while (photos.length <= RENDER_SLOT) photos.push('')
         photos[RENDER_SLOT] = result.url
-        containers[idx] = { ...containers[idx], photos, has360: true }
-        writeTable('containers', containers)
-        return send(res, 200, containers[idx])
+        fresh[fidx] = { ...fresh[fidx], photos, has360: true }
+        writeTable('containers', fresh)
+        return send(res, 200, fresh[fidx])
       }
 
       // Remove the photo in a slot (admin review/fix).

@@ -539,9 +539,19 @@ function PhotosModal({ container, onClose, onChanged }: {
   onClose: () => void
   onChanged: (updated: Container, msg: string) => void
 }) {
-  const [busySlot, setBusySlot] = useState<number | null>(null)
-  const [slotProgress, setSlotProgress] = useState<{ pct: number; stage: string } | null>(null) // crop/upload progress
-  const [batch, setBatch] = useState<{ done: number; total: number } | null>(null) // multi-file upload progress
+  // Per-slot progress — uploads run concurrently, so each slot tracks its own
+  // crop/upload state and you can start the next photo without waiting.
+  const [slotProgress, setSlotProgress] = useState<Record<number, { pct: number; stage: string }>>({})
+  const setProg = (slot: number, p: { pct: number; stage: string } | null) =>
+    setSlotProgress(prev => {
+      const next = { ...prev }
+      if (p) next[slot] = p
+      else delete next[slot]
+      return next
+    })
+  // Auto-crop can be turned off when background removal hurts more than it
+  // helps (busy yards, open doors, low light) — photos then upload as taken.
+  const [autoCrop, setAutoCrop] = useState(true)
 
   if (!container) return null
   const photos = container.photos ?? []
@@ -551,103 +561,66 @@ function PhotosModal({ container, onClose, onChanged }: {
   // shot, 8, is not part of it). The wrapped faces are 1 front / 3 right /
   // 4 back / 5 left — once those exist the 3D view is live on the marketplace.
   const texReady = [0, 2, 3, 4].every(i => !!photos[i])
-  const updating3d = busySlot != null && busySlot < SHOT_LABELS.length - 1 // shots 1–7 feed the 3D view
+  // Shots 1–7 feed the 3D view — mirror whichever is furthest behind on card 9.
+  const docProg = Object.entries(slotProgress)
+    .map(([k, v]) => ({ slot: Number(k), ...v }))
+    .filter(x => x.slot < SHOT_LABELS.length - 1)
+    .sort((a, b) => a.pct - b.pct)
+  const updating3d = docProg.length > 0
   const extras = photos.slice(EXTRA_SLOT_START).map((p, i) => ({ slot: i + EXTRA_SLOT_START, url: p })).filter(x => x.url)
 
   const generateRender = async () => {
-    setBusySlot(RENDER_SLOT)
+    if (slotProgress[RENDER_SLOT]) return
+    setProg(RENDER_SLOT, { pct: 50, stage: 'Generating' })
     try {
       const updated = await containersApi.render(container.id)
       onChanged(updated, `3D render ${renderUrl ? 'regenerated' : 'generated'} for ${container.sku}`)
     } catch (e) {
       onChanged(container, `Render failed — ${e instanceof Error ? e.message : 'try again'}`)
     } finally {
-      setBusySlot(null)
+      setProg(RENDER_SLOT, null)
     }
   }
 
   const replaceSlot = (slot: number, label: string) => {
+    if (slotProgress[slot]) return // this slot is already mid-upload
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = 'image/*,.heic,.heif'
     input.onchange = async () => {
       const file = input.files?.[0]
       if (!file) return
-      setBusySlot(slot)
-      setSlotProgress({ pct: 2, stage: 'Reading photo' })
+      setProg(slot, { pct: 2, stage: 'Reading photo' })
       try {
-        // Documentation slots get the background cut away so only the
-        // container shows in the gallery and 3D wrap.
-        const dataUrl = await cutoutContainer(
-          await fileToDataUrl(file),
-          (pct, stage) => setSlotProgress({ pct, stage }),
-        )
-        setSlotProgress({ pct: 95, stage: 'Uploading' })
+        // With auto-crop on, documentation slots get the background cut away
+        // so only the container shows in the gallery and 3D wrap. Each slot
+        // processes independently — start another while this one is cropping.
+        const base = await fileToDataUrl(file)
+        const dataUrl = autoCrop
+          ? await cutoutContainer(base, (pct, stage) => setProg(slot, { pct, stage }))
+          : base
+        setProg(slot, { pct: 95, stage: 'Uploading' })
         const updated = await containersApi.uploadPhoto(container.id, { slot, label, dataUrl })
         onChanged(updated, `${label} photo updated for ${container.sku}`)
       } catch (e) {
         onChanged(container, `Upload failed — ${e instanceof Error ? e.message : 'try again'}`)
       } finally {
-        setBusySlot(null)
-        setSlotProgress(null)
+        setProg(slot, null)
       }
-    }
-    input.click()
-  }
-
-  // Select several photos at once — they fill the empty documentation slots
-  // in order (1→8); if the set is already complete, they replace 1→8 in order.
-  // Files are processed sequentially (each is cropped, then uploaded).
-  const bulkUpload = () => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = 'image/*,.heic,.heif'
-    input.multiple = true
-    input.onchange = async () => {
-      const files = Array.from(input.files ?? [])
-      if (!files.length) return
-      const empty = SHOT_LABELS.map((_, i) => i).filter(i => !photos[i])
-      const slots = empty.length ? empty : SHOT_LABELS.map((_, i) => i)
-      const n = Math.min(files.length, slots.length)
-      let latest = container
-      let uploaded = 0
-      for (let k = 0; k < n; k++) {
-        const slot = slots[k]
-        setBusySlot(slot)
-        setBatch({ done: k, total: n })
-        setSlotProgress({ pct: 2, stage: 'Reading photo' })
-        try {
-          const dataUrl = await cutoutContainer(
-            await fileToDataUrl(files[k]),
-            (pct, stage) => setSlotProgress({ pct, stage }),
-          )
-          setSlotProgress({ pct: 95, stage: 'Uploading' })
-          latest = await containersApi.uploadPhoto(container.id, { slot, label: SHOT_LABELS[slot], dataUrl })
-          uploaded++
-          onChanged(latest, `${SHOT_LABELS[slot]} photo updated (${uploaded}/${n})`)
-        } catch (e) {
-          onChanged(latest, `${SHOT_LABELS[slot]} upload failed — ${e instanceof Error ? e.message : 'try again'}`)
-        }
-      }
-      setBusySlot(null)
-      setSlotProgress(null)
-      setBatch(null)
-      const skipped = files.length - n
-      onChanged(latest, `${uploaded} photo${uploaded === 1 ? '' : 's'} uploaded for ${container.sku}${skipped > 0 ? ` (${skipped} extra file${skipped === 1 ? '' : 's'} ignored)` : ''}`)
     }
     input.click()
   }
 
   const removeSlot = async (slot: number, label: string) => {
     if (!window.confirm(`Remove the "${label}" photo from ${container.sku}?`)) return
-    setBusySlot(slot)
+    setProg(slot, { pct: 50, stage: 'Removing' })
     try {
       const updated = await containersApi.deletePhoto(container.id, slot)
       onChanged(updated, `${label} photo removed from ${container.sku}`)
     } catch (e) {
       onChanged(container, `Remove failed — ${e instanceof Error ? e.message : 'try again'}`)
     } finally {
-      setBusySlot(null)
+      setProg(slot, null)
     }
   }
 
@@ -656,11 +629,14 @@ function PhotosModal({ container, onClose, onChanged }: {
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '2px' }}>
         <h2 style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'var(--mono)' }}>{container.sku}</h2>
         <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--ink3)' }}>{container.stockNumber}</span>
-        <button onClick={bulkUpload} disabled={busySlot != null}
-          style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '5px 12px', borderRadius: 'var(--pill)', border: 'none', background: busySlot != null ? 'var(--div)' : 'var(--primary)', color: busySlot != null ? 'var(--ink3)' : '#fff', fontSize: '11px', fontWeight: 700, cursor: busySlot != null ? 'wait' : 'pointer' }}>
-          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13V3" /><polyline points="6,7 10,3 14,7" /><path d="M3 13v3a1 1 0 001 1h12a1 1 0 001-1v-3" /></svg>
-          {batch ? `Uploading ${batch.done + 1}/${batch.total}…` : 'Upload Multiple'}
-        </button>
+        <label title="Remove the background so only the container shows. Turn off if cropping hurts the shot."
+          style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: '7px', cursor: 'pointer', userSelect: 'none' }}>
+          <span style={{ fontSize: '11px', fontWeight: 700, color: autoCrop ? 'var(--primary)' : 'var(--ink3)' }}>Auto-crop</span>
+          <button onClick={() => setAutoCrop(v => !v)} role="switch" aria-checked={autoCrop}
+            style={{ width: '36px', height: '20px', borderRadius: '10px', border: 'none', cursor: 'pointer', background: autoCrop ? 'var(--primary)' : 'var(--div)', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
+            <span style={{ position: 'absolute', top: '2.5px', left: autoCrop ? '18.5px' : '2.5px', width: '15px', height: '15px', borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.3)' }} />
+          </button>
+        </label>
         <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: 'var(--pill)', background: realCount >= SHOT_LABELS.length ? 'var(--green-cont)' : 'var(--amb-c,#FEF3C7)', color: realCount >= SHOT_LABELS.length ? 'var(--green)' : 'var(--amber)' }}>
           {realCount}/{SHOT_LABELS.length} photos
         </span>
@@ -671,7 +647,8 @@ function PhotosModal({ container, onClose, onChanged }: {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '10px' }}>
         {SHOT_LABELS.map((label, i) => {
           const p = photos[i]
-          const busy = busySlot === i
+          const prog = slotProgress[i]
+          const busy = !!prog
           const isSkuShot = i === SHOT_LABELS.length - 1
           return (
             <div key={i} style={{ border: `1.5px solid ${p ? 'var(--green)' : 'var(--div)'}`, borderRadius: 'var(--r12)', overflow: 'hidden', background: 'var(--surf1)' }}>
@@ -682,8 +659,8 @@ function PhotosModal({ container, onClose, onChanged }: {
                 {isSkuShot && <span style={{ position: 'absolute', top: '4px', left: '4px', background: 'var(--primary)', color: '#fff', fontSize: '8px', fontWeight: 700, padding: '2px 6px', borderRadius: 'var(--r4)', letterSpacing: '0.4px' }}>STOCK #</span>}
                 {busy && (
                   <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,.82)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', zIndex: 2 }}>
-                    <ProgressRing pct={slotProgress?.pct ?? 0} size={38} />
-                    <span style={{ fontSize: '9px', fontWeight: 700, color: 'var(--primary)' }}>{slotProgress?.stage ?? 'Working'}…</span>
+                    <ProgressRing pct={prog?.pct ?? 0} size={38} />
+                    <span style={{ fontSize: '9px', fontWeight: 700, color: 'var(--primary)' }}>{prog?.stage ?? 'Working'}…</span>
                   </div>
                 )}
               </div>
@@ -692,7 +669,7 @@ function PhotosModal({ container, onClose, onChanged }: {
                 <div style={{ display: 'flex', gap: '4px' }}>
                   <button onClick={() => replaceSlot(i, label)} disabled={busy}
                     style={{ flex: 1, padding: '4px 0', borderRadius: 'var(--r4)', border: 'none', background: 'var(--primary)', color: '#fff', fontSize: '10px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer' }}>
-                    {busy ? `${Math.round(slotProgress?.pct ?? 0)}%` : p ? 'Replace' : 'Upload'}
+                    {busy ? `${Math.round(prog?.pct ?? 0)}%` : p ? 'Replace' : 'Upload'}
                   </button>
                   {p && (
                     <button onClick={() => removeSlot(i, label)} disabled={busy}
@@ -721,8 +698,8 @@ function PhotosModal({ container, onClose, onChanged }: {
           {/* Uploading any of shots 1–7 rebuilds the 3D wrap — mirror the progress here */}
           {updating3d && (
             <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', zIndex: 2 }}>
-              <ProgressRing pct={slotProgress?.pct ?? 0} size={38} />
-              <span style={{ fontSize: '9px', fontWeight: 700, color: 'var(--primary)' }}>Updating 3D view…</span>
+              <ProgressRing pct={docProg[0]?.pct ?? 0} size={38} />
+              <span style={{ fontSize: '9px', fontWeight: 700, color: 'var(--primary)' }}>Updating 3D view{docProg.length > 1 ? ` (${docProg.length} photos)` : ''}…</span>
             </div>
           )}
         </div>
@@ -733,13 +710,13 @@ function PhotosModal({ container, onClose, onChanged }: {
             Optionally, an AI-stitched photorealistic render can replace it{renderUrl ? '' : ' — generate one below'}.
           </div>
           <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-            <button onClick={generateRender} disabled={busySlot === RENDER_SLOT || realCount < SHOT_LABELS.length}
+            <button onClick={generateRender} disabled={!!slotProgress[RENDER_SLOT] || realCount < SHOT_LABELS.length}
               title={realCount < SHOT_LABELS.length ? `All ${SHOT_LABELS.length} shots are required first` : undefined}
-              style={{ padding: '5px 14px', borderRadius: 'var(--r4)', border: 'none', background: realCount < SHOT_LABELS.length ? 'var(--div)' : 'var(--primary)', color: realCount < SHOT_LABELS.length ? 'var(--ink3)' : '#fff', fontSize: '11px', fontWeight: 700, cursor: busySlot === RENDER_SLOT ? 'wait' : realCount < SHOT_LABELS.length ? 'not-allowed' : 'pointer' }}>
-              {busySlot === RENDER_SLOT ? 'Generating…' : renderUrl ? 'Regenerate 3D Render' : 'Generate 3D Render'}
+              style={{ padding: '5px 14px', borderRadius: 'var(--r4)', border: 'none', background: realCount < SHOT_LABELS.length ? 'var(--div)' : 'var(--primary)', color: realCount < SHOT_LABELS.length ? 'var(--ink3)' : '#fff', fontSize: '11px', fontWeight: 700, cursor: slotProgress[RENDER_SLOT] ? 'wait' : realCount < SHOT_LABELS.length ? 'not-allowed' : 'pointer' }}>
+              {slotProgress[RENDER_SLOT] ? 'Generating…' : renderUrl ? 'Regenerate 3D Render' : 'Generate 3D Render'}
             </button>
             {renderUrl && (
-              <button onClick={() => removeSlot(RENDER_SLOT, RENDER_LABEL)} disabled={busySlot === RENDER_SLOT}
+              <button onClick={() => removeSlot(RENDER_SLOT, RENDER_LABEL)} disabled={!!slotProgress[RENDER_SLOT]}
                 style={{ padding: '5px 10px', borderRadius: 'var(--r4)', border: '1.5px solid var(--cta-cont)', background: 'transparent', color: 'var(--cta)', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>
                 Remove
               </button>
