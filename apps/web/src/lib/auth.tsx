@@ -271,7 +271,7 @@ export function LoginForm({ onDone, allowRegister = false, subtitle }: {
 // Shown by RequireRole when the account signed in with the shared seeded
 // password — staff must set a real one before reaching the portal.
 
-function ChangePasswordGate() {
+function ChangePasswordGate({ onSkip }: { onSkip: () => void }) {
   const { user, changePassword, logout } = useAuth()
   const [form, setForm] = useState({ current: '', next: '', confirm: '' })
   const [error, setError] = useState('')
@@ -314,7 +314,10 @@ function ChangePasswordGate() {
         {pwInput('confirm', 'Confirm new password', 'Repeat it')}
         {error && <div style={errorBox}>{error}</div>}
         <button onClick={submit} disabled={busy} style={primaryBtn(busy)}>{busy ? 'Saving…' : 'Save & Continue'}</button>
-        <button onClick={logout} style={{ ...linkBtn, display: 'block', margin: '14px auto 0' }}>Sign out instead</button>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '18px', marginTop: '14px' }}>
+          <button onClick={onSkip} style={linkBtn}>Skip for now →</button>
+          <button onClick={logout} style={{ ...linkBtn, color: '#6B7280' }}>Sign out</button>
+        </div>
       </div>
     </div>
   )
@@ -328,14 +331,17 @@ export function RequireRole({ roles, title, children }: {
   children: React.ReactNode
 }) {
   const { user, loading, logout } = useAuth()
+  // Seeded-password prompt is skippable per session while the site ramps up
+  // (the seeded logins stay active by request — revisit before real traffic).
+  const [pwGateSkipped, setPwGateSkipped] = useState(false)
 
   if (loading) {
     return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', fontFamily: 'system-ui, sans-serif', color: '#6B7280', fontSize: '14px' }}>Loading…</div>
   }
 
   if (user && roles.includes(user.role)) {
-    // Seeded/shared passwords don't get past the door.
-    if (user.mustChangePassword) return <ChangePasswordGate />
+    // Accounts on the seeded/shared password are prompted to set a real one.
+    if (user.mustChangePassword && !pwGateSkipped) return <ChangePasswordGate onSkip={() => setPwGateSkipped(true)} />
     return <>{children}</>
   }
 

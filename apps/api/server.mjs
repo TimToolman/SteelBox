@@ -344,6 +344,8 @@ function estimateRent(buyPrice) {
 const AUTH_SECRET = process.env.SBX_SECRET || 'sbx-dev-secret'
 const TOKEN_TTL_MS = 12 * 60 * 60 * 1000 // 12h sessions
 const SEED_PASSWORD = 'test1234' // dev-seeded accounts; login flags these for a forced change
+// ADMIN_2FA=off disables the emailed sign-in code for admins (pre-email-setup escape hatch).
+const ADMIN_2FA = (process.env.ADMIN_2FA || 'on').toLowerCase() !== 'off'
 
 // Short-lived 6-digit codes for admin login 2FA and password resets.
 // In-memory (single instance) — a restart just means requesting a new code.
@@ -680,7 +682,9 @@ async function handleRequest(req, res) {
       const mustChangePassword = String(password) === SEED_PASSWORD
       // Admin logins take a second factor: a 6-digit code emailed to the
       // account address, entered against a short-lived pending token.
-      if (u.role === 'admin') {
+      // ADMIN_2FA=off skips the code step (used while email delivery is
+      // not yet configured — set up SendGrid, then remove the var).
+      if (u.role === 'admin' && ADMIN_2FA) {
         const code = String(randomInt(100000, 1000000))
         loginCodes.set(u.id, { code, mustChangePassword, expires: Date.now() + AUTH_CODE_TTL })
         queueMessage('email', u.email, 'Your MVP Container sign-in code',
