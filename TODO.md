@@ -4,13 +4,14 @@ Working list toward go-live. Updated 2026-07-15.
 
 ## Go-live blockers
 
-- [x] **Real email delivery** — Gmail SMTP sender built into the API (`apps/api/smtp.mjs`).
-      Every outbox.csv email is actually delivered once `SMTP_USER` + `SMTP_PASS`
-      (Gmail app password) are set on Railway; without them the app runs in log-only
-      dev mode. SMS remains log-only until a gateway (e.g. Twilio) is added.
-- [ ] **Set Railway env vars** — `SMTP_USER`, `SMTP_PASS` (Gmail app password from
-      myaccount.google.com/apppasswords), optional `MAIL_FROM_NAME`, `ORDER_NOTIFY_EMAILS`
-      (comma-separated; defaults to tgmoore@gmail.com), and a strong `SBX_SECRET`.
+- [x] **Real email delivery** — two transports in `apps/api/smtp.mjs`: SendGrid HTTP API
+      (preferred — Railway blocks ALL outbound SMTP ports, verified 2026-07-15) and
+      Gmail SMTP (587 STARTTLS / 465) for hosts that allow it. Log-only dev mode when
+      neither is configured. SMS remains log-only until a gateway (e.g. Twilio) is added.
+- [ ] **Set Railway env vars** — `SENDGRID_API_KEY` + `MAIL_FROM` (the SendGrid-verified
+      single sender), optional `MAIL_FROM_NAME` / `ORDER_NOTIFY_EMAILS` (defaults to
+      tgmoore@gmail.com). The `SMTP_USER`/`SMTP_PASS` vars are dead weight on Railway
+      (SMTP blocked) — remove them or leave them; SendGrid wins when both are set.
 - [x] **True authentication** — admin logins require an emailed 6-digit code;
       email-code password reset for all roles; seeded `test1234` passwords force a
       change at the door; checkout verification codes now arrive by email.

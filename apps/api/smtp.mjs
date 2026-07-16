@@ -1,20 +1,23 @@
 // ============================================================
-// Minimal SMTP sender — zero-dependency, built for Gmail SMTP.
-// Speaks both submission flavors:
-//   port 587 (default): plain TCP → STARTTLS upgrade → AUTH
-//   port 465:           implicit TLS from the first byte
-// Configure via env:
-//   SMTP_USER  Gmail address to authenticate as
-//   SMTP_PASS  Gmail app password (myaccount.google.com/apppasswords)
-//   SMTP_PORT  587 (default) or 465; SMTP_HOST for other providers
-//   MAIL_FROM / MAIL_FROM_NAME  optional From header parts
-// When SMTP_USER/PASS are unset, sendEmail rejects and callers fall
-// back to log-only mode (outbox.csv), keeping local dev working.
+// Minimal email sender — zero-dependency, two transports:
+//
+//   1. SendGrid HTTP API (preferred when SENDGRID_API_KEY is set).
+//      Plain HTTPS, so it works on hosts that block outbound SMTP
+//      (Railway does). Free tier + Single Sender Verification needs
+//      no DNS setup. The From address must be the verified sender.
+//   2. SMTP (Gmail-style) via SMTP_USER + SMTP_PASS (app password).
+//      Port 587 STARTTLS by default, implicit TLS via SMTP_PORT=465.
+//
+// Env: SENDGRID_API_KEY | SMTP_USER/SMTP_PASS/SMTP_HOST/SMTP_PORT,
+// plus MAIL_FROM / MAIL_FROM_NAME (From defaults to SMTP_USER).
+// With neither transport configured, sendEmail rejects and callers
+// fall back to log-only mode (outbox.csv), keeping local dev working.
 // ============================================================
 
 import { connect as tlsConnect } from 'node:tls'
 import { connect as netConnect } from 'node:net'
 
+const SENDGRID_KEY = process.env.SENDGRID_API_KEY || ''
 const HOST = process.env.SMTP_HOST || 'smtp.gmail.com'
 const PORT = Number(process.env.SMTP_PORT || 587)
 const USER = process.env.SMTP_USER || ''
@@ -24,7 +27,35 @@ const FROM_NAME = process.env.MAIL_FROM_NAME || 'MVP Container'
 const TIMEOUT_MS = 25000
 
 export function smtpConfigured() {
-  return Boolean(USER && PASS)
+  return Boolean(SENDGRID_KEY || (USER && PASS))
+}
+
+// ── Transport 1: SendGrid HTTP API ─────────────────────────
+
+async function sendViaSendgrid(recipients, subject, text) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  try {
+    const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { Authorization: `Bearer ${SENDGRID_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        personalizations: [{ to: recipients.map(email => ({ email })) }],
+        from: { email: FROM, name: FROM_NAME },
+        subject: subject || '',
+        content: [{ type: 'text/plain', value: String(text || ' ') }],
+      }),
+    })
+    if (res.status !== 202) {
+      const detail = await res.text().catch(() => '')
+      throw new Error(`SendGrid ${res.status}: ${detail.slice(0, 200)}`)
+    }
+  } catch (e) {
+    throw e.name === 'AbortError' ? new Error('SendGrid timeout') : e
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 // RFC 2047 encode a header word if it contains non-ASCII.
@@ -104,11 +135,13 @@ function makeIO(onFatal) {
 }
 
 // Send one plain-text email. `to` is a string or array of addresses.
+// Routes to SendGrid (HTTPS) when a key is set, else the SMTP transport.
 export function sendEmail({ to, subject, text }) {
   const recipients = (Array.isArray(to) ? to : [to]).map(a => String(a).trim()).filter(Boolean)
+  if (!recipients.length) return Promise.reject(new Error('No recipients'))
+  if (SENDGRID_KEY) return sendViaSendgrid(recipients, subject, text)
   return new Promise((resolve, reject) => {
-    if (!smtpConfigured()) return reject(new Error('SMTP not configured (set SMTP_USER + SMTP_PASS)'))
-    if (!recipients.length) return reject(new Error('No recipients'))
+    if (!smtpConfigured()) return reject(new Error('Email not configured (set SENDGRID_API_KEY, or SMTP_USER + SMTP_PASS)'))
 
     let settled = false
     let io
