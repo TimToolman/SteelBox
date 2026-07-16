@@ -2,16 +2,27 @@
 // MVP Container Auth — shared context, login screens, route guards
 // Roles: admin (portal), driver (field app), customer (marketplace
 // checkout + profile). Guests may browse the marketplace freely.
+// Admin sign-ins take a second step: a 6-digit code emailed to the
+// account address. Password resets are email-code based too.
 // ============================================================
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { auth as authApi, type AuthUser, type Role } from './api'
 
+// Password-correct admin logins pause here until the emailed code is entered.
+export interface PendingLogin {
+  pendingToken: string
+  devCode?: string   // dev only — shown when the server has no SMTP configured
+}
+
 interface AuthContextValue {
   user: AuthUser | null
   loading: boolean
-  login: (email: string, password: string) => Promise<AuthUser>
+  // Resolves to the signed-in user, or a PendingLogin when a code is needed.
+  login: (email: string, password: string) => Promise<{ user?: AuthUser; pending?: PendingLogin }>
+  verifyLogin: (pendingToken: string, code: string) => Promise<AuthUser>
   register: (data: { name: string; email: string; password: string; phone?: string }) => Promise<AuthUser>
+  changePassword: (current: string, next: string) => Promise<void>
   logout: () => void
   refresh: () => Promise<void>
 }
@@ -33,6 +44,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const result = await authApi.login(email, password)
+    if ('twoFaRequired' in result && result.twoFaRequired) {
+      return { pending: { pendingToken: result.pendingToken, devCode: result.devCode } }
+    }
+    localStorage.setItem('sbx_token', result.token)
+    setUser(result.user)
+    return { user: result.user }
+  }, [])
+
+  const verifyLogin = useCallback(async (pendingToken: string, code: string) => {
+    const result = await authApi.loginVerify(pendingToken, code)
     localStorage.setItem('sbx_token', result.token)
     setUser(result.user)
     return result.user
@@ -40,9 +61,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = useCallback(async (data: { name: string; email: string; password: string; phone?: string }) => {
     const result = await authApi.register(data)
+    if ('twoFaRequired' in result && result.twoFaRequired) throw new Error('Unexpected verification step') // registration never 2FAs
     localStorage.setItem('sbx_token', result.token)
     setUser(result.user)
     return result.user
+  }, [])
+
+  const changePassword = useCallback(async (current: string, next: string) => {
+    await authApi.changePassword(current, next)
+    // The seeded-password nag is satisfied the moment a real password is set.
+    setUser(u => (u ? { ...u, mustChangePassword: false } : u))
   }, [])
 
   const logout = useCallback(() => {
@@ -55,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refresh }}>
+    <AuthContext.Provider value={{ user, loading, login, verifyLogin, register, changePassword, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   )
@@ -71,6 +99,10 @@ export function useAuth(): AuthContextValue {
 
 const label: React.CSSProperties = { display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: '#6B7280', marginBottom: '5px' }
 const input: React.CSSProperties = { width: '100%', padding: '11px 13px', border: '1.5px solid #D9DBE4', borderRadius: '10px', fontSize: '14px', outline: 'none', marginBottom: '12px', fontFamily: 'inherit', boxSizing: 'border-box' }
+const primaryBtn = (busy: boolean): React.CSSProperties => ({ width: '100%', padding: '13px', borderRadius: '999px', background: '#0057B8', color: '#fff', fontSize: '14px', fontWeight: 700, border: 'none', cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.7 : 1 })
+const linkBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#0057B8', fontWeight: 700, cursor: 'pointer', fontSize: '12px', padding: 0 }
+const errorBox: React.CSSProperties = { background: '#FDECEA', border: '1px solid #F5C6C0', color: '#B3261E', borderRadius: '8px', padding: '9px 12px', fontSize: '12px', lineHeight: 1.5, marginBottom: '12px' }
+const infoBox: React.CSSProperties = { background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#1D4ED8', borderRadius: '8px', padding: '9px 12px', fontSize: '12px', lineHeight: 1.5, marginBottom: '12px' }
 
 // Eye / eye-off toggle shown inside password fields. Reused by the admin
 // portal's user form too — keep it dependency-free.
@@ -87,81 +119,203 @@ export function ShowPasswordButton({ shown, onToggle }: { shown: boolean; onTogg
   )
 }
 
+type FormMode = 'login' | 'register' | 'code' | 'forgot' | 'reset'
+
 export function LoginForm({ onDone, allowRegister = false, subtitle }: {
   onDone?: (u: AuthUser) => void
   allowRegister?: boolean
   subtitle?: string
 }) {
-  const { login, register } = useAuth()
-  const [mode, setMode] = useState<'login' | 'register'>('login')
-  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '' })
+  const { login, verifyLogin, register } = useAuth()
+  const [mode, setMode] = useState<FormMode>('login')
+  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', code: '', newPassword: '' })
+  const [pending, setPending] = useState<PendingLogin | null>(null)
+  const [notice, setNotice] = useState('')  // blue info banner (code sent, reset done…)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [pwFocused, setPwFocused] = useState(false)  // hide the ••• placeholder the moment the field is focused
   const [showPw, setShowPw] = useState(false)
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [k]: e.target.value }))
+  const go = (m: FormMode, msg = '') => { setMode(m); setError(''); setNotice(msg) }
 
-  const submit = async () => {
+  const run = async (fn: () => Promise<void>) => {
     if (busy) return
     setBusy(true)
     setError('')
-    try {
-      const u = mode === 'login'
-        ? await login(form.email.trim(), form.password)
-        : await register({ name: form.name.trim(), email: form.email.trim(), password: form.password, phone: form.phone.trim() })
-      onDone?.(u)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Sign in failed — please try again')
-    } finally {
-      setBusy(false)
-    }
+    try { await fn() } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong — please try again')
+    } finally { setBusy(false) }
   }
+
+  const submitLogin = () => run(async () => {
+    const result = mode === 'login'
+      ? await login(form.email.trim(), form.password)
+      : { user: await register({ name: form.name.trim(), email: form.email.trim(), password: form.password, phone: form.phone.trim() }) }
+    if (result.pending) {
+      setPending(result.pending)
+      go('code', `We emailed a 6-digit sign-in code to ${form.email.trim()}. Enter it below.`)
+      return
+    }
+    if (result.user) onDone?.(result.user)
+  })
+
+  const submitCode = () => run(async () => {
+    if (!pending) { go('login'); return }
+    const u = await verifyLogin(pending.pendingToken, form.code.trim())
+    onDone?.(u)
+  })
+
+  const submitForgot = () => run(async () => {
+    const r = await authApi.forgot(form.email.trim())
+    go('reset', `If ${form.email.trim()} has an account, a reset code is on its way.${r.devCode ? ` (Dev code: ${r.devCode})` : ''}`)
+  })
+
+  const submitReset = () => run(async () => {
+    await authApi.reset(form.email.trim(), form.code.trim(), form.newPassword)
+    setForm(p => ({ ...p, password: '', code: '', newPassword: '' }))
+    go('login', 'Password updated — sign in with your new password.')
+  })
+
+  const submit = mode === 'code' ? submitCode : mode === 'forgot' ? submitForgot : mode === 'reset' ? submitReset : submitLogin
+  const onEnter = (e: React.KeyboardEvent) => { if (e.key === 'Enter') submit() }
 
   return (
     <div>
-      {subtitle && <p style={{ fontSize: '13px', color: '#6B7280', lineHeight: 1.55, marginBottom: '16px' }}>{subtitle}</p>}
+      {subtitle && mode !== 'code' && <p style={{ fontSize: '13px', color: '#6B7280', lineHeight: 1.55, marginBottom: '16px' }}>{subtitle}</p>}
+      {notice && <div style={infoBox}>{notice}{mode === 'code' && pending?.devCode ? <> (Dev code: <strong>{pending.devCode}</strong>)</> : null}</div>}
+
       {mode === 'register' && (
         <div>
           <label style={label}>Your name</label>
           <input style={input} placeholder="Jane Smith" value={form.name} onChange={set('name')} />
         </div>
       )}
-      <label style={label}>Email</label>
-      <input style={input} type="email" placeholder="you@company.com" value={form.email} onChange={set('email')}
-        onKeyDown={e => e.key === 'Enter' && submit()} autoFocus />
-      <label style={label}>Password</label>
+
+      {(mode === 'login' || mode === 'register' || mode === 'forgot') && (
+        <>
+          <label style={label}>Email</label>
+          <input style={input} type="email" placeholder="you@company.com" value={form.email} onChange={set('email')}
+            onKeyDown={onEnter} autoFocus />
+        </>
+      )}
+
+      {(mode === 'login' || mode === 'register') && (
+        <>
+          <label style={label}>Password</label>
+          <div style={{ position: 'relative', marginBottom: '12px' }}>
+            <input style={{ ...input, paddingRight: '44px', marginBottom: 0 }} type={showPw ? 'text' : 'password'}
+              placeholder={pwFocused ? '' : mode === 'register' ? 'At least 8 characters' : '••••••••'}
+              value={form.password} onChange={set('password')}
+              onFocus={() => setPwFocused(true)} onBlur={() => setPwFocused(false)}
+              onKeyDown={onEnter} />
+            <ShowPasswordButton shown={showPw} onToggle={() => setShowPw(s => !s)} />
+          </div>
+        </>
+      )}
+
+      {(mode === 'code' || mode === 'reset') && (
+        <>
+          <label style={label}>{mode === 'code' ? 'Sign-in code' : 'Reset code'}</label>
+          <input style={{ ...input, letterSpacing: '4px', fontFamily: 'ui-monospace, monospace', fontSize: '17px', textAlign: 'center' }}
+            inputMode="numeric" maxLength={6} placeholder="••••••"
+            value={form.code} onChange={set('code')} onKeyDown={onEnter} autoFocus />
+        </>
+      )}
+
+      {mode === 'reset' && (
+        <>
+          <label style={label}>New password</label>
+          <div style={{ position: 'relative', marginBottom: '12px' }}>
+            <input style={{ ...input, paddingRight: '44px', marginBottom: 0 }} type={showPw ? 'text' : 'password'}
+              placeholder="At least 8 characters" value={form.newPassword} onChange={set('newPassword')} onKeyDown={onEnter} />
+            <ShowPasswordButton shown={showPw} onToggle={() => setShowPw(s => !s)} />
+          </div>
+        </>
+      )}
+
+      {mode === 'register' && (
+        <div>
+          <label style={label}>Mobile phone <span style={{ fontWeight: 400, textTransform: 'none' }}>(used to coordinate deliveries)</span></label>
+          <input style={input} type="tel" placeholder="(504) 555-0000" value={form.phone} onChange={set('phone')} onKeyDown={onEnter} />
+        </div>
+      )}
+
+      {error && <div style={errorBox}>{error}</div>}
+
+      <button onClick={submit} disabled={busy} style={primaryBtn(busy)}>
+        {busy ? 'One moment…'
+          : mode === 'login' ? 'Sign In'
+          : mode === 'register' ? 'Create Account'
+          : mode === 'code' ? 'Verify & Sign In'
+          : mode === 'forgot' ? 'Email Me a Reset Code'
+          : 'Set New Password'}
+      </button>
+
+      <div style={{ textAlign: 'center', marginTop: '12px', fontSize: '12px', color: '#6B7280', display: 'grid', gap: '6px' }}>
+        {mode === 'login' && (
+          <>
+            <button onClick={() => go('forgot')} style={linkBtn}>Forgot password?</button>
+            {allowRegister && <span>New to MVP Container? <button onClick={() => go('register')} style={linkBtn}>Create an account</button></span>}
+          </>
+        )}
+        {mode === 'register' && <span>Already have an account? <button onClick={() => go('login')} style={linkBtn}>Sign in</button></span>}
+        {(mode === 'code' || mode === 'forgot' || mode === 'reset') && (
+          <button onClick={() => { setPending(null); go('login') }} style={linkBtn}>← Back to sign in</button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Forced password change (seeded dev passwords) ──────────
+// Shown by RequireRole when the account signed in with the shared seeded
+// password — staff must set a real one before reaching the portal.
+
+function ChangePasswordGate() {
+  const { user, changePassword, logout } = useAuth()
+  const [form, setForm] = useState({ current: '', next: '', confirm: '' })
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [showPw, setShowPw] = useState(false)
+
+  const submit = async () => {
+    if (busy) return
+    if (form.next !== form.confirm) { setError('New passwords don’t match'); return }
+    setBusy(true)
+    setError('')
+    try {
+      await changePassword(form.current, form.next)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not change the password — try again')
+    } finally { setBusy(false) }
+  }
+
+  const pwInput = (key: 'current' | 'next' | 'confirm', lbl: string, placeholder: string) => (
+    <>
+      <label style={label}>{lbl}</label>
       <div style={{ position: 'relative', marginBottom: '12px' }}>
-        <input style={{ ...input, paddingRight: '44px', marginBottom: 0 }} type={showPw ? 'text' : 'password'}
-          placeholder={pwFocused ? '' : mode === 'register' ? 'At least 8 characters' : '••••••••'}
-          value={form.password} onChange={set('password')}
-          onFocus={() => setPwFocused(true)} onBlur={() => setPwFocused(false)}
+        <input style={{ ...input, paddingRight: '44px', marginBottom: 0 }} type={showPw ? 'text' : 'password'} placeholder={placeholder}
+          value={form[key]} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
           onKeyDown={e => e.key === 'Enter' && submit()} />
         <ShowPasswordButton shown={showPw} onToggle={() => setShowPw(s => !s)} />
       </div>
-      {mode === 'register' && (
-        <div>
-          <label style={label}>Mobile phone <span style={{ fontWeight: 400, textTransform: 'none' }}>(used to verify orders by text)</span></label>
-          <input style={input} type="tel" placeholder="(504) 555-0000" value={form.phone} onChange={set('phone')} onKeyDown={e => e.key === 'Enter' && submit()} />
-        </div>
-      )}
-      {error && (
-        <div style={{ background: '#FDECEA', border: '1px solid #F5C6C0', color: '#B3261E', borderRadius: '8px', padding: '9px 12px', fontSize: '12px', lineHeight: 1.5, marginBottom: '12px' }}>
-          {error}
-        </div>
-      )}
-      <button onClick={submit} disabled={busy}
-        style={{ width: '100%', padding: '13px', borderRadius: '999px', background: '#0057B8', color: '#fff', fontSize: '14px', fontWeight: 700, border: 'none', cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.7 : 1 }}>
-        {busy ? 'One moment…' : mode === 'login' ? 'Sign In' : 'Create Account'}
-      </button>
-      {allowRegister && (
-        <div style={{ textAlign: 'center', marginTop: '12px', fontSize: '12px', color: '#6B7280' }}>
-          {mode === 'login' ? (
-            <>New to MVP Container? <button onClick={() => { setMode('register'); setError('') }} style={{ background: 'none', border: 'none', color: '#0057B8', fontWeight: 700, cursor: 'pointer', fontSize: '12px', padding: 0 }}>Create an account</button></>
-          ) : (
-            <>Already have an account? <button onClick={() => { setMode('login'); setError('') }} style={{ background: 'none', border: 'none', color: '#0057B8', fontWeight: 700, cursor: 'pointer', fontSize: '12px', padding: 0 }}>Sign in</button></>
-          )}
-        </div>
-      )}
+    </>
+  )
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#F4F6FB', fontFamily: 'system-ui, -apple-system, sans-serif', padding: '20px' }}>
+      <div style={{ width: '100%', maxWidth: '400px', boxSizing: 'border-box', background: '#fff', borderRadius: '18px', border: '1px solid #E3E5EE', boxShadow: '0 8px 30px rgba(26,28,46,.08)', padding: '30px 28px' }}>
+        <h1 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 4px' }}>Set a new password</h1>
+        <p style={{ fontSize: '13px', color: '#6B7280', lineHeight: 1.6, margin: '0 0 16px' }}>
+          <strong>{user?.email}</strong> is still using the shared setup password. Choose your own before continuing — this is required now that the site is live.
+        </p>
+        {pwInput('current', 'Current password', 'The setup password')}
+        {pwInput('next', 'New password', 'At least 8 characters')}
+        {pwInput('confirm', 'Confirm new password', 'Repeat it')}
+        {error && <div style={errorBox}>{error}</div>}
+        <button onClick={submit} disabled={busy} style={primaryBtn(busy)}>{busy ? 'Saving…' : 'Save & Continue'}</button>
+        <button onClick={logout} style={{ ...linkBtn, display: 'block', margin: '14px auto 0' }}>Sign out instead</button>
+      </div>
     </div>
   )
 }
@@ -179,7 +333,11 @@ export function RequireRole({ roles, title, children }: {
     return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', fontFamily: 'system-ui, sans-serif', color: '#6B7280', fontSize: '14px' }}>Loading…</div>
   }
 
-  if (user && roles.includes(user.role)) return <>{children}</>
+  if (user && roles.includes(user.role)) {
+    // Seeded/shared passwords don't get past the door.
+    if (user.mustChangePassword) return <ChangePasswordGate />
+    return <>{children}</>
+  }
 
   return (
     <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#F4F6FB', fontFamily: 'system-ui, -apple-system, sans-serif', padding: '20px' }}>

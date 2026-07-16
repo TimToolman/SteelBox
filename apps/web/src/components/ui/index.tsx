@@ -21,6 +21,9 @@ export type StatusKey =
   | 'estimate_sent'
   | 'estimate_approved'
   | 'custom_in_progress'
+  | 'pending_review'
+  | 'confirmed'
+  | 'cancelled'
 
 // ── Grade Badge ────────────────────────────────────────────
 
@@ -86,6 +89,9 @@ const STATUS_STYLES: Record<StatusKey, { bg: string; color: string; dot: string;
   estimate_sent:       { bg: '#D6E4FF', color: '#0057B8', dot: '#0057B8', label: 'Estimate Sent' },
   estimate_approved:   { bg: '#E6F4EA', color: '#188038', dot: '#188038', label: 'Estimate Approved' },
   custom_in_progress:  { bg: '#EDE9FE', color: '#6D28D9', dot: '#6D28D9', label: 'Build In Progress' },
+  pending_review:      { bg: '#FFF8E1', color: '#B45309', dot: '#B45309', label: 'Pending Review' },
+  confirmed:           { bg: '#E6F4EA', color: '#188038', dot: '#188038', label: 'Paid · Confirmed' },
+  cancelled:           { bg: '#FDECEA', color: '#B3261E', dot: '#B3261E', label: 'Cancelled' },
 }
 
 interface StatusBadgeProps {

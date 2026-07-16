@@ -5,10 +5,11 @@
 // ============================================================
 
 import { createServer } from 'node:http'
-import { readFileSync, writeFileSync, existsSync, mkdirSync, cpSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, cpSync, renameSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, basename } from 'node:path'
 import { createHmac, randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto'
+import { sendEmail, smtpConfigured } from './smtp.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 // In the cloud, DATA_DIR points at a persistent volume (e.g. /data on
@@ -102,11 +103,15 @@ const SCHEMAS = {
   },
   orders: {
     file: 'orders.csv',
-    headers: ['id','orderNumber','containerId','containerSku','customerId','customerName','customerEmail','customerPhone','deliveryAddress','deliveryZip','amount','status','driverId','driverName','scheduledDate','completedAt','createdAt','saleType','unitCost','deposit','driverHours'],
+    // validatedAt/calledAt/paidAt timestamp the phone-payment pipeline:
+    // staff validate availability → call the customer → collect payment
+    // (status becomes 'confirmed') → assign a driver.
+    headers: ['id','orderNumber','containerId','containerSku','customerId','customerName','customerEmail','customerPhone','deliveryAddress','deliveryZip','amount','status','driverId','driverName','scheduledDate','completedAt','createdAt','saleType','unitCost','deposit','driverHours','validatedAt','calledAt','paidAt'],
     types: {
       amount: 'number', unitCost: 'number', deposit: 'number', driverHours: 'number',
       driverId: 'stringOrNull', driverName: 'stringOrNull',
       scheduledDate: 'stringOrNull', completedAt: 'stringOrNull',
+      validatedAt: 'stringOrNull', calledAt: 'stringOrNull', paidAt: 'stringOrNull',
     },
   },
   drivers: {
@@ -215,7 +220,45 @@ function writeTable(name, records) {
   const schema = SCHEMAS[name]
   const csv = serializeCsv(schema.headers, records, rec =>
     schema.headers.map(h => encodeCell(rec[h], schema.types[h])))
-  writeFileSync(join(DATA_DIR, schema.file), csv)
+  // Atomic write (temp file + rename) so a crash mid-write can never leave a
+  // truncated CSV — rename within one filesystem replaces the file whole.
+  const path = join(DATA_DIR, schema.file)
+  writeFileSync(`${path}.tmp`, csv)
+  renameSync(`${path}.tmp`, path)
+  broadcastChange(name)
+}
+
+// ── Live change feed (SSE) ────────────────────────────────
+// Every writeTable() bumps that table's revision and pushes it to all
+// connected clients over /events, so open apps (admin ⇄ field ⇄ marketplace)
+// re-fetch changed data instantly instead of waiting for a manual refresh.
+// Only table names + counters go over the wire — no row data — so the stream
+// is served unauthenticated (same exposure as the public /containers list).
+
+const tableRevs = {}
+const sseClients = new Set()
+
+function broadcastChange(name) {
+  tableRevs[name] = (tableRevs[name] || 0) + 1
+  const frame = `event: change\ndata: ${JSON.stringify({ table: name, rev: tableRevs[name] })}\n\n`
+  for (const res of sseClients) res.write(frame)
+}
+
+function handleEvents(req, res) {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'X-Accel-Buffering': 'no',
+  })
+  // Rev snapshot on connect — a reconnecting client diffs this against what
+  // it last saw and re-fetches only tables that changed while it was offline.
+  res.write(`event: snapshot\ndata: ${JSON.stringify(tableRevs)}\n\n`)
+  sseClients.add(res)
+  // Comment heartbeat keeps proxies (Railway) from idling out the socket.
+  const ping = setInterval(() => res.write(': ping\n\n'), 25000)
+  req.on('close', () => { clearInterval(ping); sseClients.delete(res) })
 }
 
 // ── Domain helpers ────────────────────────────────────────
@@ -300,6 +343,30 @@ function estimateRent(buyPrice) {
 
 const AUTH_SECRET = process.env.SBX_SECRET || 'sbx-dev-secret'
 const TOKEN_TTL_MS = 12 * 60 * 60 * 1000 // 12h sessions
+const SEED_PASSWORD = 'test1234' // dev-seeded accounts; login flags these for a forced change
+
+// Short-lived 6-digit codes for admin login 2FA and password resets.
+// In-memory (single instance) — a restart just means requesting a new code.
+const AUTH_CODE_TTL = 10 * 60 * 1000
+const loginCodes = new Map()  // userId → { code, mustChangePassword, expires }
+const resetCodes = new Map()  // email → { code, userId, expires }
+
+// A pending token bridges login step 1 (password OK) to step 2 (email code) —
+// same HMAC scheme as session tokens but tagged so it can't be used as one.
+function signPendingToken(userId) {
+  const exp = Date.now() + AUTH_CODE_TTL
+  const payload = `${userId}.${exp}.pending`
+  const sig = createHmac('sha256', AUTH_SECRET).update(payload).digest('hex').slice(0, 32)
+  return `${payload}.${sig}`
+}
+function verifyPendingToken(token) {
+  const parts = String(token || '').split('.')
+  if (parts.length !== 4 || parts[2] !== 'pending') return null
+  const [id, exp, tag, sig] = parts
+  const expect = createHmac('sha256', AUTH_SECRET).update(`${id}.${exp}.${tag}`).digest('hex').slice(0, 32)
+  if (sig !== expect || Number(exp) < Date.now()) return null
+  return id
+}
 
 function hashPassword(pw) {
   const salt = randomBytes(8).toString('hex')
@@ -391,16 +458,45 @@ function twoFaVerified(userId) {
   return !!rec?.verifiedAt && (Date.now() - rec.verifiedAt) < TWOFA_VALID_FOR
 }
 
-// ── Outbound email / SMS (logged to outbox.csv) ───────────
+// ── Outbound email / SMS ──────────────────────────────────
+// Every message is logged to outbox.csv (the admin portal shows it). When
+// SMTP is configured (SMTP_USER/SMTP_PASS env), email is actually delivered
+// and the row's status tracks sending → sent/failed. SMS has no gateway yet —
+// rows are logged with status 'logged (no SMS gateway)' until one is wired.
+
+// Staff inboxes that receive operational notifications (new orders, customer
+// messages). Comma-separated env override; tenant-configurable later.
+const NOTIFY_EMAILS = (process.env.ORDER_NOTIFY_EMAILS || 'tgmoore@gmail.com')
+  .split(',').map(s => s.trim()).filter(Boolean)
 
 function queueMessage(channel, to, subject, body, relatedType = '', relatedId = '') {
   if (!to) return
+  const id = uid('out')
+  const deliver = channel === 'email' && smtpConfigured()
   const rows = readTable('outbox')
   rows.push({
-    id: uid('out'), channel, to, subject, body,
-    relatedType, relatedId, status: 'sent', createdAt: new Date().toISOString(),
+    id, channel, to, subject, body, relatedType, relatedId,
+    status: deliver ? 'sending' : channel === 'email' ? 'logged (no SMTP)' : 'logged (no SMS gateway)',
+    createdAt: new Date().toISOString(),
   })
   writeTable('outbox', rows)
+  if (!deliver) return
+  sendEmail({ to: to.split(',').map(s => s.trim()).filter(Boolean), subject, text: body })
+    .then(() => setOutboxStatus(id, 'sent'))
+    .catch(err => {
+      console.warn(`Email to ${to} failed: ${err.message}`)
+      setOutboxStatus(id, `failed: ${err.message}`.slice(0, 120))
+    })
+}
+
+// Outbox status lands after the SMTP conversation finishes — enqueue the
+// read-modify-write so it can't interleave with in-flight request handling.
+function setOutboxStatus(id, status) {
+  enqueue(() => {
+    const rows = readTable('outbox')
+    const i = rows.findIndex(r => r.id === id)
+    if (i !== -1) { rows[i] = { ...rows[i], status }; writeTable('outbox', rows) }
+  })
 }
 
 // ── Photo storage ─────────────────────────────────────────
@@ -499,15 +595,19 @@ function triggerAutoRender(containerId) {
     if (!c) return
     const result = await generateRender(c)
     if (result.error) { console.warn(`Auto-render skipped for ${c.sku}: ${result.error}`); return }
-    const fresh = readTable('containers')
-    const idx = fresh.findIndex(x => x.id === containerId)
-    if (idx === -1) return
-    const photos = Array.isArray(fresh[idx].photos) ? [...fresh[idx].photos] : []
-    while (photos.length <= RENDER_SLOT) photos.push('')
-    photos[RENDER_SLOT] = result.url
-    fresh[idx] = { ...fresh[idx], photos, has360: true }
-    writeTable('containers', fresh)
-    console.log(`Auto-rendered 3D view for ${fresh[idx].sku}`)
+    // Join the request chain for the table update — the render finished
+    // outside a request, so an unserialized write could interleave.
+    enqueue(() => {
+      const fresh = readTable('containers')
+      const idx = fresh.findIndex(x => x.id === containerId)
+      if (idx === -1) return
+      const photos = Array.isArray(fresh[idx].photos) ? [...fresh[idx].photos] : []
+      while (photos.length <= RENDER_SLOT) photos.push('')
+      photos[RENDER_SLOT] = result.url
+      fresh[idx] = { ...fresh[idx], photos, has360: true }
+      writeTable('containers', fresh)
+      console.log(`Auto-rendered 3D view for ${fresh[idx].sku}`)
+    })
   })().catch(e => console.warn('Auto-render failed:', e.message))
 }
 
@@ -576,7 +676,86 @@ async function handleRequest(req, res) {
       if (!u || !checkPassword(password || '', u.passwordHash)) {
         return send(res, 401, { message: 'Invalid email or password' })
       }
-      return send(res, 200, { token: signToken(u.id), user: publicUser(u) })
+      // Anyone still on the seeded dev password must set a real one.
+      const mustChangePassword = String(password) === SEED_PASSWORD
+      // Admin logins take a second factor: a 6-digit code emailed to the
+      // account address, entered against a short-lived pending token.
+      if (u.role === 'admin') {
+        const code = String(randomInt(100000, 1000000))
+        loginCodes.set(u.id, { code, mustChangePassword, expires: Date.now() + AUTH_CODE_TTL })
+        queueMessage('email', u.email, 'Your MVP Container sign-in code',
+          `Your sign-in verification code is ${code}. It expires in 10 minutes.\n\nIf you didn't try to sign in, change your password immediately.`,
+          'user', u.id)
+        return send(res, 200, {
+          twoFaRequired: true,
+          pendingToken: signPendingToken(u.id),
+          // Dev fallback — without SMTP the code can't arrive by email.
+          ...(smtpConfigured() ? {} : { devCode: code }),
+        })
+      }
+      return send(res, 200, { token: signToken(u.id), user: { ...publicUser(u), mustChangePassword } })
+    }
+
+    // Second step of an admin sign-in: pendingToken (from /auth/login) + the
+    // emailed 6-digit code → a real session token.
+    if (path === '/auth/login/verify' && method === 'POST') {
+      const { pendingToken, code } = await readBody(req)
+      const uid_ = verifyPendingToken(pendingToken)
+      if (!uid_) return send(res, 401, { message: 'Sign-in session expired — start again' })
+      const rec = loginCodes.get(uid_)
+      if (!rec || Date.now() > rec.expires) return send(res, 400, { message: 'Code expired — sign in again to get a new one' })
+      if (String(code || '').trim() !== rec.code) return send(res, 400, { message: 'Incorrect code — check the email and try again' })
+      loginCodes.delete(uid_)
+      const u = readTable('users').find(x => x.id === uid_ && x.active !== false)
+      if (!u) return send(res, 401, { message: 'Account not found' })
+      return send(res, 200, { token: signToken(u.id), user: { ...publicUser(u), mustChangePassword: rec.mustChangePassword } })
+    }
+
+    // Password reset: request an emailed code, then set the new password.
+    // The response never reveals whether the email has an account.
+    if (path === '/auth/forgot' && method === 'POST') {
+      const body = await readBody(req)
+      const email = String(body.email || '').trim().toLowerCase()
+      const u = readTable('users').find(x => (x.email || '').toLowerCase() === email && x.active !== false)
+      let devCode
+      if (u) {
+        const code = String(randomInt(100000, 1000000))
+        resetCodes.set(email, { code, userId: u.id, expires: Date.now() + AUTH_CODE_TTL })
+        queueMessage('email', u.email, 'Reset your MVP Container password',
+          `Your password reset code is ${code}. It expires in 10 minutes.\n\nIf you didn't request this, you can ignore this email — your password is unchanged.`,
+          'user', u.id)
+        if (!smtpConfigured()) devCode = code
+      }
+      return send(res, 200, { sent: true, ...(devCode ? { devCode } : {}) })
+    }
+    if (path === '/auth/reset' && method === 'POST') {
+      const body = await readBody(req)
+      const email = String(body.email || '').trim().toLowerCase()
+      const rec = resetCodes.get(email)
+      if (!rec || Date.now() > rec.expires) return send(res, 400, { message: 'Code expired — request a new one' })
+      if (String(body.code || '').trim() !== rec.code) return send(res, 400, { message: 'Incorrect code — check the email and try again' })
+      if (!body.password || String(body.password).length < 8) return send(res, 400, { message: 'Password must be at least 8 characters' })
+      const users = readTable('users')
+      const i = users.findIndex(x => x.id === rec.userId)
+      if (i === -1) return send(res, 404, { message: 'Account not found' })
+      users[i] = { ...users[i], passwordHash: hashPassword(body.password) }
+      writeTable('users', users)
+      resetCodes.delete(email)
+      return send(res, 200, { reset: true })
+    }
+
+    // Signed-in password change (also clears the seeded-password nag).
+    if (path === '/auth/change-password' && method === 'POST') {
+      if (!user) return denied()
+      const { current, next } = await readBody(req)
+      if (!checkPassword(current || '', user.passwordHash)) return send(res, 400, { message: 'Current password is incorrect' })
+      if (!next || String(next).length < 8) return send(res, 400, { message: 'New password must be at least 8 characters' })
+      const users = readTable('users')
+      const i = users.findIndex(x => x.id === user.id)
+      if (i === -1) return send(res, 404, { message: 'Account not found' })
+      users[i] = { ...users[i], passwordHash: hashPassword(next) }
+      writeTable('users', users)
+      return send(res, 200, { changed: true })
     }
 
     // Customer self-registration (marketplace). Creates the login and links
@@ -611,7 +790,9 @@ async function handleRequest(req, res) {
       return send(res, 200, { ...publicUser(user), twoFaVerified: twoFaVerified(user.id) })
     }
 
-    // ── Two-factor: send + verify a 6-digit SMS code ──
+    // ── Two-factor: send + verify a 6-digit checkout code ──
+    // Delivered by email (no SMS gateway yet); the mobile number is still
+    // collected and persisted on the account for delivery coordination.
     if (path === '/auth/2fa/send' && method === 'POST') {
       if (!user) return denied()
       const { phone } = await readBody(req)
@@ -619,10 +800,10 @@ async function handleRequest(req, res) {
       if (cleaned.replace(/\D/g, '').length < 10) return send(res, 400, { message: 'A valid mobile number is required' })
       const code = String(randomInt(100000, 1000000))
       twoFactor.set(user.id, { code, phone: cleaned, expires: Date.now() + TWOFA_CODE_TTL, verifiedAt: null })
-      queueMessage('sms', cleaned, 'Verification code',
-        `Your MVP Container verification code is ${code}. It expires in 10 minutes.`, 'user', user.id)
-      // Dev convenience: no real SMS gateway, so surface the code to the client.
-      return send(res, 200, { sent: true, devCode: code })
+      queueMessage('email', user.email, 'Your MVP Container verification code',
+        `Your order verification code is ${code}. It expires in 10 minutes.\n\nEnter it on the checkout screen to place your order.`, 'user', user.id)
+      // Dev convenience: without SMTP the email can't arrive — surface the code.
+      return send(res, 200, { sent: true, channel: 'email', ...(smtpConfigured() ? {} : { devCode: code }) })
     }
     if (path === '/auth/2fa/verify' && method === 'POST') {
       if (!user) return denied()
@@ -932,7 +1113,9 @@ async function handleRequest(req, res) {
           deliveryAddress: body.deliveryAddress || '',
           deliveryZip: body.deliveryZip || '',
           amount: Number(body.amount) || 0,
-          status: body.status || 'sale_in_progress',
+          // Marketplace orders enter the phone-payment pipeline: staff
+          // validate availability → call the customer → collect payment.
+          status: body.status || 'pending_review',
           driverId: body.driverId || null,
           driverName: body.driverName || null,
           scheduledDate: body.scheduledDate || null,
@@ -943,19 +1126,34 @@ async function handleRequest(req, res) {
           unitCost: Number(body.unitCost) || 0,
           deposit: Number(body.deposit) || 0,
           driverHours: Number(body.driverHours) || 0,
+          validatedAt: null, calledAt: null, paidAt: null,
         }
         orders.push(record)
         writeTable('orders', orders)
         // Confirmation email (mandatory) + text (if the customer opted in).
         queueMessage('email', record.customerEmail,
-          `Order ${record.orderNumber} confirmed — ${record.containerSku}`,
-          `Thanks ${record.customerName || 'for your order'}! We've reserved ${record.containerSku} (${record.saleType === 'rent' ? 'rental' : 'purchase'}, $${record.amount.toLocaleString()}). Our team will confirm delivery to ${record.deliveryAddress} and finalize payment within 2 hours.`,
+          `Order ${record.orderNumber} received — ${record.containerSku}`,
+          `Thanks ${record.customerName || 'for your order'}! We've reserved ${record.containerSku} (${record.saleType === 'rent' ? 'rental' : 'purchase'}, $${record.amount.toLocaleString()}).\n\nNo payment has been taken yet — a member of our team will call ${record.customerPhone || 'you'} shortly to confirm availability, collect payment, and schedule delivery to ${record.deliveryAddress}.`,
           'order', record.id)
         if (body.notifySms === true && record.customerPhone) {
-          queueMessage('sms', record.customerPhone, 'Order confirmed',
-            `MVP Container: order ${record.orderNumber} (${record.containerSku}) confirmed. We'll text delivery updates to this number.`,
+          queueMessage('sms', record.customerPhone, 'Order received',
+            `MVP Container: order ${record.orderNumber} (${record.containerSku}) received. We'll call shortly to confirm and collect payment.`,
             'order', record.id)
         }
+        // Alert the monitored staff inboxes — this is the go-work-the-order signal.
+        queueMessage('email', NOTIFY_EMAILS.join(','),
+          `NEW ORDER ${record.orderNumber} — ${record.containerSku} · $${record.amount.toLocaleString()} (${record.saleType})`,
+          `A new ${record.saleType === 'rent' ? 'rental' : 'purchase'} order needs review.\n\n` +
+          `Order:    ${record.orderNumber}\n` +
+          `Container: ${record.containerSku}\n` +
+          `Amount:   $${record.amount.toLocaleString()}\n` +
+          `Customer: ${record.customerName}\n` +
+          `Phone:    ${record.customerPhone || '—'}\n` +
+          `Email:    ${record.customerEmail}\n` +
+          `Deliver:  ${record.deliveryAddress || '—'} ${record.deliveryZip || ''}\n\n` +
+          `Next steps: validate availability → call the customer → collect payment → assign a driver.\n` +
+          `Work it in the admin portal → Orders.`,
+          'order', record.id)
         return send(res, 201, record)
       }
 
@@ -1023,6 +1221,50 @@ async function handleRequest(req, res) {
         return send(res, 200, o)
       }
 
+      // ── Phone-payment review pipeline (admin) ──
+      // Steps timestamp the checklist: validated (availability confirmed) →
+      // called (customer reached) → paid (payment collected → status becomes
+      // 'confirmed', customer notified, container marked sold). 'reject'
+      // cancels the order and returns the container to the marketplace.
+      if (seg.length === 3 && seg[2] === 'review-step' && method === 'POST') {
+        if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
+        if (idx === -1) return send(res, 404, { message: 'Order not found' })
+        const { step } = await readBody(req)
+        const FIELD = { validated: 'validatedAt', called: 'calledAt', paid: 'paidAt' }
+        if (!FIELD[step] && step !== 'reject') return send(res, 400, { message: 'step must be validated, called, paid, or reject' })
+        const now = new Date().toISOString()
+        if (step === 'reject') {
+          orders[idx] = { ...orders[idx], status: 'cancelled' }
+        } else {
+          orders[idx] = { ...orders[idx], [FIELD[step]]: now, ...(step === 'paid' ? { status: 'confirmed' } : {}) }
+        }
+        writeTable('orders', orders)
+        const o = orders[idx]
+        // Mirror onto the container: paid → sold (ready for a driver);
+        // reject → back to available.
+        const containers = readTable('containers')
+        const ci = containers.findIndex(c => c.id === o.containerId || c.sku === o.containerSku)
+        if (ci !== -1 && (step === 'paid' || step === 'reject')) {
+          containers[ci] = { ...containers[ci], status: step === 'paid' ? 'sold' : 'available' }
+          writeTable('containers', containers)
+        }
+        if (step === 'paid') {
+          queueMessage('email', o.customerEmail, `Payment received — ${o.containerSku} (${o.orderNumber})`,
+            `Thanks ${o.customerName}! Your payment of $${(o.amount || 0).toLocaleString()} for ${o.containerSku} is confirmed. We're scheduling your delivery now and will follow up with the date and driver.`,
+            'order', o.id)
+          const cust = readTable('customers').find(c => c.id === o.customerId)
+          if (cust?.notifySms && o.customerPhone) {
+            queueMessage('sms', o.customerPhone, 'Payment received',
+              `MVP Container: payment for ${o.containerSku} received. Delivery scheduling is next — we'll be in touch.`, 'order', o.id)
+          }
+        } else if (step === 'reject') {
+          queueMessage('email', o.customerEmail, `Order ${o.orderNumber} cancelled`,
+            `Hi ${o.customerName}, your order for ${o.containerSku} has been cancelled and the container returned to the marketplace. If this is unexpected, call us at (504) 555-0190.`,
+            'order', o.id)
+        }
+        return send(res, 200, o)
+      }
+
       // Admin edits (e.g. moving a finished custom build to 'sold' so it
       // enters the normal approve → assign-driver delivery pipeline).
       if (seg.length === 2 && method === 'PATCH') {
@@ -1059,6 +1301,22 @@ async function handleRequest(req, res) {
         if (cust?.notifySms && o.customerPhone) {
           queueMessage('sms', o.customerPhone, 'Delivery scheduled',
             `MVP Container: ${o.containerSku} delivery scheduled${when}. Driver: ${driver.name}.`, 'order', o.id)
+        }
+        // Tell the driver too: an inbox message (field app) + email + logged SMS.
+        const jobText = `You've been assigned ${o.containerSku}${when}.\n\nDeliver to: ${o.deliveryAddress || '—'}\nCustomer: ${o.customerName}${o.customerPhone ? ` · ${o.customerPhone}` : ''}\nOrder: ${o.orderNumber} ($${(o.amount || 0).toLocaleString()} ${o.saleType === 'rent' ? 'rental' : 'purchase'})`
+        const msgs = readTable('messages')
+        msgs.push({
+          id: uid('msg'), fromRole: 'admin', fromName: 'Dispatch', fromEmail: '',
+          toDriverId: driverId, toRole: 'driver', toName: driver.name, toEmail: '',
+          subject: `New delivery — ${o.containerSku}${when}`, body: jobText,
+          createdAt: new Date().toISOString(), read: false, trashed: false,
+        })
+        writeTable('messages', msgs)
+        const drvUser = readTable('users').find(x => x.driverId === driverId && x.active !== false)
+        if (drvUser) queueMessage('email', drvUser.email, `New delivery — ${o.containerSku}${when}`, jobText, 'order', o.id)
+        if (driver.cellPhone) {
+          queueMessage('sms', driver.cellPhone, 'New delivery assigned',
+            `MVP Container: ${o.containerSku}${when} → ${o.deliveryAddress || 'see app'}. Details in your field app inbox.`, 'order', o.id)
         }
         return send(res, 200, orders[idx])
       }
@@ -1272,14 +1530,17 @@ async function handleRequest(req, res) {
       if (seg.length === 1 && method === 'POST') {
         if (!user) return denied()
         const body = await readBody(req)
-        if (!body.toDriverId) return send(res, 400, { message: 'toDriverId is required' })
+        const toRole = ['admin', 'customer', 'driver'].includes(body.toRole) ? body.toRole : 'driver'
+        // toDriverId anchors driver conversations; admin ⇄ customer threads
+        // don't have one.
+        if (toRole === 'driver' && !body.toDriverId) return send(res, 400, { message: 'toDriverId is required for messages to a driver' })
         const record = {
           id: uid('msg'),
           fromRole: ['admin', 'customer', 'driver'].includes(body.fromRole) ? body.fromRole : 'admin',
           fromName: body.fromName || 'MVP Container',
           fromEmail: body.fromEmail || '',
-          toDriverId: body.toDriverId,
-          toRole: ['admin', 'customer', 'driver'].includes(body.toRole) ? body.toRole : 'driver',
+          toDriverId: body.toDriverId || '',
+          toRole,
           toName: body.toName || '',
           toEmail: body.toEmail || '',
           subject: body.subject || '(no subject)',
@@ -1290,13 +1551,22 @@ async function handleRequest(req, res) {
         }
         messages.push(record)
         writeTable('messages', messages)
-        // Messages to customers also go out as real email/SMS (per their prefs).
+        // Recipients also hear about it outside the app:
         if (record.toRole === 'customer' && record.toEmail) {
-          queueMessage('email', record.toEmail, record.subject, record.body, 'message', record.id)
+          // customers → real email (+ SMS per their opt-in)
+          queueMessage('email', record.toEmail, record.subject, `${record.body}\n\n— ${record.fromName}, MVP Container`, 'message', record.id)
           const cust = readTable('customers').find(c => (c.email || '').toLowerCase() === record.toEmail.toLowerCase())
           if (cust?.notifySms && cust.phone) {
             queueMessage('sms', cust.phone, record.subject, `MVP Container (${record.fromName}): ${record.body}`.slice(0, 300), 'message', record.id)
           }
+        } else if (record.toRole === 'driver' && record.toDriverId) {
+          // drivers → email to their login address (inbox badge handles in-app)
+          const drvUser = readTable('users').find(x => x.driverId === record.toDriverId && x.active !== false)
+          if (drvUser) queueMessage('email', drvUser.email, `[Inbox] ${record.subject}`, `${record.body}\n\nFrom ${record.fromName} — reply in your field app inbox.`, 'message', record.id)
+        } else if (record.toRole === 'admin') {
+          // admin/dispatch → the monitored staff inboxes
+          queueMessage('email', NOTIFY_EMAILS.join(','), `[Inbox] ${record.subject}`,
+            `${record.body}\n\nFrom ${record.fromName} (${record.fromRole}${record.fromEmail ? `, ${record.fromEmail}` : ''}) — reply in the admin portal Inbox.`, 'message', record.id)
         }
         return send(res, 201, record)
       }
@@ -1654,7 +1924,22 @@ async function handleRequest(req, res) {
 // CSV-backed dev API. handleRequest never rejects (it catches internally);
 // the .catch here is a backstop so one failure can't wedge the chain.
 let requestChain = Promise.resolve()
+
+// Table writes that finish outside a request (email status updates, the
+// auto-render completion) join the same chain so they can't interleave with
+// a request's read-modify-write.
+function enqueue(fn) {
+  requestChain = requestChain
+    .then(fn)
+    .catch(err => console.warn('Deferred write failed:', err?.message || err))
+}
+
 const server = createServer((req, res) => {
+  // The SSE stream stays open for the client's whole session — handle it
+  // outside the serialized chain so it can never block other requests.
+  if (req.method === 'GET' && (req.url || '').split('?')[0] === '/events') {
+    return handleEvents(req, res)
+  }
   requestChain = requestChain
     .then(() => handleRequest(req, res))
     .catch(err => {

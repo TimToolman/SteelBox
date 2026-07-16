@@ -7,8 +7,8 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { GradeBadge, StatusBadge, Button, Modal, Snackbar, BuildClipart, ProgressRing } from '../../components/ui'
 import { ShowPasswordButton } from '../../lib/auth'
-import { useContainers, useOrders, useDrivers, useSnackbar, useAuth, useFavicon, useIsMobile } from '../../hooks'
-import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, customBuilds as customBuildsApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, cutoutContainer, SHOT_LABELS, RENDER_SLOT, RENDER_LABEL, EXTRA_SLOT_START, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role, type CustomBuild, CUSTOM_STAGES, SIZE_LABEL } from '../../lib/api'
+import { useContainers, useOrders, useDrivers, useLive, useSnackbar, useAuth, useFavicon, useIsMobile } from '../../hooks'
+import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, customBuilds as customBuildsApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, cutoutContainer, SHOT_LABELS, RENDER_SLOT, RENDER_LABEL, EXTRA_SLOT_START, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role, type CustomBuild, type Message, CUSTOM_STAGES, SIZE_LABEL } from '../../lib/api'
 
 // Every size/type code, for the container add/edit selects.
 const SIZE_SELECT_OPTIONS = Object.entries(SIZE_LABEL) as [ContainerSize, string][]
@@ -24,7 +24,7 @@ const TRUCK_SIZES: { value: ContainerSize; label: string }[] = [
 
 // ── Types ─────────────────────────────────────────────────
 
-type AdminView = 'dashboard' | 'orders' | 'inventory' | 'schedule' | 'activity' | 'drivers' | 'customers' | 'users' | 'notifications' | 'depots' | 'builds'
+type AdminView = 'dashboard' | 'orders' | 'inventory' | 'schedule' | 'activity' | 'inbox' | 'drivers' | 'customers' | 'users' | 'notifications' | 'depots' | 'builds'
 
 const VIEW_TITLES: Record<AdminView, string> = {
   dashboard:     'Dashboard',
@@ -32,6 +32,7 @@ const VIEW_TITLES: Record<AdminView, string> = {
   inventory:     'Inventory',
   schedule:      'Schedule',
   activity:      'Activity Log',
+  inbox:         'Inbox',
   drivers:       'Drivers',
   customers:     'Customers',
   users:         'Users & Access',
@@ -1434,14 +1435,26 @@ export default function AdminPage() {
   const [buildPhotoBusy, setBuildPhotoBusy] = useState<string | null>(null)
   const refetchBuilds = useCallback(() => customBuildsApi.list().then(setBuildList), [])
   useEffect(() => { refetchBuilds().catch(() => {}) }, [refetchBuilds])
+  useLive(['custombuilds'], () => refetchBuilds().catch(() => {}))
   // RBAC accounts (users.csv) + sent email/SMS log (outbox.csv)
   const [userList, setUserList] = useState<AuthUser[]>([])
   const [editUser, setEditUser] = useState<AuthUser | 'new' | null>(null)
   const refetchUsers = useCallback(() => usersApi.list().then(setUserList), [])
   useEffect(() => { refetchUsers().catch(() => {}) }, [refetchUsers])
+  useLive(['users'], () => refetchUsers().catch(() => {}))
   const [outboxList, setOutboxList] = useState<OutboxMessage[]>([])
   const refetchOutbox = useCallback(() => outboxApi.list().then(setOutboxList), [])
   useEffect(() => { refetchOutbox().catch(() => {}) }, [refetchOutbox])
+  useLive(['outbox'], () => refetchOutbox().catch(() => {}))
+  // Dispatch inbox — all internal messages (driver ⇄ admin ⇄ customer threads)
+  const [msgList, setMsgList] = useState<Message[]>([])
+  const refetchMsgs = useCallback(() => messagesApi.list().then(setMsgList), [])
+  useEffect(() => { refetchMsgs().catch(() => {}) }, [refetchMsgs])
+  useLive(['messages'], () => refetchMsgs().catch(() => {}))
+  const inboxUnread = msgList.filter(m => m.toRole === 'admin' && !m.read && !m.trashed).length
+  const [openMsgId, setOpenMsgId] = useState<string | null>(null)
+  const [replyText, setReplyText] = useState('')
+  const [replySending, setReplySending] = useState(false)
   const { toast, message, open: snackOpen, close: snackClose } = useSnackbar()
 
   const { data: containerList, refetch: refetchContainers } = useContainers()
@@ -1475,6 +1488,8 @@ export default function AdminPage() {
   // background syncs attach a silent catch.
   const refetchSchedule = useCallback(() => scheduleApi.list().then(setScheduleEvents), [])
   useEffect(() => { refetchSchedule().catch(() => {}) }, [refetchSchedule])
+  // Field-app reschedules appear on the board the moment the server saves them.
+  useLive(['schedule'], () => refetchSchedule().catch(() => {}))
   // Re-sync whenever the admin navigates back to the Schedule page.
   useEffect(() => { if (view === 'schedule') refetchSchedule().catch(() => {}) }, [view, refetchSchedule])
   // Re-sync with field-app + marketplace changes on window focus (photos,
@@ -1545,15 +1560,19 @@ export default function AdminPage() {
   const [activityLog, setActivityLog] = useState<ActivityEvent[]>([])
   const refetchActivity = useCallback(() => activityApi.list().then(setActivityLog), [])
   useEffect(() => { refetchActivity().catch(() => {}) }, [refetchActivity])
+  // Live feed of field events (arrivals, photo sessions, deliveries).
+  useLive(['activity'], () => refetchActivity().catch(() => {}))
   const [depotList, setDepotList] = useState<Depot[]>([])
   const [editDepot, setEditDepot] = useState<Depot | 'new' | null>(null)
   const refetchDepots = useCallback(() => depotsApi.list().then(setDepotList), [])
   useEffect(() => { refetchDepots().catch(() => {}) }, [refetchDepots])
+  useLive(['depots'], () => refetchDepots().catch(() => {}))
   // ── Customers (master list, CRUD) ──
   const [customerList, setCustomerList] = useState<Customer[]>([])
   const [editCustomer, setEditCustomer] = useState<Customer | 'new' | null>(null)
   const refetchCustomers = useCallback(() => customersApi.list().then(setCustomerList), [])
   useEffect(() => { refetchCustomers().catch(() => {}) }, [refetchCustomers])
+  useLive(['customers'], () => refetchCustomers().catch(() => {}))
   const handleDeleteCustomer = async (c: Customer) => {
     if (!window.confirm(`Archive ${c.name}? They'll be hidden from lists but kept in order history.`)) return
     try { await customersApi.remove(c.id); toast(`${c.name} archived`); refetchCustomers() }
@@ -1669,8 +1688,42 @@ export default function AdminPage() {
   // Which driver is assigned to each in-flight purchase (containerId → name).
   const [assignedDrivers, setAssignedDrivers] = useState<Record<string, string>>({})
   const [detailPurchase, setDetailPurchase] = useState<Container | null>(null)
-  // Reserved / in-fulfilment units awaiting approval or a driver.
-  const purchases = containerList.filter(c => ['sale_in_progress', 'sold', 'assigned'].includes(c.status))
+  // Phone-payment pipeline: new orders staff must validate → call → collect
+  // payment on → assign a driver. Payment is never taken online.
+  const pipelineOrders = orderList.filter(o => o.status === 'pending_review' || o.status === 'confirmed')
+  const pipelineContainerKeys = new Set(pipelineOrders.flatMap(o => [o.containerId, o.containerSku]))
+  const runReviewStep = async (o: Order, step: 'validated' | 'called' | 'paid' | 'reject') => {
+    const confirmMsg = step === 'reject' ? `Cancel order ${o.orderNumber} and return ${o.containerSku} to the marketplace?` : null
+    if (confirmMsg && !window.confirm(confirmMsg)) return
+    try {
+      await ordersApi.reviewStep(o.id, step)
+      refetchOrders()
+      refetchContainers()
+      toast(step === 'paid' ? `Payment recorded for ${o.orderNumber} — customer notified, ready for a driver`
+        : step === 'reject' ? `${o.orderNumber} cancelled — ${o.containerSku} back on the marketplace`
+        : step === 'validated' ? `${o.containerSku} availability confirmed`
+        : `Call to ${o.customerName} logged`)
+    } catch (e) {
+      toast(`Step failed — ${e instanceof Error ? e.message : 'try again'}`)
+    }
+  }
+  const assignOrderDriver = async (o: Order, driverId: string) => {
+    const driver = driverList.find(d => d.id === driverId)
+    if (!driver) return
+    const date = o.scheduledDate || dateFromDayOffset(1)
+    try {
+      await ordersApi.assignDriver(o.id, driverId, date)
+      await afterOrderAssign(o.id, driverId, date)
+      refetchOrders()
+      toast(`${o.containerSku} assigned to ${driver.name} — customer & driver notified`)
+    } catch (e) {
+      toast(`Failed to assign — ${e instanceof Error ? e.message : 'try again'}`)
+    }
+  }
+  // Reserved / in-fulfilment units awaiting approval or a driver — pipeline
+  // orders are handled in the New Orders panel above, so exclude their units.
+  const purchases = containerList.filter(c => ['sale_in_progress', 'sold', 'assigned'].includes(c.status)
+    && !pipelineContainerKeys.has(c.id) && !pipelineContainerKeys.has(c.sku))
 
   const approvePurchase = async (c: Container) => {
     try { await containersApi.update(c.id, { status: 'sold' }); toast(`${c.sku} purchase approved — ready to assign a driver`); refetchContainers() }
@@ -1851,10 +1904,11 @@ export default function AdminPage() {
         <div style={{ flex: 1, overflowY: 'auto', padding: '10px 0' }}>
           <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', padding: '8px 18px 3px' }}>Operations</div>
           <NavItem active={view === 'dashboard'} onClick={() => go('dashboard')} label="Dashboard" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="2" y="2" width="7" height="7" rx="1.5" /><rect x="11" y="2" width="7" height="7" rx="1.5" /><rect x="2" y="11" width="7" height="7" rx="1.5" /><rect x="11" y="11" width="7" height="7" rx="1.5" /></svg>} />
-          <NavItem active={view === 'orders'} onClick={() => go('orders')} label="Orders" badge={reserved.length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="4" y="2" width="12" height="16" rx="1.5" /><line x1="7" y1="7" x2="13" y2="7" /><line x1="7" y1="10" x2="13" y2="10" /><line x1="7" y1="13" x2="11" y2="13" /></svg>} />
+          <NavItem active={view === 'orders'} onClick={() => go('orders')} label="Orders" badge={pipelineOrders.length + reserved.filter(c => !pipelineContainerKeys.has(c.id) && !pipelineContainerKeys.has(c.sku)).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="4" y="2" width="12" height="16" rx="1.5" /><line x1="7" y1="7" x2="13" y2="7" /><line x1="7" y1="10" x2="13" y2="10" /><line x1="7" y1="13" x2="11" y2="13" /></svg>} />
           <NavItem active={view === 'inventory'} onClick={() => go('inventory')} label="Inventory" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="5" width="18" height="12" rx="1.5" /><line x1="5" y1="5" x2="5" y2="17" /><line x1="9" y1="5" x2="9" y2="17" /><line x1="13" y1="5" x2="13" y2="17" /></svg>} />
           <NavItem active={view === 'schedule'} onClick={() => go('schedule')} label="Schedule" badge={scheduleEvents.length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="2" y="4" width="16" height="14" rx="2" /><line x1="2" y1="8.5" x2="18" y2="8.5" /><line x1="7" y1="2" x2="7" y2="6" /><line x1="13" y1="2" x2="13" y2="6" /></svg>} />
           <NavItem active={view === 'activity'} onClick={() => go('activity')} label="Activity Log" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="10" r="7.5" /><path d="M10 5.5V10l3 2" /></svg>} />
+          <NavItem active={view === 'inbox'} onClick={() => go('inbox')} label="Inbox" badge={inboxUnread} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 5.5A1.5 1.5 0 0 1 4 4h12a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5z" /><polyline points="3 5.5 10 11 17 5.5" /></svg>} />
           <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', padding: '16px 18px 3px' }}>People</div>
           <NavItem active={view === 'drivers'} onClick={() => go('drivers')} label="Drivers" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="10" cy="6.5" r="3" /><path d="M3 18A7 7 0 0 1 17 18" /></svg>} />
           <NavItem active={view === 'customers'} onClick={() => go('customers')} label="Customers" badge={customerList.filter(c => c.active !== false).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="7" cy="7" r="2.6" /><path d="M2 16.5A5 5 0 0 1 12 16.5" /><path d="M13 4.6a2.6 2.6 0 0 1 0 4.8" /><path d="M14.5 16.5a5 5 0 0 0-2.2-4.1" /></svg>} />
@@ -2012,6 +2066,66 @@ export default function AdminPage() {
                               </Td>
                               <Td><StatusBadge status={c.status as any} /></Td>
                               <Td>{customStageActions(c)}</Td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* New Orders — phone-payment pipeline: validate → call → collect payment → assign driver */}
+              {pipelineOrders.length > 0 && (
+                <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1.5px solid var(--primary)', boxShadow: 'var(--sh1)', overflow: 'hidden', marginBottom: '22px' }}>
+                  <div style={{ background: 'var(--primary)', padding: '10px 18px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '14px' }}>📞</span>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff', flex: 1 }}>New Orders — validate availability, call the customer, collect payment, then assign a driver</span>
+                    <span style={{ background: 'rgba(255,255,255,.25)', color: '#fff', borderRadius: 'var(--pill)', padding: '2px 10px', fontSize: '11px', fontWeight: 700 }}>{pipelineOrders.length}</span>
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '980px' }}>
+                      <thead><tr><Th>Order</Th><Th>SKU</Th><Th>Customer</Th><Th>Amount</Th><Th>Review checklist</Th><Th>Driver</Th><Th>{' '}</Th></tr></thead>
+                      <tbody>
+                        {pipelineOrders.map(o => {
+                          const steps: Array<{ key: 'validated' | 'called' | 'paid'; label: string; doneLabel: string; at: string | null }> = [
+                            { key: 'validated', label: '1 · Validate availability', doneLabel: 'Available ✓', at: o.validatedAt },
+                            { key: 'called', label: '2 · Called customer', doneLabel: 'Called ✓', at: o.calledAt },
+                            { key: 'paid', label: '3 · Payment collected', doneLabel: 'Paid ✓', at: o.paidAt },
+                          ]
+                          const nextIdx = steps.findIndex(s => !s.at)
+                          const onDuty = activeDrivers.filter(d => d.status === 'on_duty')
+                          return (
+                            <tr key={o.id}>
+                              <Td><div style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700 }}>{o.orderNumber}</div><div style={{ fontSize: '11px', color: 'var(--ink3)' }}>{new Date(o.createdAt).toLocaleDateString()} · {o.saleType === 'rent' ? 'Rental' : 'Purchase'}</div></Td>
+                              <Td mono>{o.containerSku}</Td>
+                              <Td><div style={{ fontWeight: 600 }}>{o.customerName}</div><div style={{ fontSize: '11px', color: 'var(--ink3)' }}>{o.customerPhone ? <a href={`tel:${o.customerPhone}`} style={{ color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>{o.customerPhone}</a> : o.customerEmail}</div></Td>
+                              <Td><span style={{ fontFamily: 'var(--mono)', fontWeight: 700 }}>${o.amount.toLocaleString()}</span></Td>
+                              <Td>
+                                <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                                  {steps.map((s, i) => s.at ? (
+                                    <span key={s.key} title={new Date(s.at).toLocaleString()} style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 'var(--pill)', fontSize: '10px', fontWeight: 700, background: 'var(--green-cont)', color: 'var(--green)', whiteSpace: 'nowrap' }}>{s.doneLabel}</span>
+                                  ) : (
+                                    <button key={s.key} onClick={() => runReviewStep(o, s.key)} disabled={i !== nextIdx}
+                                      style={{ padding: '4px 10px', borderRadius: 'var(--pill)', fontSize: '10px', fontWeight: 700, whiteSpace: 'nowrap', cursor: i === nextIdx ? 'pointer' : 'not-allowed', background: i === nextIdx ? 'var(--primary)' : 'var(--surf1)', color: i === nextIdx ? '#fff' : 'var(--ink3)', border: i === nextIdx ? 'none' : '1px solid var(--div)' }}>
+                                      {s.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </Td>
+                              <Td>
+                                {o.status === 'confirmed' ? (
+                                  <select value="" onChange={e => { if (e.target.value) assignOrderDriver(o, e.target.value) }}
+                                    style={{ padding: '6px 10px', border: '1.5px solid var(--green)', borderRadius: 'var(--r8)', fontSize: '12px', outline: 'none', fontFamily: 'var(--sans)', background: 'var(--surf-w)', cursor: 'pointer' }}>
+                                    <option value="">Assign driver…</option>
+                                    {onDuty.length === 0 && <option value="" disabled>No drivers on duty today</option>}
+                                    {onDuty.map(d => <option key={d.id} value={d.id}>{d.name} · {d.vehicle}</option>)}
+                                  </select>
+                                ) : (
+                                  <span style={{ fontSize: '11px', color: 'var(--ink3)' }}>After payment</span>
+                                )}
+                              </Td>
+                              <Td><TblBtn variant="danger" onClick={() => runReviewStep(o, 'reject')}>Reject</TblBtn></Td>
                             </tr>
                           )
                         })}
@@ -2782,6 +2896,94 @@ export default function AdminPage() {
           })()}
 
           {/* ── Depots ── */}
+          {/* ── Inbox — dispatch messaging across drivers, customers & admins ── */}
+          {view === 'inbox' && (() => {
+            const visible = msgList.filter(m => !m.trashed)
+            const openMessage = (m: Message) => {
+              setOpenMsgId(id => (id === m.id ? null : m.id))
+              setReplyText('')
+              if (m.toRole === 'admin' && !m.read) {
+                messagesApi.update(m.id, { read: true }).catch(() => {})
+                setMsgList(ms => ms.map(x => x.id === m.id ? { ...x, read: true } : x))
+              }
+            }
+            const sendReply = async (m: Message) => {
+              if (!replyText.trim() || replySending) return
+              setReplySending(true)
+              const toDriver = m.fromRole === 'driver'
+              try {
+                await messagesApi.create({
+                  fromRole: 'admin', fromName: DISPATCH.name, fromEmail: DISPATCH.email,
+                  toRole: toDriver ? 'driver' : 'customer',
+                  toDriverId: toDriver ? m.toDriverId : (m.toDriverId || ''),
+                  toName: m.fromName, toEmail: m.fromEmail,
+                  subject: m.subject.startsWith('Re:') ? m.subject : `Re: ${m.subject}`,
+                  body: replyText.trim(),
+                })
+                setReplyText('')
+                setOpenMsgId(null)
+                refetchMsgs().catch(() => {})
+                toast(`Reply sent to ${m.fromName}${toDriver ? '' : ' — they’ll also get it by email'}`)
+              } catch (e) {
+                toast(`Failed to send — ${e instanceof Error ? e.message : 'try again'}`)
+              } finally { setReplySending(false) }
+            }
+            const roleChip = (role: string) => ({
+              admin: { label: 'Dispatch', bg: 'var(--pri-c,#D6E4FF)', color: 'var(--primary)' },
+              driver: { label: 'Driver', bg: 'var(--green-cont)', color: 'var(--green)' },
+              customer: { label: 'Customer', bg: 'var(--cta-cont)', color: 'var(--cta)' },
+            }[role] || { label: role, bg: 'var(--surf1)', color: 'var(--ink3)' })
+            return (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', gap: '10px', flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: '15px', fontWeight: 700 }}>Inbox</div>
+                    <div style={{ fontSize: '12px', color: 'var(--ink3)' }}>Messages between dispatch, drivers, and customers. Customer replies also go out by email{inboxUnread > 0 ? ` · ${inboxUnread} unread` : ''}.</div>
+                  </div>
+                  <Button variant="primary" size="sm" onClick={() => setComposeOpen(true)}>+ Message a driver</Button>
+                </div>
+                <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', overflow: 'hidden' }}>
+                  {visible.length === 0 && <div style={{ padding: '30px', textAlign: 'center', color: 'var(--ink3)', fontSize: '13px' }}>No messages yet — customer and driver messages land here.</div>}
+                  {visible.map(m => {
+                    const isOpen = openMsgId === m.id
+                    const unreadRow = m.toRole === 'admin' && !m.read
+                    const from = roleChip(m.fromRole)
+                    const to = roleChip(m.toRole)
+                    return (
+                      <div key={m.id} style={{ borderBottom: '1px solid var(--div)' }}>
+                        <div onClick={() => openMessage(m)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', cursor: 'pointer', background: isOpen ? 'var(--surf1)' : unreadRow ? 'var(--pri-c,#EFF6FF)' : 'transparent' }}>
+                          {unreadRow ? <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)', flexShrink: 0 }} /> : <span style={{ width: '8px', flexShrink: 0 }} />}
+                          <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--pill)', background: from.bg, color: from.color, flexShrink: 0 }}>{from.label}</span>
+                          <span style={{ fontSize: '12px', fontWeight: 700, flexShrink: 0, maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.fromName}</span>
+                          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="var(--ink3)" strokeWidth="1.8" strokeLinecap="round" style={{ flexShrink: 0 }}><path d="M3 10h13M12 5l5 5-5 5" /></svg>
+                          <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--pill)', background: to.bg, color: to.color, flexShrink: 0 }}>{m.toName || to.label}</span>
+                          <span style={{ fontSize: '12px', color: unreadRow ? 'var(--ink)' : 'var(--ink2)', fontWeight: unreadRow ? 700 : 400, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.subject} <span style={{ color: 'var(--ink3)' }}>— {m.body.slice(0, 80)}</span></span>
+                          <span style={{ fontSize: '11px', color: 'var(--ink3)', flexShrink: 0 }}>{new Date(m.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                        </div>
+                        {isOpen && (
+                          <div style={{ padding: '4px 16px 16px 34px', background: 'var(--surf1)' }}>
+                            <div style={{ fontSize: '13px', color: 'var(--ink)', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: '12px' }}>{m.body}</div>
+                            {m.fromRole !== 'admin' && (
+                              <div>
+                                <textarea value={replyText} onChange={e => setReplyText(e.target.value)} rows={3}
+                                  placeholder={`Reply to ${m.fromName}…`}
+                                  style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '13px', outline: 'none', fontFamily: 'var(--sans)', resize: 'vertical', marginBottom: '8px', background: 'var(--surf-w)' }} />
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                                  <Button variant="ghost" size="sm" onClick={() => setOpenMsgId(null)}>Close</Button>
+                                  <Button variant="primary" size="sm" onClick={() => sendReply(m)} disabled={replySending || !replyText.trim()}>{replySending ? 'Sending…' : `Reply${m.fromRole === 'customer' ? ' (in-app + email)' : ''}`}</Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
+
           {view === 'depots' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>

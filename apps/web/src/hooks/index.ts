@@ -12,6 +12,18 @@ import {
   type Order,
   type Driver,
 } from '../lib/api'
+import { subscribeLive, type LiveTable } from '../lib/live'
+
+// ── useLive ───────────────────────────────────────────────
+// Runs `onChange` whenever the server pushes word (over SSE) that one of the
+// given CSV tables changed — the backbone of cross-app auto-refresh. The
+// callback lives in a ref so inline closures don't churn the subscription.
+
+export function useLive(tables: readonly LiveTable[], onChange: () => void) {
+  const cb = useRef(onChange)
+  cb.current = onChange
+  useEffect(() => subscribeLive(tables, () => cb.current()), [JSON.stringify(tables)]) // eslint-disable-line react-hooks/exhaustive-deps
+}
 
 // ── useAuth ───────────────────────────────────────────────
 // Re-exported from the shared auth context so every page sees the same
@@ -45,6 +57,9 @@ export function useContainers(filters?: ContainerFilters) {
   }, [JSON.stringify(filters)])
 
   useEffect(() => { fetch() }, [fetch])
+  // Server pushed a containers change (photo upload, sale, edit in another
+  // app) — swap in the fresh list without waiting for focus/refresh.
+  useLive(['containers'], fetch)
 
   return { data, loading, error, refetch: fetch }
 }
@@ -55,12 +70,16 @@ export function useOrders() {
   const [data, setData] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const loaded = useRef(false)
 
   const fetch = useCallback(async () => {
-    setLoading(true)
+    // Skeletons only on the first load — live/background refreshes swap the
+    // data in place without flashing the view.
+    if (!loaded.current) setLoading(true)
     setError(null)
     try {
       setData(await orders.list())
+      loaded.current = true
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load orders')
     } finally {
@@ -69,6 +88,7 @@ export function useOrders() {
   }, [])
 
   useEffect(() => { fetch() }, [fetch])
+  useLive(['orders'], fetch)
 
   return { data, loading, error, refetch: fetch }
 }
@@ -79,12 +99,14 @@ export function useDrivers() {
   const [data, setData] = useState<Driver[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const loaded = useRef(false)
 
   const fetch = useCallback(async () => {
-    setLoading(true)
+    if (!loaded.current) setLoading(true)
     setError(null)
     try {
       setData(await drivers.list())
+      loaded.current = true
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load drivers')
     } finally {
@@ -93,6 +115,7 @@ export function useDrivers() {
   }, [])
 
   useEffect(() => { fetch() }, [fetch])
+  useLive(['drivers'], fetch)
 
   return { data, loading, error, refetch: fetch }
 }

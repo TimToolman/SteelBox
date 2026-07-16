@@ -6,7 +6,7 @@
 // ============================================================
 
 import React, { useState, useRef, useEffect } from 'react'
-import { useSnackbar, useAuth, useFavicon } from '../../hooks'
+import { useSnackbar, useAuth, useFavicon, useLive } from '../../hooks'
 import { Snackbar, ProgressRing } from '../../components/ui'
 import { activity, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, containers as containersApi, availability as availabilityApi, messages as messagesApi, customers as customersApi, orders as ordersApi, parseTrucks, parseWorkHours, encodeWorkHours, photoUrl, fileToDataUrl, cutoutContainer, type ActivityEvent, type Depot, type Driver, type SchedJob, type DayHours, type Availability, type Message, type Customer, type Container, type Order } from '../../lib/api'
 
@@ -346,6 +346,19 @@ export default function FieldAppPage() {
     document.addEventListener('visibilitychange', onFocus)
     return () => { window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus) }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Live push updates — admin-side changes (new jobs, assignments, messages)
+  // land on the driver's screen the moment the server saves them; the focus
+  // sync above stays as a fallback for missed pushes.
+  useLive(['schedule'], () => fetchSchedule().catch(() => {}))
+  useLive(['orders'], () => fetchOrders().catch(() => {}))
+  useLive(['containers'], () => fetchContainers().catch(() => {}))
+  useLive(['messages'], () => fetchMessages().catch(() => {}))
+  useLive(['activity'], () => fetchActivity().catch(() => {}))
+  useLive(['drivers'], () => loadMe().catch(() => {}))
+  useLive(['availability'], () => loadAvailability().catch(() => {}))
+  useLive(['depots'], () => depotsApi.list().then(setDepots).catch(() => {}))
+  useLive(['customers'], () => customersApi.list().then(cs => setMsgCustomers(cs.filter(c => c.active !== false))).catch(() => {}))
 
   // Monday (local) of the current week + `off` weeks, as YYYY-MM-DD.
   const mondayISO = (off: number) => {

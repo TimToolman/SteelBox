@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { GradeBadge, StatusBadge, Button, Modal, Snackbar, Input, Select, BuildClipart } from '../components/ui'
-import { useContainers, useSnackbar, useAuth, useIsMobile } from '../hooks'
+import { useContainers, useSnackbar, useAuth, useIsMobile, useLive } from '../hooks'
 import { LoginForm } from '../lib/auth'
 import { auth as authApi, containers, quotes, orders, isZipCovered, estimateDelivery, drivers as driversApi, messages as messagesApi, customers as customersApi, customBuilds as customBuildsApi, depots as depotsApi, photoUrl, SHOT_LABELS, RENDER_SLOT, RENDER_LABEL, CUSTOM_STAGES, type Container, type ContainerGrade, type ContainerSize, type Driver, type Customer, type Order, type Message, type AuthUser, type CustomBuild, type ContainerCondition, type Depot, SIZE_LABEL } from '../lib/api'
 
@@ -283,38 +283,51 @@ function ContainerSVGIcon({ size }: { size: ContainerSize }) {
 // gallery; missing slots fall back to a 3D container model placeholder.
 // SHOT_LABELS comes from lib/api so slots match the field app + admin exactly.
 
-// Optional per-face photo textures — the real field shots wrapped onto the
-// box faces make an interactive 3D view of the actual container (no AI key).
-interface FaceTextures { front?: string; right?: string; back?: string; left?: string }
+// End-face photo textures — only the real front-doors and back shots are used
+// in the spinner; the long sides carry a size callout instead (keep it simple).
+interface FaceTextures { doors?: string; back?: string }
 
 function Container3D({ size, grade, rotY, rotX, tex }: { size: ContainerSize; grade: ContainerGrade; rotY: number; rotX: number; tex?: FaceTextures }) {
   const is40 = size.startsWith('40'), is10 = size.startsWith('10')
   const W = is40 ? 300 : is10 ? 110 : 180, H = 118, D = 118
   const accent = GRADE_META[grade].color
   const steel = 'repeating-linear-gradient(90deg,#4a6ea5 0,#4a6ea5 5px,#3d5c8c 5px,#3d5c8c 11px)'
-  const corr = 'repeating-linear-gradient(0deg,#5578ad 0,#5578ad 5px,#48699a 5px,#48699a 11px)'
+  const sizeLabel = `${is40 ? '40' : is10 ? '10' : '20'} foot`
   const faceBase: React.CSSProperties = { position: 'absolute', left: '50%', top: '50%', boxSizing: 'border-box', border: '1px solid rgba(0,0,0,.3)' }
   const skin = (fallback: string, photo?: string): React.CSSProperties =>
     // Cutout photos have transparent backgrounds — back them with a steel tone.
     photo ? { backgroundColor: '#31517e', backgroundImage: `url(${photo})`, backgroundSize: 'cover', backgroundPosition: 'center' } : { background: fallback }
+  // Long sides: flat blue with the container length superimposed (double arrow
+  // + "20 foot"), matching the marketing mock.
+  const arrowW = W - 44
+  const sideFace: React.CSSProperties = { background: '#33538A', display: 'grid', placeItems: 'center' }
+  const sizeCallout = (
+    <div style={{ display: 'grid', justifyItems: 'center', gap: '3px' }}>
+      <span style={{ color: '#F5A623', fontWeight: 700, fontSize: is10 ? '13px' : '16px', fontFamily: 'var(--sans)', letterSpacing: '0.2px', textShadow: '0 1px 3px rgba(0,0,0,.4)' }}>{sizeLabel}</span>
+      <svg width={arrowW} height="16" viewBox={`0 0 ${arrowW} 16`} fill="none" stroke="#F5A623" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <path d={`M3 8 H${arrowW - 3}`} />
+        <path d="M12 2 L3 8 L12 14" />
+        <path d={`M${arrowW - 12} 2 L${arrowW - 3} 8 L${arrowW - 12} 14`} />
+      </svg>
+    </div>
+  )
   return (
     <div style={{ perspective: '1200px', width: '100%', height: '100%', display: 'grid', placeItems: 'center' }}>
       <div style={{ position: 'relative', width: `${W}px`, height: `${H}px`, transformStyle: 'preserve-3d', transform: `rotateX(${rotX}deg) rotateY(${rotY}deg)` }}>
-        {/* front — doors (painted door detail only when no photo texture) */}
-        <div style={{ ...faceBase, width: W, height: H, marginLeft: -W / 2, marginTop: -H / 2, transform: `translateZ(${D / 2}px)`, ...skin(steel, tex?.front), display: 'flex' }}>
-          {!tex?.front && [0, 1].map(k => (
+        {/* long sides — solid blue + size callout (no photos here) */}
+        <div style={{ ...faceBase, width: W, height: H, marginLeft: -W / 2, marginTop: -H / 2, transform: `translateZ(${D / 2}px)`, ...sideFace }}>{sizeCallout}</div>
+        <div style={{ ...faceBase, width: W, height: H, marginLeft: -W / 2, marginTop: -H / 2, transform: `rotateY(180deg) translateZ(${D / 2}px)`, ...sideFace }}>{sizeCallout}</div>
+        {/* door end — the real front-doors photo (painted doors as fallback) */}
+        <div style={{ ...faceBase, width: D, height: H, marginLeft: -D / 2, marginTop: -H / 2, transform: `rotateY(90deg) translateZ(${W / 2}px)`, ...skin(steel, tex?.doors), display: 'flex' }}>
+          {!tex?.doors && [0, 1].map(k => (
             <div key={k} style={{ flex: 1, borderRight: k === 0 ? '2px solid rgba(0,0,0,.35)' : 'none', position: 'relative' }}>
               <div style={{ position: 'absolute', top: '12%', bottom: '12%', left: k === 0 ? 'auto' : '10%', right: k === 0 ? '10%' : 'auto', width: '4px', background: 'rgba(0,0,0,.35)', borderRadius: '2px' }} />
             </div>
           ))}
           <div style={{ position: 'absolute', top: '8px', left: '8px', background: '#fff', color: accent, fontFamily: 'var(--mono)', fontSize: is10 ? '7px' : '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '2px' }}>{grade}</div>
         </div>
-        {/* back */}
-        <div style={{ ...faceBase, width: W, height: H, marginLeft: -W / 2, marginTop: -H / 2, transform: `rotateY(180deg) translateZ(${D / 2}px)`, ...skin(steel, tex?.back) }} />
-        {/* right */}
-        <div style={{ ...faceBase, width: D, height: H, marginLeft: -D / 2, marginTop: -H / 2, transform: `rotateY(90deg) translateZ(${W / 2}px)`, ...skin(corr, tex?.right) }} />
-        {/* left */}
-        <div style={{ ...faceBase, width: D, height: H, marginLeft: -D / 2, marginTop: -H / 2, transform: `rotateY(-90deg) translateZ(${W / 2}px)`, ...skin(corr, tex?.left) }} />
+        {/* back end — the real back photo */}
+        <div style={{ ...faceBase, width: D, height: H, marginLeft: -D / 2, marginTop: -H / 2, transform: `rotateY(-90deg) translateZ(${W / 2}px)`, ...skin(steel, tex?.back) }} />
         {/* top */}
         <div style={{ ...faceBase, width: W, height: D, marginLeft: -W / 2, marginTop: -D / 2, transform: `rotateX(90deg) translateZ(${H / 2}px)`, background: '#2f466a', borderTop: `3px solid ${accent}` }} />
         {/* bottom */}
@@ -334,16 +347,13 @@ function PhotoGallery({ container }: { container: Container }) {
   const [idx, setIdx] = useState(0)
   const item = items[idx]
 
-  // Texture-map the real field shots onto the 3D box: the long W-wide faces
-  // carry the side photos, the square end faces carry the doors + back shots.
-  // (The stock-number shot, slot 7, is not part of the 3D view.)
+  // Only the real front-doors and back shots go on the box (the end faces);
+  // the long sides show a size callout instead — simpler and always clean.
   const tex: FaceTextures = {
-    front: photos[2] ? photoUrl(photos[2]) : undefined, // right hand side → long face
-    back: photos[4] ? photoUrl(photos[4]) : undefined,  // left hand side → far long face
-    right: photos[0] ? photoUrl(photos[0]) : undefined, // front doors closed → end face
-    left: photos[3] ? photoUrl(photos[3]) : undefined,  // back → other end face
+    doors: photos[0] ? photoUrl(photos[0]) : undefined, // front doors closed → door end
+    back: photos[3] ? photoUrl(photos[3]) : undefined,  // back → other end
   }
-  const texReady = !!(tex.front && tex.back && tex.right && tex.left)
+  const texReady = !!(tex.doors && tex.back)
 
   // While a slot's photo is pending (and for the 3D view), the box stands in —
   // each square snaps it to that shot's viewing angle, and it stays drag-rotatable.
@@ -757,7 +767,7 @@ function CartModal({ open, cart, user, onClose, onRemove, onUpdateItem, onLongTe
           </div>
           <h2 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '8px' }}>Order placed!</h2>
           <p style={{ fontSize: '13px', color: 'var(--ink3)', lineHeight: 1.6, marginBottom: '20px', maxWidth: '360px', margin: '0 auto 20px' }}>
-            Thanks, {form.firstName}. We've reserved your container{placedCount > 1 ? 's' : ''} and emailed a confirmation to <strong style={{ color: 'var(--ink)' }}>{form.email}</strong>. Our team will confirm delivery to {form.city}, {form.state} and finalize payment within 2 hours.
+            Thanks, {form.firstName}. We've reserved your container{placedCount > 1 ? 's' : ''} and emailed a confirmation to <strong style={{ color: 'var(--ink)' }}>{form.email}</strong>. No payment has been taken — our team will call you{form.phone ? ` at ${form.phone}` : ''} to confirm availability, collect payment, and schedule delivery to {form.city}, {form.state}.
           </p>
           <button onClick={close} style={{ padding: '12px 28px', borderRadius: 'var(--pill)', background: 'var(--primary)', color: '#fff', fontSize: '14px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>Done</button>
         </div>
@@ -879,23 +889,17 @@ function CartModal({ open, cart, user, onClose, onRemove, onUpdateItem, onLongTe
             </div>
           )}
 
-          {/* Payment — placeholder ahead of live processing */}
+          {/* Payment — collected by phone after the order is validated */}
           <div>
             <div style={sectionTitle}>Payment</div>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', background: 'var(--surf1)', border: '1px solid var(--div)', borderRadius: 'var(--r8)', padding: '10px 12px', fontSize: '11px', color: 'var(--ink3)', lineHeight: 1.5, marginBottom: '12px' }}>
-              <span style={{ flexShrink: 0 }}>🔒</span>
-              Secure card processing is activating soon. <strong style={{ color: 'var(--ink)' }}>You won't be charged today</strong> — we confirm availability and collect payment when your order is confirmed.
-            </div>
-            <div style={{ opacity: 0.6, pointerEvents: 'none' }}>
-              <div style={{ marginBottom: '12px' }}>
-                <label style={fieldLabel}>Card number</label>
-                <input disabled placeholder="•••• •••• •••• ••••" style={fieldInput} />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                <div><label style={fieldLabel}>Expiry</label><input disabled placeholder="MM / YY" style={fieldInput} /></div>
-                <div><label style={fieldLabel}>CVC</label><input disabled placeholder="123" style={fieldInput} /></div>
-                <div><label style={fieldLabel}>Billing ZIP</label><input disabled placeholder="70112" style={fieldInput} /></div>
-              </div>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', background: 'var(--green-cont)', border: '1px solid var(--green)', borderRadius: 'var(--r8)', padding: '12px 14px', fontSize: '12px', color: 'var(--ink2)', lineHeight: 1.6 }}>
+              <span style={{ flexShrink: 0, fontSize: '15px' }}>📞</span>
+              <span>
+                <strong style={{ color: 'var(--ink)' }}>No payment is collected online.</strong> Placing this order reserves your
+                container{cart.length > 1 ? 's' : ''} — a member of our team will call you
+                {form.phone ? <> at <strong style={{ color: 'var(--ink)' }}>{form.phone}</strong></> : null} to confirm availability,
+                collect payment, and schedule delivery. You won't be charged until that call.
+              </span>
             </div>
           </div>
 
@@ -947,22 +951,22 @@ function CartModal({ open, cart, user, onClose, onRemove, onUpdateItem, onLongTe
               {placing ? 'Placing order…' : `Place order · ${num(dueToday)}`}
             </button>
           ) : twoFa.stage === 'idle' ? (
-            /* ── Step 1: text a verification code (required on every order) ── */
+            /* ── Step 1: email a verification code (required on every order) ── */
             <div>
               <button onClick={sendCode} disabled={!canPlace || twoFa.sending} style={{ width: '100%', padding: '14px', borderRadius: 'var(--pill)', background: canPlace ? 'var(--primary)' : 'var(--surf-w)', color: canPlace ? '#fff' : 'var(--ink3)', fontSize: '14px', fontWeight: 700, border: canPlace ? 'none' : '1.5px solid var(--div)', cursor: canPlace ? 'pointer' : 'not-allowed' }}>
-                {twoFa.sending ? 'Sending code…' : '📱 Text me a verification code'}
+                {twoFa.sending ? 'Sending code…' : '✉️ Email me a verification code'}
               </button>
               <div style={{ fontSize: '10px', color: 'var(--ink3)', textAlign: 'center', marginTop: '8px', lineHeight: 1.5 }}>
-                Every order is confirmed with a code texted to your mobile{form.phone ? ` (${form.phone})` : ''}.
+                Every order is confirmed with a code sent to your account email{user?.email ? ` (${user.email})` : ''}.
               </div>
             </div>
           ) : (
             /* ── Step 2: enter the code, then the order places ── */
             <div style={{ background: 'var(--surf1)', border: '1px solid var(--div)', borderRadius: 'var(--r12)', padding: '12px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '6px' }}>Enter the 6-digit code we texted to {form.phone}</div>
+              <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '6px' }}>Enter the 6-digit code we emailed to {user?.email || 'you'}</div>
               {twoFa.devCode && (
                 <div style={{ fontSize: '11px', color: 'var(--ink3)', background: 'var(--amb-c,#FEF3C7)', borderRadius: 'var(--r8)', padding: '6px 9px', marginBottom: '8px' }}>
-                  Dev mode — no SMS gateway connected. Your code: <strong style={{ fontFamily: 'var(--mono)' }}>{twoFa.devCode}</strong>
+                  Dev mode — email delivery not configured. Your code: <strong style={{ fontFamily: 'var(--mono)' }}>{twoFa.devCode}</strong>
                 </div>
               )}
               <input
@@ -1245,12 +1249,13 @@ function BulkForm({ onSuccess }: { onSuccess: () => void }) {
 // real customer sign-in). Reads and writes the customer's record in
 // customers.csv via the API, and lists their orders from orders.csv.
 
-type ProfileTab = 'account' | 'info' | 'orders'
+type ProfileTab = 'account' | 'info' | 'orders' | 'messages'
 
 const PROFILE_TABS: { key: ProfileTab; label: string }[] = [
   { key: 'account', label: 'Account' },
   { key: 'info', label: 'My Info' },
   { key: 'orders', label: 'Orders' },
+  { key: 'messages', label: 'Messages' },
 ]
 
 interface ProfileFormState {
@@ -1310,8 +1315,11 @@ function CustomerProfileModal({ open, initialTab, onClose, onMessageDriver, onSa
       } catch { setMyOrders([]) }
       try {
         const allMsgs = await messagesApi.list()
-        setMyMessages(allMsgs.filter(m => m.toRole === 'customer' && !m.trashed
-          && ((m.toEmail || '').trim().toLowerCase() === norm || (m.toName || '') === match!.name)))
+        // Whole conversation: replies addressed to them AND messages they sent.
+        setMyMessages(allMsgs.filter(m => !m.trashed && (
+          (m.toRole === 'customer' && ((m.toEmail || '').trim().toLowerCase() === norm || (m.toName || '') === match!.name))
+          || (m.fromEmail || '').trim().toLowerCase() === norm
+        )).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')))
       } catch { setMyMessages([]) }
       return match
     } catch (e) {
@@ -1350,7 +1358,37 @@ function CustomerProfileModal({ open, initialTab, onClose, onMessageDriver, onSa
     }
   }
 
-  const unread = myMessages.filter(m => !m.read).length
+  const unread = myMessages.filter(m => !m.read && (m.fromEmail || '').trim().toLowerCase() !== (customer?.email || '').trim().toLowerCase()).length
+
+  // Compose → dispatch (lands in the admin portal Inbox + staff email).
+  const [dmSubject, setDmSubject] = useState('')
+  const [dmBody, setDmBody] = useState('')
+  const [dmSending, setDmSending] = useState(false)
+  const sendToDispatch = async () => {
+    if (!customer || !dmBody.trim() || dmSending) return
+    setDmSending(true)
+    try {
+      await messagesApi.create({
+        fromRole: 'customer', fromName: customer.name, fromEmail: customer.email,
+        toRole: 'admin', toName: 'MVP Container', subject: dmSubject.trim() || 'Message from customer', body: dmBody.trim(),
+      })
+      setDmSubject('')
+      setDmBody('')
+      toast('Message sent — we’ll reply here and by email')
+      if (user) lookup(user)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not send the message — try again')
+    } finally { setDmSending(false) }
+  }
+
+  // Opening the Messages tab marks received messages read (in-app and server).
+  useEffect(() => {
+    if (tab !== 'messages' || !customer) return
+    const mine = customer.email.trim().toLowerCase()
+    myMessages.filter(m => !m.read && (m.fromEmail || '').trim().toLowerCase() !== mine)
+      .forEach(m => messagesApi.update(m.id, { read: true }).catch(() => {}))
+    setMyMessages(ms => ms.map(m => (m.fromEmail || '').trim().toLowerCase() !== mine ? { ...m, read: true } : m))
+  }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
   // Date-only values (UTC midnight) render in UTC so the calendar day never shifts locally.
   const fmtDate = (iso: string | null) => {
     if (!iso) return '—'
@@ -1502,6 +1540,48 @@ function CustomerProfileModal({ open, initialTab, onClose, onMessageDriver, onSa
               )}
             </div>
           )}
+
+          {tab === 'messages' && (
+            <div>
+              {/* Compose → dispatch (admin inbox). Driver messaging lives on the Account tab. */}
+              <div style={{ background: 'var(--surf1)', border: '1px solid var(--div)', borderRadius: 'var(--r12)', padding: '12px', marginBottom: '14px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '8px' }}>Message our team</div>
+                <input value={dmSubject} onChange={e => setDmSubject(e.target.value)} placeholder="Subject (optional)"
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '9px 11px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '13px', outline: 'none', fontFamily: 'var(--sans)', marginBottom: '8px', background: 'var(--surf-w)' }} />
+                <textarea value={dmBody} onChange={e => setDmBody(e.target.value)} placeholder="Question about an order, delivery, or anything else…" rows={3}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '9px 11px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '13px', outline: 'none', fontFamily: 'var(--sans)', resize: 'vertical', marginBottom: '8px', background: 'var(--surf-w)' }} />
+                <Button variant="primary" onClick={sendToDispatch} disabled={dmSending || !dmBody.trim()} style={{ width: '100%' }}>
+                  {dmSending ? 'Sending…' : 'Send to MVP Container'}
+                </Button>
+              </div>
+
+              {myMessages.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '20px 12px', color: 'var(--ink3)' }}>
+                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>💬</div>
+                  <div style={{ fontSize: '13px' }}>No messages yet — replies from our team and your driver show up here (and by email).</div>
+                </div>
+              ) : (
+                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                  {myMessages.map(m => {
+                    const sentByMe = (m.fromEmail || '').trim().toLowerCase() === customer.email.trim().toLowerCase()
+                    return (
+                      <div key={m.id} style={{ padding: '10px 2px', borderBottom: '1px solid var(--div)' }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 700, color: sentByMe ? 'var(--ink3)' : 'var(--primary)' }}>
+                            {sentByMe ? `You → ${m.toName || (m.toRole === 'admin' ? 'MVP Container' : 'Driver')}` : `${m.fromName} → You`}
+                          </span>
+                          {!sentByMe && !m.read && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--cta)', flexShrink: 0 }} />}
+                          <span style={{ marginLeft: 'auto', fontSize: '10px', color: 'var(--ink3)', flexShrink: 0 }}>{new Date(m.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                        </div>
+                        <div style={{ fontSize: '13px', fontWeight: 700, margin: '2px 0' }}>{m.subject}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--ink2)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{m.body}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </Modal>
@@ -1561,6 +1641,8 @@ export default function MarketplacePage() {
   const [orderBuild, setOrderBuild] = useState<CustomBuild | null>(null)
   const loadBuilds = useCallback(() => customBuildsApi.list().then(setBuilds).catch(() => {}), [])
   useEffect(() => { loadBuilds() }, [loadBuilds])
+  // Admin catalog edits (Settings → Custom Builds) show up live.
+  useLive(['custombuilds'], loadBuilds)
 
   // Keep inventory fresh: re-pull whenever the shopper switches tabs
   // (Buy ⇄ Rent ⇄ …), opens the cart or detail views won't need it, and
@@ -1575,18 +1657,22 @@ export default function MarketplacePage() {
 
   // Unread replies addressed to this customer (requires a signed-in account).
   const [customerReplies, setCustomerReplies] = useState(0)
-  useEffect(() => {
+  const loadReplies = useCallback(() => {
     if (!user) { setCustomerReplies(0); return }
-    const load = () => messagesApi.list().then(ms => {
+    messagesApi.list().then(ms => {
       setCustomerReplies(ms.filter(m => m.toRole === 'customer' && !m.read && !m.trashed
         && (m.toEmail || '').trim().toLowerCase() === customerEmail).length)
     }).catch(() => {})
-    load()
-    const onFocus = () => { if (document.visibilityState !== 'hidden') load() }
+  }, [user, customerEmail])
+  useEffect(() => {
+    loadReplies()
+    const onFocus = () => { if (document.visibilityState !== 'hidden') loadReplies() }
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onFocus)
     return () => { window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus) }
-  }, [user, customerEmail])
+  }, [loadReplies])
+  // Driver/dispatch replies pop the badge live.
+  useLive(['messages'], loadReplies)
   // Admin draft-preview is on when signed in as admin, OR forced via ?admin=1
   // in the URL (handy for demos). Use ?admin=0 to force the customer view.
   const adminParam = new URLSearchParams(window.location.search).get('admin')

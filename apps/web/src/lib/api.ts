@@ -55,27 +55,47 @@ export interface AuthUser {
   phoneVerified: boolean
   active: boolean
   createdAt: string
-  twoFaVerified?: boolean  // true if SMS 2FA completed recently (per session)
+  twoFaVerified?: boolean       // true if checkout 2FA completed recently (per session)
+  mustChangePassword?: boolean  // true when signed in with the seeded dev password
 }
 
+// Login either completes immediately (token+user) or — for admins — asks for
+// the emailed 6-digit code first (twoFaRequired + pendingToken).
 export interface AuthPayload {
   token: string
   user: AuthUser
+  twoFaRequired?: undefined
+}
+export interface AuthPending {
+  twoFaRequired: true
+  pendingToken: string
+  devCode?: string   // dev only — surfaced when the server has no SMTP configured
 }
 
 export const auth = {
   login: (email: string, password: string) =>
-    request<AuthPayload>('/auth/login', {
+    request<AuthPayload | AuthPending>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
+  // Step 2 of an admin sign-in: the emailed code + the pending token.
+  loginVerify: (pendingToken: string, code: string) =>
+    request<AuthPayload>('/auth/login/verify', { method: 'POST', body: JSON.stringify({ pendingToken, code }) }),
   register: (data: { name: string; email: string; password: string; phone?: string }) =>
     request<AuthPayload>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   me: () => request<AuthUser>('/auth/me'),
-  // SMS two-factor: send a 6-digit code to a mobile number, then verify it.
-  // Required before every order. devCode is returned in dev (no SMS gateway).
+  // Password reset: request an emailed code, then set the new password with it.
+  forgot: (email: string) =>
+    request<{ sent: true; devCode?: string }>('/auth/forgot', { method: 'POST', body: JSON.stringify({ email }) }),
+  reset: (email: string, code: string, password: string) =>
+    request<{ reset: true }>('/auth/reset', { method: 'POST', body: JSON.stringify({ email, code, password }) }),
+  changePassword: (current: string, next: string) =>
+    request<{ changed: true }>('/auth/change-password', { method: 'POST', body: JSON.stringify({ current, next }) }),
+  // Checkout two-factor: a 6-digit code emailed to the account address
+  // (the mobile number is collected for delivery coordination). Required
+  // before every order. devCode is returned only when SMTP isn't configured.
   twoFaSend: (phone: string) =>
-    request<{ sent: true; devCode?: string }>('/auth/2fa/send', { method: 'POST', body: JSON.stringify({ phone }) }),
+    request<{ sent: true; channel?: string; devCode?: string }>('/auth/2fa/send', { method: 'POST', body: JSON.stringify({ phone }) }),
   twoFaVerify: (code: string) =>
     request<{ verified: true }>('/auth/2fa/verify', { method: 'POST', body: JSON.stringify({ code }) }),
 }
@@ -156,6 +176,10 @@ export type ContainerStatus =
   | 'estimate_sent'
   | 'estimate_approved'
   | 'custom_in_progress'   // build underway (customEta = promised completion)
+  // Phone-payment order pipeline (orders only, not containers)
+  | 'pending_review'       // new order awaiting staff validation + payment call
+  | 'confirmed'            // payment collected — ready to assign a driver
+  | 'cancelled'            // rejected during review; container returned to market
 
 // Every stage a custom build passes through before entering the normal
 // delivery pipeline — shared by admin views and the customer portal.
@@ -398,6 +422,10 @@ export interface Order {
   deposit: number        // refundable rental deposit
   driverHours: number    // labor hours for this job
   notifySms?: boolean     // transient: customer's SMS opt-in from checkout (drives customers.csv, not stored on order)
+  // Phone-payment review pipeline timestamps (null until each step is done)
+  validatedAt: string | null   // availability confirmed by staff
+  calledAt: string | null      // customer reached by phone
+  paidAt: string | null        // payment collected (status → confirmed)
 }
 
 export const orders = {
@@ -411,6 +439,10 @@ export const orders = {
   // estimate_sent requires the settled amount; customer is notified each step.
   customStage: (id: string, stage: ContainerStatus, amount?: number) =>
     request<Order>(`/orders/${id}/custom-stage`, { method: 'POST', body: JSON.stringify({ stage, amount }) }),
+  // Phone-payment review checklist: validated → called → paid (status becomes
+  // 'confirmed'); 'reject' cancels and frees the container.
+  reviewStep: (id: string, step: 'validated' | 'called' | 'paid' | 'reject') =>
+    request<Order>(`/orders/${id}/review-step`, { method: 'POST', body: JSON.stringify({ step }) }),
   assignDriver: (id: string, driverId: string, scheduledDate: string) =>
     request<Order>(`/orders/${id}/assign-driver`, {
       method: 'POST',
