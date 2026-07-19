@@ -44,6 +44,14 @@ Working list toward go-live. Updated 2026-07-15.
       marketplace themes, per-tenant notification addresses, and tenant admin onboarding.
 - [ ] **Real SMS gateway** (Twilio) — SMS is logged to outbox.csv but not delivered;
       wire it up when ready and checkout/2FA can move back to text codes.
+- [ ] **Implement RBAC** using the following roles, implaement single sign on with access
+      to each portal as setup within Admin Portal as new node. User profiles to include admin, driver, 
+      customer with ability to change by user or multi-select by user which profile they are. admin will
+      have access to Admin Portal. Driver will have access to Field App. Customer will have access to 
+      marketplace. Admin as access to all portals. 
+- [ ] **Create New Portal - Marketing** build elements of a true marketing hub, like hubspot, that lets
+      admins track emails sent, responded, follow ups, etc. with tracking, reports, charts, etc.
+      showing how each email, direct mail, or social media publish has performed. 
 
 ## Shipped
 
