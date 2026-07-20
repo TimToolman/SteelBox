@@ -35,6 +35,7 @@
 
 /* ── Nav ── */
 .ld-nav { position: sticky; top: 0; z-index: 50; background: #fff; border-bottom: 1px solid #e6e9ee; }
+.ld-nav .ld-wrap { position: relative; }
 .ld-nav-row { display: flex; align-items: center; gap: 14px; height: 62px; }
 .ld-logo { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 18px; text-decoration: none; letter-spacing: -0.3px; white-space: nowrap; flex-shrink: 0; }
 .ld-logo-mark { width: 30px; height: 20px; border-radius: 4px; background: var(--ld-brand); position: relative; flex-shrink: 0; }
@@ -46,10 +47,22 @@
 .ld-nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .ld-nav-phone { text-decoration: none; font-weight: 700; font-size: 14px; white-space: nowrap; }
 .ld-nav-burger { display: none; background: none; border: 1px solid #d5dbe3; border-radius: 8px; padding: 8px 10px; cursor: pointer; font-size: 16px; flex-shrink: 0; }
-/* Rendered only while open (React conditional), so no width gate here —
-   it must be visible at ANY width where the burger can be clicked. */
-.ld-nav-mobile { border-top: 1px solid #e6e9ee; padding: 8px 0 14px; }
-.ld-nav-mobile a { display: block; padding: 10px 6px; text-decoration: none; font-weight: 600; font-size: 15px; }
+/* Burger dropdown — a floating panel anchored under the nav bar, not an
+   inline block (inline pushes the hero down and reads as broken layout).
+   Rendered only while open (React conditional), so no width gate. */
+.ld-nav-mobile {
+  position: absolute; top: calc(100% + 6px); right: 20px; min-width: 250px;
+  background: #fff; border: 1px solid #e2e7ee; border-radius: 14px;
+  box-shadow: 0 14px 36px rgba(19, 41, 61, .16); padding: 8px; z-index: 70;
+}
+.ld-nav-mobile a { display: block; padding: 10px 12px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px; }
+.ld-nav-mobile a:hover { background: #f0f4f9; }
+/* Above the phone breakpoint the three category links are already in the
+   bar — don't duplicate them inside the panel. */
+@media (min-width: 941px) { .ld-nav-mobile .ld-m-cat { display: none; } }
+
+/* Anchor jumps (#how-it-works etc.) must clear the sticky header. */
+.ld [id] { scroll-margin-top: 76px; }
 
 /* Mid widths: the full link set doesn't fit — collapse the secondary
    links into the burger menu, keep the three category links. */

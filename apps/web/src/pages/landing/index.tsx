@@ -34,6 +34,16 @@ function JsonLd({ data }: { data: object }) {
 
 export function SiteNav({ tenant }: { tenant: Tenant }) {
   const [open, setOpen] = useState(false)
+  const navRef = React.useRef<HTMLElement>(null)
+  // Close the burger dropdown on outside click or Escape.
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => { if (navRef.current && !navRef.current.contains(e.target as Node)) setOpen(false) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
+  }, [open])
   const links = [
     { label: 'For Sale', href: u('shop?tab=buy'), cat: true },
     { label: 'Rentals', href: u('shop?tab=rent'), cat: true },
@@ -45,7 +55,7 @@ export function SiteNav({ tenant }: { tenant: Tenant }) {
     { label: 'Contact', href: tenant.phoneHref },
   ]
   return (
-    <header className="ld-nav">
+    <header className="ld-nav" ref={navRef}>
       <div className="ld-wrap">
         <div className="ld-nav-row">
           <a className="ld-logo" href={u('')} aria-label={`${tenant.name} home`}>
@@ -68,8 +78,10 @@ export function SiteNav({ tenant }: { tenant: Tenant }) {
           </div>
         </div>
         {open && (
-          <nav className="ld-nav-mobile" aria-label="Mobile">
-            {links.map(l => <a key={l.label} href={l.href} onClick={() => setOpen(false)}>{l.label}</a>)}
+          <nav className="ld-nav-mobile" aria-label="Menu">
+            {links.map(l => (
+              <a key={l.label} className={l.cat ? 'ld-m-cat' : ''} href={l.href} onClick={() => setOpen(false)}>{l.label}</a>
+            ))}
           </nav>
         )}
       </div>
