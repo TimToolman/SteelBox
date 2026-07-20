@@ -55,7 +55,9 @@ export function SiteNav({ tenant }: { tenant: Tenant }) {
           <nav aria-label="Main">
             <ul className="ld-nav-links">
               {links.map(l => (
-                <li key={l.label}><a className={l.cat ? 'ld-nav-cat' : ''} href={l.href}>{l.label}</a></li>
+                <li key={l.label} className={l.cat ? '' : 'ld-nav-sec'}>
+                  <a className={l.cat ? 'ld-nav-cat' : ''} href={l.href}>{l.label}</a>
+                </li>
               ))}
             </ul>
           </nav>
@@ -127,7 +129,7 @@ function Hero({ tenant, zip, setZip, city }: { tenant: Tenant; zip: string; setZ
           </div>
           <div className="ld-hero-photo">
             <img
-              src={heroImg()} width="1000" height="750"
+              src={heroImg()} width="750" height="1000"
               alt={`Field-inspected steel shipping container ready for delivery by ${tenant.name}`}
             />
           </div>

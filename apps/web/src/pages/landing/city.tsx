@@ -75,7 +75,7 @@ export default function CityPage({ tenant, city, initialInventory }: CityPagePro
               </div>
               <div className="ld-hero-photo">
                 <img
-                  src={u('og/container-hero.jpg')} width="1000" height="750"
+                  src={u('og/container-hero.jpg')} width="750" height="1000"
                   alt={`Shipping container ready for delivery to ${city.name}, ${city.state}`}
                 />
               </div>
