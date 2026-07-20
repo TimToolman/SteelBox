@@ -46,7 +46,10 @@
 .ld-nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .ld-nav-phone { text-decoration: none; font-weight: 700; font-size: 14px; white-space: nowrap; }
 .ld-nav-burger { display: none; background: none; border: 1px solid #d5dbe3; border-radius: 8px; padding: 8px 10px; cursor: pointer; font-size: 16px; flex-shrink: 0; }
-.ld-nav-mobile { display: none; }
+/* Rendered only while open (React conditional), so no width gate here —
+   it must be visible at ANY width where the burger can be clicked. */
+.ld-nav-mobile { border-top: 1px solid #e6e9ee; padding: 8px 0 14px; }
+.ld-nav-mobile a { display: block; padding: 10px 6px; text-decoration: none; font-weight: 600; font-size: 15px; }
 
 /* Mid widths: the full link set doesn't fit — collapse the secondary
    links into the burger menu, keep the three category links. */
@@ -178,8 +181,6 @@
 @media (max-width: 940px) {
   .ld-nav-links { display: none; }
   .ld-nav-burger { display: block; }
-  .ld-nav-mobile { display: block; border-top: 1px solid #e6e9ee; padding: 8px 0 14px; }
-  .ld-nav-mobile a { display: block; padding: 10px 6px; text-decoration: none; font-weight: 600; font-size: 15px; }
   .ld-hero-grid { grid-template-columns: 1fr; padding: 30px 0; }
   .ld-hero-photo { order: -1; aspect-ratio: 16 / 9; }
   .ld-teasers { grid-template-columns: 1fr; }
