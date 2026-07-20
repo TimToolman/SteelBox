@@ -531,6 +531,16 @@ export interface QuoteRequest {
   notes?: string
   containerSku?: string
   containerId?: string
+  // Lead attribution (spread in via lib/attribution.attributionFields)
+  source?: string
+  utm_source?: string
+  utm_medium?: string
+  utm_campaign?: string
+  utm_term?: string
+  utm_content?: string
+  gclid?: string
+  referrer?: string
+  landingPath?: string
 }
 
 export const quotes = {

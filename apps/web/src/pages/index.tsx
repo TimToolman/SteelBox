@@ -8,6 +8,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { GradeBadge, StatusBadge, Button, Modal, Snackbar, Input, Select, BuildClipart } from '../components/ui'
 import { useContainers, useSnackbar, useAuth, useIsMobile, useLive } from '../hooks'
 import { LoginForm } from '../lib/auth'
+import { attributionFields } from '../lib/attribution'
 import { auth as authApi, containers, quotes, orders, isZipCovered, estimateDelivery, drivers as driversApi, messages as messagesApi, customers as customersApi, customBuilds as customBuildsApi, depots as depotsApi, photoUrl, SHOT_LABELS, RENDER_SLOT, RENDER_LABEL, CUSTOM_STAGES, type Container, type ContainerGrade, type ContainerSize, type Driver, type Customer, type Order, type Message, type AuthUser, type CustomBuild, type ContainerCondition, type Depot, SIZE_LABEL } from '../lib/api'
 
 // ── Types ─────────────────────────────────────────────────
@@ -25,13 +26,9 @@ function allowedModes(c: Container): { buy: boolean; rent: boolean } {
 
 // ── Constants ─────────────────────────────────────────────
 
-const GRADE_META: Record<ContainerGrade, { label: string; desc: string; color: string }> = {
-  A: { label: 'One-Trip', desc: 'Direct import, single use. Like new inside and out.', color: '#1B7A5A' },
-  B: { label: 'Cargo-Worthy', desc: 'Used, structurally sound, wind and watertight.', color: '#2563EB' },
-  C: { label: 'Wind & Watertight', desc: 'Older unit with visible rust. Structurally solid.', color: '#D97706' },
-  R: { label: 'Refurbished', desc: 'Repainted, resealed, and reconditioned.', color: '#6D28D9' },
-  X: { label: 'Custom Build', desc: 'Modified to specification.', color: '#374151' },
-}
+// Canonical grade ladder lives in lib/specs so the landing page,
+// FAQ/schema, and marketplace can never disagree on a definition.
+import { GRADE_META } from '../lib/specs'
 
 // Canonical labels live in lib/api (SIZE_LABEL) so admin + storefront stay in sync.
 const SIZE_LABELS = SIZE_LABEL
@@ -78,7 +75,7 @@ function QuoteDialog({ open, onClose, title, subtitle, defaultNeed = '', contain
     setSubmitting(true)
     setError('')
     try {
-      await quotes.submit({ ...form, containerSku })
+      await quotes.submit({ ...form, containerSku, ...attributionFields('marketplace-quote') })
       onSuccess?.()
       onClose()
     } catch (e) {
@@ -1591,13 +1588,29 @@ function CustomerProfileModal({ open, initialTab, onClose, onMessageDriver, onSa
 // ── Main Marketplace Page ──────────────────────────────────
 
 export default function MarketplacePage() {
-  const [activeTab, setActiveTab] = useState<Tab>('buy')
+  // Deep-link entry from the landing page's shop-by cards:
+  // /shop?tab=rent&size=20ft-std,20ft-hc&grade=A,B&cond=used&zip=70112
+  const qp = (k: string) => new URLSearchParams(window.location.search).get(k)
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const t = qp('tab')
+    return t === 'rent' || t === 'custom' || t === 'bulk' ? t : 'buy'
+  })
   const ALL_SIZES = SIZE_OPTIONS.map(([v]) => v)
   // Top-level gate: shoppers first pick New or Used ('all' = grouped view);
   // the remaining filters only appear once a condition is chosen.
-  const [condFilter, setCondFilter] = useState<'all' | ContainerCondition>('all')
-  const [sizeFilters, setSizeFilters] = useState<Set<ContainerSize>>(new Set(ALL_SIZES))
-  const [gradeFilters, setGradeFilters] = useState<Set<ContainerGrade>>(new Set(['A', 'B', 'C', 'R', 'X']))
+  const [condFilter, setCondFilter] = useState<'all' | ContainerCondition>(() => {
+    const c = qp('cond')
+    return c === 'new' || c === 'used' ? c : 'all'
+  })
+  const [sizeFilters, setSizeFilters] = useState<Set<ContainerSize>>(() => {
+    const wanted = (qp('size') ?? '').split(',').filter(s => (ALL_SIZES as string[]).includes(s)) as ContainerSize[]
+    return new Set(wanted.length ? wanted : ALL_SIZES)
+  })
+  const [gradeFilters, setGradeFilters] = useState<Set<ContainerGrade>>(() => {
+    const all: ContainerGrade[] = ['A', 'B', 'C', 'R', 'X']
+    const wanted = (qp('grade') ?? '').split(',').filter(g => (all as string[]).includes(g)) as ContainerGrade[]
+    return new Set(wanted.length ? wanted : all)
+  })
   // null = no color restriction (all colors checked)
   const [colorSel, setColorSel] = useState<Set<string> | null>(null)
   // Depot filter — shoppers may only want stock at nearby yards. null = all depots.
@@ -1618,7 +1631,7 @@ export default function MarketplacePage() {
   const [selectedContainer, setSelectedContainer] = useState<Container | null>(null)
   const [quoteOpen, setQuoteOpen] = useState(false)
   const [quotePurpose, setQuotePurpose] = useState<'quote' | 'contact' | 'rental'>('quote')
-  const [zipInput, setZipInput] = useState('')
+  const [zipInput, setZipInput] = useState(() => qp('zip') ?? '')
   const [zipResult, setZipResult] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [cartOpen, setCartOpen] = useState(false)

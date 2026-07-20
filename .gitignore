@@ -1,0 +1,11 @@
+# Build outputs — CI (GitHub Pages) and Vercel build from source;
+# nothing deploys from a committed dist.
+apps/web/dist/
+apps/web/dist-ssr/
+
+# Dependencies. NOTE: node_modules was historically committed and ~3,200
+# files are still tracked — this line stops NEW files from being added.
+# Untracking the existing ones (git rm -r --cached) is a separate cleanup.
+node_modules/
+
+.DS_Store

@@ -31,6 +31,12 @@ jobs:
           # and variables → Actions → Variables) once the API is hosted;
           # left unset, the site falls back to http://localhost:4000.
           VITE_API_URL: ${{ vars.VITE_API_URL }}
+          # GitHub Pages is a TEST BED only. Every prerendered page gets
+          # <meta name="robots" content="noindex"> plus a canonical link to
+          # production, so Pages never competes with www.mvpcontainers.com
+          # for keywords. Production (Vercel) builds without VITE_NOINDEX.
+          VITE_NOINDEX: '1'
+          VITE_SITE_ORIGIN: 'https://www.mvpcontainers.com'
         run: |
           npm install
           npm run install:web
