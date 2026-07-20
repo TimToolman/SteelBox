@@ -9,3 +9,6 @@ apps/web/dist-ssr/
 node_modules/
 
 .DS_Store
+
+# Dev API runtime log — written locally on every email send (see apps/api/smtp.mjs)
+apps/api/data/outbox.csv
