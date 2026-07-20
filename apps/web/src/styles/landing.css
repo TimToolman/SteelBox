@@ -217,11 +217,6 @@
 .ld-teaser p { font-size: 14px; color: #4a5d70; margin: 10px 0 16px; }
 .ld-teaser ul { margin: 0 0 16px; padding-left: 18px; font-size: 13px; color: #4a5d70; }
 
-/* ── Service area ── */
-.ld-cities { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-top: 20px; }
-.ld-city-link { display: block; text-decoration: none; font-size: 14px; font-weight: 600; padding: 11px 14px; border: 1px solid #e2e7ed; border-radius: 10px; background: #fff; }
-.ld-city-link:hover { border-color: var(--ld-brand); color: var(--ld-brand); }
-
 /* ── FAQ ── */
 .ld-faq { margin-top: 20px; max-width: 840px; }
 .ld-faq details { border-bottom: 1px solid #e2e7ed; padding: 4px 0; }

@@ -12,10 +12,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import '../../styles/landing.css'
-import { SIZE_SPECS, GRADE_META } from '../../lib/specs'
-import { photoUrl, quotes, isZipCovered, SIZE_LABEL, type Container } from '../../lib/api'
-import { getInventory } from '../../tenant/inventory'
-import type { Tenant, TenantCity } from '../../tenant'
+import { quotes, isZipCovered } from '../../lib/api'
+import type { Tenant } from '../../tenant'
 import { attributionFields } from '../../lib/attribution'
 import {
   buildFaq, jsonLdLocalBusiness, jsonLdFaq, jsonLdBreadcrumb,
@@ -72,7 +70,6 @@ export function SiteNav({ tenant, active, onSelect, right }: {
     { label: 'How It Works', href: u('#how-it-works') },
     { label: 'Why Us', href: u('#why-us') },
     { label: 'FAQ', href: u('#faq') },
-    { label: 'Service Area', href: u('service-area/') },
   ]
   // Category item: an in-page tab button on the marketplace, a link elsewhere.
   const category = (c: { tab: ShopTab; label: string }, cls: string) => onSelect
@@ -220,106 +217,14 @@ function Hero({ tenant }: { tenant: Tenant }) {
   )
 }
 
-// ── Live inventory grid (city pages) ──────────────────────
-
-function UnitCard({ c, zip }: { c: Container; zip: string }) {
-  const photo = c.photos?.filter(Boolean)[0]
-  const covered = zip ? isZipCovered(zip) : false
-  return (
-    <article className="ld-inv-card">
-      <div className="ld-inv-photo">
-        {photo
-          ? <img src={photoUrl(photo)} alt={`${SIZE_LABEL[c.size] ?? c.size} container ${c.sku}, grade ${c.grade}`} loading="lazy" width="480" height="270" />
-          : <img src={heroImg()} alt={`${SIZE_LABEL[c.size] ?? c.size} container ${c.sku}`} loading="lazy" width="480" height="270" />}
-        <span className="ld-inv-grade" style={{ background: GRADE_META[c.grade]?.color ?? '#374151' }}>Grade {c.grade}</span>
-      </div>
-      <div className="ld-inv-body">
-        <h3 className="ld-inv-title">{SIZE_LABEL[c.size] ?? c.size}</h3>
-        <p className="ld-inv-meta">{GRADE_META[c.grade]?.label} · {c.condition === 'new' ? 'New' : 'Used'} · {c.sku}</p>
-        <p className="ld-inv-price">
-          ${c.buyPrice.toLocaleString()}
-          {c.rentMonthly ? <small> or ${c.rentMonthly}/mo</small> : null}
-        </p>
-        <p className="ld-inv-delivered">
-          {zip && covered
-            ? `Delivered to ${zip}${c.deliveryIncluded ? ' — delivery included' : ' — delivery quoted at checkout'}`
-            : c.deliveryIncluded ? 'Delivery included' : 'Enter ZIP for delivered price'}
-        </p>
-        <div className="ld-inv-cta">
-          <a className="ld-btn ld-btn--brand ld-btn--sm" href={u(`shop?size=${c.size}`)}>View &amp; buy</a>
-        </div>
-      </div>
-    </article>
-  )
-}
-
-// Static category cards — the SSG fallback when live stock isn't
-// baked in, and the client's skeleton until the fetch lands.
-function CategoryCard({ size }: { size: (typeof SIZE_SPECS)[number] }) {
-  return (
-    <article className="ld-inv-card">
-      <div className="ld-inv-photo">
-        <img src={heroImg()} alt={`${size.label} shipping container`} loading="lazy" width="480" height="270" />
-      </div>
-      <div className="ld-inv-body">
-        <h3 className="ld-inv-title">{size.label}</h3>
-        <ul className="ld-spec-list">
-          <li>{size.extL} × {size.extW} × {size.extH} outside</li>
-          <li>{size.capacityCuFt.toLocaleString()} cu ft · {size.floorSqFt} sq ft floor</li>
-          <li>Payload {size.payloadLb.toLocaleString()} lb</li>
-        </ul>
-        <div className="ld-inv-cta">
-          <a className="ld-btn ld-btn--brand ld-btn--sm" href={u(`shop?size=${size.size}`)}>See live prices</a>
-        </div>
-      </div>
-    </article>
-  )
-}
-
-export function InventorySection({ tenant, zip, initialInventory, city }: {
-  tenant: Tenant; zip: string; initialInventory: Container[] | null; city?: TenantCity
-}) {
-  const [units, setUnits] = useState<Container[] | null>(initialInventory)
-  useEffect(() => {
-    let live = true
-    getInventory({ tenantId: tenant.id, nearZip: zip || undefined, scope: 'tenant' })
-      .then(r => { if (live) setUnits(r.units) })
-      .catch(() => { /* keep SSG-baked units (or category cards) if the API is unreachable */ })
-    return () => { live = false }
-  }, [tenant.id, zip])
-
-  const show = units?.slice(0, 8)
-  return (
-    <section className="ld-section" id="inventory" aria-labelledby="inv-h">
-      <div className="ld-wrap">
-        <div className="ld-inv-head">
-          <div>
-            <p className="ld-kicker">Live inventory</p>
-            <h2 id="inv-h" className="ld-h2">{city ? `In stock for ${city.name} delivery` : 'In stock right now'}</h2>
-            <p className="ld-section-sub">
-              These are the actual units in our yards — the photos are of the box you'll get, and the price is the price.
-            </p>
-          </div>
-          <a className="ld-btn ld-btn--ghost ld-btn--sm" href={u('shop')}>Browse all inventory</a>
-        </div>
-        <div className="ld-inv-grid">
-          {show && show.length > 0
-            ? show.map(c => <UnitCard key={c.id} c={c} zip={zip} />)
-            : SIZE_SPECS.map(s => <CategoryCard key={s.size} size={s} />)}
-        </div>
-      </div>
-    </section>
-  )
-}
-
 // ── How it works ──────────────────────────────────────────
 
 export function HowItWorks() {
   const steps = [
-    { t: 'Pick your size', d: `20ft or 40ft, standard or high cube. Not sure? The specs on every card show floor space, ceiling, and payload.`, href: u('shop') },
-    { t: 'Pick your grade', d: 'A through R, each verified in a field inspection with a full photo set — you see exactly what "used" means on that unit.', href: u('shop?grade=A') },
-    { t: 'Add your options', d: 'Rental term, custom modifications, lock boxes — options price out on the spot, not in a callback.', href: u('shop?tab=custom') },
-    { t: 'Schedule delivery', d: `Pick a window that works. Payment is held until the container is set on your site and you've walked around it.`, href: u('shop') },
+    { t: 'Pick Buy or Rent', d: 'Own it outright or rent by the month — it\'s the same field-inspected inventory either way.', href: u('shop?tab=buy') },
+    { t: 'Pick your size & grade', d: `20ft or 40ft, standard or high cube, grades A through R — each verified in a field inspection with a full photo set.`, href: u('shop') },
+    { t: 'Pick new or used', d: 'New one-trip boxes or inspected used units — the photos show exactly what you\'re getting.', href: u('shop?cond=new') },
+    { t: 'Checkout', d: `Add to cart and pick a delivery window. Payment is held until the container is set on your site and you've walked around it.`, href: u('shop') },
   ]
   return (
     <section className="ld-section ld-section--tint" id="how-it-works" aria-labelledby="how-h">
@@ -434,8 +339,8 @@ export function Teasers() {
 
 // ── FAQ ───────────────────────────────────────────────────
 
-export function FaqSection({ tenant, city }: { tenant: Tenant; city?: TenantCity }) {
-  const faq = useMemo(() => buildFaq(tenant, city), [tenant, city])
+export function FaqSection({ tenant }: { tenant: Tenant }) {
+  const faq = useMemo(() => buildFaq(tenant), [tenant])
   return (
     <section className="ld-section ld-section--tint" id="faq" aria-labelledby="faq-h">
       <div className="ld-wrap">
@@ -527,7 +432,6 @@ export function SiteFooter({ tenant }: { tenant: Tenant }) {
               <li><a href={u('#how-it-works')}>How it works</a></li>
               <li><a href={u('#why-us')}>Why us</a></li>
               <li><a href={u('#faq')}>FAQ</a></li>
-              <li><a href={u('service-area/')}>Service area</a></li>
             </ul>
           </div>
           <div>
@@ -564,7 +468,6 @@ export function CallBar({ tenant }: { tenant: Tenant }) {
 
 export interface LandingPageProps {
   tenant: Tenant
-  initialInventory: Container[] | null
 }
 
 export default function LandingPage({ tenant }: LandingPageProps) {

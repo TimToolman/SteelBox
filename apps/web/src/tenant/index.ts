@@ -121,7 +121,3 @@ export function resolveTenant(hostname?: string): Tenant {
 export function getTenantById(id: string): Tenant | undefined {
   return TENANTS[id]
 }
-
-export function cityBySlug(tenant: Tenant, slug: string): TenantCity | undefined {
-  return tenant.cities.find(c => c.slug === slug)
-}

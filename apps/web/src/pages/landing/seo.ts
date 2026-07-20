@@ -8,10 +8,8 @@
 // sourced from competitor sites.
 // ============================================================
 
-import { SIZE_SPECS, GRADE_META, GRADE_ORDER, DELIVERY_CLEARANCE, specOf } from '../../lib/specs'
-import type { Tenant, TenantCity } from '../../tenant'
-import type { Container } from '../../lib/api'
-import { SIZE_LABEL, photoUrl } from '../../lib/api'
+import { GRADE_META, GRADE_ORDER, DELIVERY_CLEARANCE, specOf } from '../../lib/specs'
+import type { Tenant } from '../../tenant'
 
 export interface FaqItem { q: string; a: string }
 
@@ -19,8 +17,8 @@ const s20 = specOf('20ft-std')!
 const s40 = specOf('40ft-std')!
 const hc40 = specOf('40ft-hc')!
 
-export function buildFaq(tenant: Tenant, city?: TenantCity): FaqItem[] {
-  const place = city ? `${city.name}, ${city.state}` : 'the Gulf Coast'
+export function buildFaq(tenant: Tenant): FaqItem[] {
+  const place = 'the Gulf Coast'
   return [
     {
       q: 'What are the exact dimensions of a shipping container?',
@@ -86,36 +84,6 @@ export function jsonLdLocalBusiness(tenant: Tenant) {
   }
 }
 
-// Live units when available (real offers), otherwise the four core
-// size categories (no offer — prices are live-only).
-export function jsonLdProducts(tenant: Tenant, units: Container[] | null) {
-  const items = units && units.length
-    ? units.slice(0, 8).map(u => ({
-        '@type': 'Product',
-        name: `${SIZE_LABEL[u.size] ?? u.size} shipping container — Grade ${u.grade} (${GRADE_META[u.grade]?.label ?? ''})`,
-        sku: u.sku,
-        image: u.photos?.filter(Boolean).slice(0, 1).map(p => photoUrl(p)),
-        description: `Field-inspected ${SIZE_LABEL[u.size] ?? u.size} container, grade ${u.grade}, photo-documented, delivered across the Gulf Coast.`,
-        offers: {
-          '@type': 'Offer',
-          price: u.buyPrice,
-          priceCurrency: 'USD',
-          availability: 'https://schema.org/InStock',
-          url: `${tenant.primaryDomain}/shop`,
-        },
-      }))
-    : SIZE_SPECS.map(s => ({
-        '@type': 'Product',
-        name: `${s.label} shipping container`,
-        description: `${s.keyword} — ${s.extL} × ${s.extW} × ${s.extH}, ${s.capacityCuFt.toLocaleString()} cu ft, payload ${s.payloadLb.toLocaleString()} lb. Field-inspected and delivered.`,
-      }))
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'ItemList',
-    itemListElement: items.map((item, i) => ({ '@type': 'ListItem', position: i + 1, item })),
-  }
-}
-
 export function jsonLdFaq(faq: FaqItem[]) {
   return {
     '@context': 'https://schema.org',
@@ -157,18 +125,3 @@ export function homeMeta(tenant: Tenant): RouteMeta {
   }
 }
 
-export function cityMeta(tenant: Tenant, city: TenantCity): RouteMeta {
-  return {
-    path: `/service-area/${city.slug}/`,
-    title: `Shipping Containers for Sale in ${city.name}, ${city.state} | Conex Boxes Delivered | ${tenant.name}`,
-    description: `New & used shipping containers delivered to ${city.name}, ${city.state}. Field-inspected 20ft & 40ft conex boxes with real photos, verified grades, and instant delivered pricing. Pay on delivery.`,
-  }
-}
-
-export function serviceAreaMeta(tenant: Tenant): RouteMeta {
-  return {
-    path: '/service-area/',
-    title: `Service Area — Container Delivery Across the Gulf Coast | ${tenant.name}`,
-    description: `${tenant.name} delivers shipping containers across Louisiana, Mississippi, Alabama, Texas, Arkansas, and the Florida Panhandle. Find delivered pricing for your city.`,
-  }
-}

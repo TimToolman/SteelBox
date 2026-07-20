@@ -17,7 +17,6 @@
 //   VITE_NOINDEX=1    add <meta robots noindex> — set on the
 //                     GitHub Pages test bed so it never competes
 //                     with production for keywords
-//   VITE_API_URL      API to fetch live inventory from at build
 // ============================================================
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
@@ -29,30 +28,8 @@ const dist = join(root, 'dist')
 
 const ORIGIN = (process.env.VITE_SITE_ORIGIN || 'https://www.mvpcontainers.com').replace(/\/$/, '')
 const NOINDEX = process.env.VITE_NOINDEX === '1'
-const API = process.env.VITE_API_URL || ''
 
 const { renderPages } = await import(join(root, 'dist-ssr', 'entry-ssg.js'))
-
-// ── Live inventory at build time (best-effort) ──
-let inventory = null
-if (API) {
-  try {
-    const res = await fetch(`${API}/containers`, { signal: AbortSignal.timeout(8000) })
-    if (res.ok) {
-      const all = await res.json()
-      inventory = all
-        .filter(c => c.status === 'available')
-        .sort((a, b) => (b.photos?.filter(Boolean).length ?? 0) - (a.photos?.filter(Boolean).length ?? 0) || a.buyPrice - b.buyPrice)
-      console.log(`[prerender] baked ${inventory.length} live units from ${API}`)
-    } else {
-      console.warn(`[prerender] inventory fetch: HTTP ${res.status} — using category cards`)
-    }
-  } catch (err) {
-    console.warn(`[prerender] inventory fetch failed (${err?.message}) — using category cards`)
-  }
-} else {
-  console.warn('[prerender] VITE_API_URL unset — using category cards')
-}
 
 const template = readFileSync(join(dist, 'index.html'), 'utf8')
 
@@ -86,7 +63,7 @@ function headFor(page) {
   ].join('\n    ')
 }
 
-const pages = renderPages(inventory)
+const pages = renderPages()
 
 for (const page of pages) {
   let html = template
