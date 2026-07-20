@@ -53,7 +53,7 @@ export function buildFaq(tenant: Tenant, city?: TenantCity): FaqItem[] {
     },
     {
       q: 'Are used conex boxes wind and watertight?',
-      a: 'Every grade we sell above salvage is verified wind and watertight at inspection: doors sealed, roof sound, floors solid. The 16-photo inspection on each listing shows the actual roof, seals, floor, and corners of the exact unit you\'re buying — not a stock photo of a nicer one.',
+      a: 'Every grade we sell above salvage is verified wind and watertight at inspection: doors sealed, roof sound, floors solid. The 8-photo inspection on each listing shows the actual roof, seals, floor, and corners of the exact unit you\'re buying — not a stock photo of a nicer one.',
     },
   ]
 }

@@ -33,18 +33,47 @@
 .ld-btn--ghost { background: #fff; color: var(--ld-ink); border: 1.5px solid #d5dbe3; }
 .ld-btn--sm { padding: 10px 16px; font-size: 13px; }
 
-/* ── Nav ── */
-.ld-nav { position: sticky; top: 0; z-index: 50; background: #fff; border-bottom: 1px solid #e6e9ee; }
-.ld-nav .ld-wrap { position: relative; }
-.ld-nav-row { display: flex; align-items: center; gap: 14px; height: 62px; }
-.ld-logo { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 18px; text-decoration: none; letter-spacing: -0.3px; white-space: nowrap; flex-shrink: 0; }
-.ld-logo-mark { width: 30px; height: 20px; border-radius: 4px; background: var(--ld-brand); position: relative; flex-shrink: 0; }
-.ld-logo-mark::after { content: ''; position: absolute; inset: 4px 5px; border-left: 2px solid #fff; border-right: 2px solid #fff; opacity: .85; }
-.ld-nav-links { display: flex; align-items: center; gap: 2px; list-style: none; margin: 0; padding: 0; }
-.ld-nav-links a { text-decoration: none; font-size: 14px; font-weight: 600; padding: 8px 9px; border-radius: 8px; color: #33475c; white-space: nowrap; display: block; }
-.ld-nav-links a:hover { background: #f0f4f9; color: var(--ld-ink); }
-.ld-nav-links a.ld-nav-cat { color: var(--ld-brand); }
+/* ── Nav ──
+   The one site-wide header (landing, city pages, AND the marketplace —
+   see SiteNav in pages/landing/index.tsx). Full-width bar so it reads
+   identically on the 1180px-capped landing and the full-width shop. */
+.ld-nav { position: sticky; top: 0; z-index: 400; background: #fff; border-bottom: 1px solid #e6e9ee; color: var(--ld-ink, #13293D); }
+.ld-nav-wrap { position: relative; padding: 0 20px; }
+.ld-nav-row { display: flex; align-items: center; gap: 12px; height: 60px; }
+.ld-logo { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 18px; text-decoration: none; letter-spacing: -0.4px; white-space: nowrap; flex-shrink: 0; }
+.ld-logo-badge { width: 32px; height: 32px; border-radius: 8px; background: var(--ld-brand); display: grid; place-items: center; flex-shrink: 0; }
+.ld-logo-brand { color: var(--ld-brand); }
+.ld-logo-accent { color: var(--ld-accent); }
+.ld-nav-main { min-width: 0; }
+.ld-nav-links { display: flex; align-items: center; gap: 2px; list-style: none; margin: 0 0 0 6px; padding: 0; }
+.ld-nav-links a, .ld-nav-links button {
+  text-decoration: none; font: 600 13px/1.4 var(--sans); padding: 7px 13px; border-radius: 999px;
+  color: #33475c; white-space: nowrap; display: block; background: none; border: none; cursor: pointer;
+}
+.ld-nav-links a:hover, .ld-nav-links button:hover { background: #f0f4f9; color: var(--ld-ink); }
+.ld-nav-links .ld-nav-cat { color: var(--ld-brand); font-weight: 700; }
+.ld-nav-links .ld-nav-cat:hover { background: rgba(43, 127, 212, .1); color: var(--ld-brand); }
+.ld-nav-links .ld-nav-cat--active, .ld-nav-links .ld-nav-cat--active:hover { background: var(--ld-brand); color: #fff; }
+.ld-nav-div { width: 1px; height: 20px; background: #e2e7ee; margin: 0 8px; }
 .ld-nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.ld-nav-profile {
+  display: flex; align-items: center; justify-content: center; width: 38px; height: 38px;
+  border-radius: 50%; border: 1.5px solid #d5dbe3; color: var(--ld-brand); flex-shrink: 0;
+}
+.ld-nav-profile:hover { background: #f0f4f9; }
+/* Contact Us dropdown card — phone first, then email and yard address. */
+.ld-nav-contactwrap { position: relative; display: inline-flex; flex-shrink: 0; }
+.ld-contact-pop {
+  position: absolute; top: calc(100% + 12px); right: 0; min-width: 230px; z-index: 70;
+  background: #fff; border: 1px solid #e2e7ee; border-radius: 14px;
+  box-shadow: 0 14px 36px rgba(19, 41, 61, .16); padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.ld-contact-pop a { text-decoration: none; }
+.ld-contact-phone { font-size: 17px; font-weight: 800; color: var(--ld-brand); }
+.ld-contact-email { font-size: 14px; font-weight: 600; color: var(--ld-ink); }
+.ld-contact-email:hover, .ld-contact-phone:hover { text-decoration: underline; }
+.ld-contact-addr { font-style: normal; font-size: 13px; line-height: 1.5; color: #5b6b7c; }
 .ld-nav-phone { text-decoration: none; font-weight: 700; font-size: 14px; white-space: nowrap; }
 .ld-nav-burger { display: none; background: none; border: 1px solid #d5dbe3; border-radius: 8px; padding: 8px 10px; cursor: pointer; font-size: 16px; flex-shrink: 0; }
 /* Burger dropdown — a floating panel anchored under the nav bar, not an
@@ -55,24 +84,76 @@
   background: #fff; border: 1px solid #e2e7ee; border-radius: 14px;
   box-shadow: 0 14px 36px rgba(19, 41, 61, .16); padding: 8px; z-index: 70;
 }
-.ld-nav-mobile a { display: block; padding: 10px 12px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px; }
-.ld-nav-mobile a:hover { background: #f0f4f9; }
-/* Above the phone breakpoint the three category links are already in the
+.ld-nav-mobile a, .ld-nav-mobile button {
+  display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: 8px;
+  text-decoration: none; font: 600 15px/1.4 var(--sans); color: inherit;
+  background: none; border: none; cursor: pointer;
+}
+.ld-nav-mobile a:hover, .ld-nav-mobile button:hover { background: #f0f4f9; }
+/* Above the phone breakpoint the category links are already in the
    bar — don't duplicate them inside the panel. */
 @media (min-width: 941px) { .ld-nav-mobile .ld-m-cat { display: none; } }
 
 /* Anchor jumps (#how-it-works etc.) must clear the sticky header. */
 .ld [id] { scroll-margin-top: 76px; }
 
-/* Mid widths: the full link set doesn't fit — collapse the secondary
-   links into the burger menu, keep the three category links. */
-@media (max-width: 1280px) {
+/* Mid widths: the full link set doesn't fit — collapse the section
+   links (and divider) into the burger menu, keep the category tabs. */
+@media (max-width: 1150px) {
   .ld-nav-sec { display: none; }
   .ld-nav-burger { display: block; }
 }
 
 /* ── Hero ── */
 .ld-hero { background: linear-gradient(160deg, #f4f8fc 55%, #e8f0f9); border-bottom: 1px solid #e6e9ee; }
+
+/* Home hero — bright portal style (think Yahoo landing): vivid brand
+   gradient, centered copy, one big search-pill ZIP bar, quick-link chips.
+   City pages keep the light two-column .ld-hero-grid layout below. */
+.ld-hero--portal {
+  position: relative; overflow: hidden; text-align: center; color: #fff;
+  background: linear-gradient(140deg, #4795E4 0%, var(--ld-brand) 45%, #1A5EA8 100%);
+  border-bottom: none;
+}
+.ld-hero-bgimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 62%; opacity: .15; pointer-events: none; }
+.ld-hero-inner { position: relative; max-width: 880px; margin: 0 auto; padding: 54px 20px 50px; }
+.ld-hero--portal h1 { font-size: clamp(30px, 4.4vw, 48px); font-weight: 800; letter-spacing: -1px; }
+.ld-hero--portal .ld-hero-sub { color: rgba(255, 255, 255, .92); margin: 14px auto 0; }
+.ld-searchbar {
+  display: flex; align-items: center; gap: 8px; max-width: 620px; margin: 26px auto 0;
+  background: #fff; border-radius: 999px; padding: 6px 6px 6px 22px;
+  box-shadow: 0 12px 34px rgba(9, 30, 54, .28);
+}
+.ld-searchbar input {
+  flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+  font: 600 17px var(--sans); color: var(--ld-ink); letter-spacing: .5px;
+}
+.ld-searchbar input::placeholder { color: #7b8b9c; }
+.ld-searchbar .ld-btn { flex-shrink: 0; }
+.ld-hero-ctas { display: flex; justify-content: center; margin-top: 22px; }
+.ld-hero--portal .ld-hero-points { justify-content: center; color: #fff; margin-top: 22px; }
+.ld-hero--portal .ld-hero-points span::before { color: #4DFFB4; }
+.ld-hero--portal .ld-hero-secondary { color: rgba(255, 255, 255, .9); }
+.ld-hero--portal .ld-hero-secondary a { color: #fff; text-decoration: underline; font-weight: 700; }
+
+/* Mobile scroll-collapse: once the shopper scrolls, the hero shrinks to
+   headline + ZIP bar (class set by Hero's scroll listener, phones only). */
+.ld-hero--portal .ld-hero-sub,
+.ld-hero--portal .ld-hero-ctas,
+.ld-hero--portal .ld-hero-points {
+  overflow: hidden; max-height: 220px;
+  transition: max-height .25s ease, opacity .25s ease, margin .25s ease;
+}
+.ld-hero--collapsed .ld-hero-sub,
+.ld-hero--collapsed .ld-hero-ctas,
+.ld-hero--collapsed .ld-hero-points { max-height: 0; opacity: 0; margin: 0; }
+.ld-hero--collapsed .ld-hero-bgimg { opacity: 0; }
+.ld-hero--portal .ld-hero-inner { transition: padding .25s ease; }
+.ld-hero--collapsed .ld-hero-inner { padding: 16px 20px 18px; }
+.ld-hero--portal h1 { transition: font-size .25s ease; }
+.ld-hero--collapsed h1 { font-size: 20px; }
+.ld-hero--collapsed .ld-searchbar { margin-top: 12px; }
+
 .ld-hero-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 40px; align-items: center; padding: 44px 0 40px; }
 .ld-hero h1 { font-size: clamp(28px, 4vw, 42px); font-weight: 800; letter-spacing: -0.8px; }
 .ld-hero-sub { font-size: 17px; color: #3d5166; margin-top: 12px; max-width: 54ch; }
@@ -88,17 +169,6 @@
 .ld-hero-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ld-hero-points { display: flex; gap: 18px; margin-top: 20px; flex-wrap: wrap; font-size: 13px; font-weight: 600; color: #33475c; }
 .ld-hero-points span::before { content: '✓ '; color: var(--ld-brand); font-weight: 800; }
-
-/* ── Shop-by strip ── */
-.ld-shopby { padding: 34px 0 8px; }
-.ld-shopby-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 16px; }
-.ld-shopby-card {
-  display: block; text-decoration: none; border: 1.5px solid #e2e7ed; border-radius: 12px;
-  padding: 14px 16px; background: #fff; transition: border-color .15s, box-shadow .15s;
-}
-.ld-shopby-card:hover { border-color: var(--ld-brand); box-shadow: 0 4px 14px rgba(19, 41, 61, .08); }
-.ld-shopby-card b { display: block; font-size: 15px; }
-.ld-shopby-card span { font-size: 12px; color: #5b6b7c; }
 
 /* ── Section scaffolding ── */
 .ld-section { padding: 46px 0; }
@@ -201,7 +271,18 @@
   .ld-callbar { display: flex; }
   .ld-nav-phone { display: none; }
 }
+/* Small phones: the Contact pill (still in the burger) and wordmark
+   yield to page-specific controls (cart/profile on the shop). */
+@media (max-width: 600px) { .ld-nav-contact { display: none; } }
+@media (max-width: 440px) { .ld-logo-word { display: none; } }
 @media (max-width: 520px) {
   .ld-footer-grid { grid-template-columns: 1fr; }
   .ld-zip-form .ld-btn { flex: 1; }
+}
+
+/* Portal hero: the one-line search pill stacks on small phones. */
+@media (max-width: 560px) {
+  .ld-searchbar { flex-direction: column; gap: 10px; border-radius: 22px; padding: 12px; }
+  .ld-searchbar input { width: 100%; text-align: center; padding: 8px 0; }
+  .ld-searchbar .ld-btn { width: 100%; }
 }

@@ -82,7 +82,7 @@ const MVP_CONTAINER: Tenant = {
   phoneHref: 'tel:+15045550190',
   smsHref: 'sms:+15045550190',
   email: 'sales@mvpcontainers.com',
-  address: { street: '2800 Almonaster Ave', city: 'New Orleans', state: 'LA', zip: '70126' },
+  address: { street: '123 State Street', city: 'Houma', state: 'LA', zip: '77777' },
   hours: 'Mon–Sat 7am–6pm CT',
   social: [
     { label: 'Facebook', url: 'https://www.facebook.com/mvpcontainers' },

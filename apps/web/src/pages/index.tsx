@@ -10,6 +10,8 @@ import { useContainers, useSnackbar, useAuth, useIsMobile, useLive } from '../ho
 import { LoginForm } from '../lib/auth'
 import { attributionFields } from '../lib/attribution'
 import { auth as authApi, containers, quotes, orders, isZipCovered, estimateDelivery, drivers as driversApi, messages as messagesApi, customers as customersApi, customBuilds as customBuildsApi, depots as depotsApi, photoUrl, SHOT_LABELS, RENDER_SLOT, RENDER_LABEL, CUSTOM_STAGES, type Container, type ContainerGrade, type ContainerSize, type Driver, type Customer, type Order, type Message, type AuthUser, type CustomBuild, type ContainerCondition, type Depot, SIZE_LABEL } from '../lib/api'
+import { SiteNav } from './landing'
+import { resolveTenant } from '../tenant'
 
 // ── Types ─────────────────────────────────────────────────
 
@@ -1631,17 +1633,19 @@ export default function MarketplacePage() {
   const [selectedContainer, setSelectedContainer] = useState<Container | null>(null)
   const [quoteOpen, setQuoteOpen] = useState(false)
   const [quotePurpose, setQuotePurpose] = useState<'quote' | 'contact' | 'rental'>('quote')
-  const [zipInput, setZipInput] = useState(() => qp('zip') ?? '')
-  const [zipResult, setZipResult] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [cartOpen, setCartOpen] = useState(false)
   const [msgOpen, setMsgOpen] = useState(false)
-  const [profileOpen, setProfileOpen] = useState(false)
+  // ?profile=1 deep link: the landing pages' profile icon lands here with
+  // the sign-in / profile sheet already open.
+  const [profileOpen, setProfileOpen] = useState(() => qp('profile') === '1')
   const [accountOpen, setAccountOpen] = useState(false)
   const [accountTab, setAccountTab] = useState<ProfileTab>('account')
   const browseRef = useRef<HTMLDivElement>(null)
   const { toast, message, open: snackOpen, close: snackClose } = useSnackbar()
   const isMobile = useIsMobile()
+  // Brand/contact config for the shared SiteNav header.
+  const tenant = resolveTenant(window.location.hostname)
   // Phones: the filter sidebar collapses behind a toggle so inventory shows first.
   const [filtersOpen, setFiltersOpen] = useState(false)
 
@@ -1776,12 +1780,6 @@ export default function MarketplacePage() {
     })
   }
 
-  const checkZip = async () => {
-    if (!zipInput || zipInput.length < 5) { setZipResult('Enter a 5-digit ZIP'); return }
-    setZipResult('Checking…')
-    setZipResult(await estimateDelivery(zipInput))
-  }
-
   const inCart = (id: string) => cart.some(i => i.container.id === id)
 
   const addToCart = (c: Container, mode: CartMode) => {
@@ -1842,86 +1840,31 @@ export default function MarketplacePage() {
 
   return (
     <div style={{ fontFamily: 'var(--sans)', background: 'var(--pg)', color: 'var(--ink)', minHeight: '100vh' }}>
-      {/* ── Nav ── */}
-      <header style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 400, height: 'var(--nav-h)', background: 'var(--surf-w)', borderBottom: '1px solid var(--div)', display: 'flex', alignItems: 'center', padding: isMobile ? '0 10px' : '0 20px', gap: isMobile ? '8px' : '14px' }}>
-        <a href="/" onClick={e => { e.preventDefault(); setActiveTab('buy'); setSelectedContainer(null); window.scrollTo({ top: 0 }) }} title="Back to Buy" style={{ display: 'flex', alignItems: 'center', gap: '9px', textDecoration: 'none', flexShrink: 0, cursor: 'pointer' }}>
-          <div style={{ width: '32px', height: '32px', borderRadius: 'var(--r8)', background: 'var(--primary)', display: 'grid', placeItems: 'center' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><rect x="1" y="6" width="22" height="14" rx="2" /><line x1="6" y1="6" x2="6" y2="20" /><line x1="11" y1="6" x2="11" y2="20" /><line x1="16" y1="6" x2="16" y2="20" /></svg>
-          </div>
-          {!isMobile && <span style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.4px' }}><span style={{ color: '#2B7FD4' }}>MVP&nbsp;</span><span style={{ color: 'var(--cta)' }}>Container</span></span>}
-        </a>
-        <nav style={{ display: 'flex', gap: '2px', marginLeft: isMobile ? 0 : '12px', overflowX: 'auto', scrollbarWidth: 'none', minWidth: 0 }}>
-          {/* 'custom' (Custom Builds) is hidden for now — page code kept, just not linked */}
-          {(['buy', 'rent', 'bulk'] as Tab[]).map(t => (
-            <button
-              key={t}
-              onClick={() => setActiveTab(t)}
-              style={{ padding: '6px 13px', borderRadius: 'var(--pill)', fontSize: '13px', fontWeight: 600, color: activeTab === t ? '#fff' : 'var(--ink3)', background: activeTab === t ? 'var(--primary)' : 'transparent', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
-            >
-              {t === 'buy' ? 'Buy' : t === 'rent' ? 'Rent' : t === 'custom' ? 'Custom Builds' : 'Bulk / B2B'}
+      {/* ── Nav — the shared site-wide header (same one as the landing
+             pages), with the marketplace's cart/profile in the right slot. */}
+      <SiteNav
+        tenant={tenant}
+        active={activeTab}
+        onSelect={t => { setActiveTab(t); setSelectedContainer(null) }}
+        right={
+          <>
+            <button onClick={() => setCartOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: isMobile ? '7px 12px' : '7px 16px', borderRadius: 'var(--pill)', background: 'var(--cta)', color: '#fff', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M1 2h2.5l2 9h9l2-7H5" /><circle cx="8" cy="17.5" r="1.5" fill="#fff" stroke="none" /><circle cx="13" cy="17.5" r="1.5" fill="#fff" stroke="none" /></svg>
+              {!isMobile && 'Cart '}<span style={{ background: 'rgba(255,255,255,.25)', padding: '0 6px', borderRadius: '99px', fontSize: '10px', marginLeft: '2px' }}>{cart.length}</span>
             </button>
-          ))}
-        </nav>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto', flexShrink: 0 }}>
-          {!isMobile && <button onClick={() => openQuote('contact')} style={{ padding: '7px 16px', borderRadius: 'var(--pill)', background: 'transparent', border: '1.5px solid var(--div)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>Contact Us</button>}
-          <button onClick={() => setCartOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: isMobile ? '7px 12px' : '7px 16px', borderRadius: 'var(--pill)', background: 'var(--cta)', color: '#fff', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
-            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M1 2h2.5l2 9h9l2-7H5" /><circle cx="8" cy="17.5" r="1.5" fill="#fff" stroke="none" /><circle cx="13" cy="17.5" r="1.5" fill="#fff" stroke="none" /></svg>
-            {!isMobile && 'Cart '}<span style={{ background: 'rgba(255,255,255,.25)', padding: '0 6px', borderRadius: '99px', fontSize: '10px', marginLeft: '2px' }}>{cart.length}</span>
-          </button>
-          <button onClick={() => setProfileOpen(true)} title={customerReplies > 0 ? `${customerReplies} new message${customerReplies > 1 ? 's' : ''} from your driver` : user ? `${user.name} · Profile` : 'Sign in / Profile'} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px', borderRadius: '50%', background: user ? 'var(--primary)' : 'transparent', border: user ? 'none' : '1.5px solid var(--div)', cursor: 'pointer', flexShrink: 0 }}>
-            {user
-              ? <span style={{ color: '#fff', fontSize: '13px', fontWeight: 700, letterSpacing: '0.3px' }}>{(user.name || user.email).trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()}</span>
-              : <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6.5" r="3" /><path d="M3.5 17a6.5 6.5 0 0 1 13 0" /></svg>}
-            {customerReplies > 0 && (
-              <span style={{ position: 'absolute', top: '-4px', right: '-4px', minWidth: '16px', height: '16px', padding: '0 3px', borderRadius: '999px', background: 'var(--cta)', border: '2px solid var(--surf-w)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="9" height="9" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 5.5A1.5 1.5 0 0 1 4 4h12a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5z" /><polyline points="3 5.5 10 11 17 5.5" /></svg>
-              </span>
-            )}
-          </button>
-        </div>
-      </header>
-
-      {/* ── Hero ── */}
-      <section style={{ marginTop: 'var(--nav-h)', background: '#0B1629', padding: isMobile ? '20px 20px 22px' : (activeTab === 'custom' || activeTab === 'bulk') ? '14px 48px 16px' : '22px 48px 24px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? '20px' : '48px', position: 'relative', overflow: 'hidden' }}>
-        <img src="https://images.unsplash.com/photo-1494412574643-ff11b0a5c1c3?w=1600&q=80" alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 60%', opacity: 0.28, pointerEvents: 'none' }} />
-        <div style={{ flex: 1, minWidth: 0, position: 'relative', zIndex: 1 }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.15)', borderRadius: 'var(--pill)', padding: '5px 14px', fontSize: '11px', fontWeight: 600, letterSpacing: '0.8px', textTransform: 'uppercase', color: 'rgba(255,255,255,.7)', marginBottom: '14px' }}>
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#4DFFB4', animation: 'pulse 2s ease infinite', flexShrink: 0 }} />
-            Now Serving the Gulf Coast · 200-Mile Radius from New Orleans
-          </div>
-          <h1 style={{ fontSize: 'clamp(22px,2.6vw,40px)', fontWeight: 700, lineHeight: 1.15, letterSpacing: '-0.5px', color: '#fff', marginBottom: (activeTab === 'custom' || activeTab === 'bulk') ? '10px' : '12px', whiteSpace: isMobile ? 'normal' : 'nowrap' }}>
-            {activeTab === 'custom' ? <>Custom Container Builds.</> : activeTab === 'bulk' ? <>Bulk &amp; B2B Orders.</> : <>MVP Containers. <em style={{ fontStyle: 'normal', color: '#60A5FA' }}>Delivered in Days.</em></>}
-          </h1>
-          {activeTab !== 'custom' && activeTab !== 'bulk' && (
-            <p style={{ fontSize: '15px', lineHeight: 1.6, color: 'rgba(255,255,255,.9)', marginBottom: '14px', fontWeight: 600 }}>
-              Buy or rent field-inspected ISO containers — 20ft and 40ft — with transparent pricing, 12-photo documentation, and fast delivery across LA, TX, MS, AL, AR, and the Florida Panhandle.
-            </p>
-          )}
-          {/* Solid orange accent rule */}
-          <div style={{ height: '4px', width: '100%', maxWidth: '520px', background: 'var(--cta)', borderRadius: '2px' }} />
-        </div>
-
-        {/* ZIP card — only on Buy/Rent */}
-        {activeTab !== 'custom' && activeTab !== 'bulk' && (
-        <div style={{ flexShrink: 0, width: isMobile ? '100%' : '340px', boxSizing: 'border-box', background: 'rgba(255,255,255,.07)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255,255,255,.13)', borderRadius: 'var(--r24)', padding: isMobile ? '18px' : '24px', position: 'relative', zIndex: 1 }}>
-          <div style={{ fontSize: '14px', fontWeight: 700, color: '#fff', marginBottom: '4px' }}>Check delivery to your address</div>
-          <div style={{ fontSize: '12px', color: 'rgba(255,255,255,.5)', marginBottom: '16px' }}>Enter your ZIP — we'll confirm coverage and estimated date.</div>
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
-            <input
-              value={zipInput}
-              onChange={e => setZipInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && checkZip()}
-              placeholder="Enter ZIP code"
-              maxLength={5}
-              style={{ flex: 1, padding: '11px 14px', background: 'rgba(255,255,255,.1)', border: '1.5px solid rgba(255,255,255,.18)', borderRadius: 'var(--r12)', color: '#fff', fontFamily: 'var(--mono)', fontSize: '15px', fontWeight: 500, letterSpacing: '2px', outline: 'none' }}
-            />
-            <button onClick={checkZip} style={{ padding: '11px 16px', borderRadius: 'var(--r12)', background: 'var(--cta)', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>Check</button>
-          </div>
-          {zipResult && <div style={{ fontSize: '12px', color: isZipCovered(zipInput) ? '#4DFFB4' : 'rgba(255,255,255,.5)', fontWeight: isZipCovered(zipInput) ? 600 : 400 }}>{zipResult}</div>}
-          {!zipResult && <div style={{ display: 'flex', alignItems: 'center', gap: '7px', background: 'rgba(77,255,180,.08)', border: '1px solid rgba(77,255,180,.2)', borderRadius: 'var(--r8)', padding: '9px 12px', fontSize: '11px', color: 'rgba(255,255,255,.65)' }}><span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#4DFFB4', flexShrink: 0 }} />Serving LA · MS · AL · TX · AR · FL Panhandle</div>}
-        </div>
-        )}
-      </section>
+            <button onClick={() => setProfileOpen(true)} title={customerReplies > 0 ? `${customerReplies} new message${customerReplies > 1 ? 's' : ''} from your driver` : user ? `${user.name} · Profile` : 'Sign in / Profile'} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '38px', height: '38px', borderRadius: '50%', background: user ? 'var(--primary)' : 'transparent', border: user ? 'none' : '1.5px solid var(--div)', cursor: 'pointer', flexShrink: 0 }}>
+              {user
+                ? <span style={{ color: '#fff', fontSize: '13px', fontWeight: 700, letterSpacing: '0.3px' }}>{(user.name || user.email).trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()}</span>
+                : <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6.5" r="3" /><path d="M3.5 17a6.5 6.5 0 0 1 13 0" /></svg>}
+              {customerReplies > 0 && (
+                <span style={{ position: 'absolute', top: '-4px', right: '-4px', minWidth: '16px', height: '16px', padding: '0 3px', borderRadius: '999px', background: 'var(--cta)', border: '2px solid var(--surf-w)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="9" height="9" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 5.5A1.5 1.5 0 0 1 4 4h12a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5z" /><polyline points="3 5.5 10 11 17 5.5" /></svg>
+                </span>
+              )}
+            </button>
+          </>
+        }
+      />
 
       {/* ── Browse panel ── */}
       {(activeTab === 'buy' || activeTab === 'rent') && (

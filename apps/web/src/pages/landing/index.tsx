@@ -12,13 +12,13 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import '../../styles/landing.css'
-import { SIZE_SPECS, GRADE_META, GRADE_ORDER, CUSTOM_MODS } from '../../lib/specs'
+import { SIZE_SPECS, GRADE_META } from '../../lib/specs'
 import { photoUrl, quotes, isZipCovered, SIZE_LABEL, type Container } from '../../lib/api'
 import { getInventory } from '../../tenant/inventory'
 import type { Tenant, TenantCity } from '../../tenant'
 import { attributionFields } from '../../lib/attribution'
 import {
-  buildFaq, jsonLdLocalBusiness, jsonLdProducts, jsonLdFaq, jsonLdBreadcrumb,
+  buildFaq, jsonLdLocalBusiness, jsonLdFaq, jsonLdBreadcrumb,
 } from './seo'
 
 // Base-aware internal link ('/SteelBox/' on Pages, '/' in production).
@@ -32,56 +32,126 @@ function JsonLd({ data }: { data: object }) {
 
 // ── Nav ───────────────────────────────────────────────────
 
-export function SiteNav({ tenant }: { tenant: Tenant }) {
+export type ShopTab = 'buy' | 'rent' | 'custom' | 'bulk'
+
+// 'custom' (Custom Builds) is deliberately unlisted — the shop tab code
+// is kept, but it's not linked anywhere until the fab-shop launch.
+const NAV_CATEGORIES: { tab: ShopTab; label: string }[] = [
+  { tab: 'buy', label: 'Buy' },
+  { tab: 'rent', label: 'Rent' },
+  { tab: 'bulk', label: 'Bulk / B2B' },
+]
+
+// The one site-wide header. The landing/city pages render it bare; the
+// marketplace passes `active`/`onSelect` (tabs switch in-page instead of
+// reloading) and its cart/profile controls via `right`. Keeping every page
+// on this component is what keeps the nav identical across the site.
+export function SiteNav({ tenant, active, onSelect, right }: {
+  tenant: Tenant
+  active?: ShopTab
+  onSelect?: (t: ShopTab) => void
+  right?: React.ReactNode
+}) {
   const [open, setOpen] = useState(false)
+  const [contactOpen, setContactOpen] = useState(false)
   const navRef = React.useRef<HTMLElement>(null)
-  // Close the burger dropdown on outside click or Escape.
+  // Close any open dropdown (burger, contact card) on outside click or Escape.
   useEffect(() => {
-    if (!open) return
-    const onDown = (e: MouseEvent) => { if (navRef.current && !navRef.current.contains(e.target as Node)) setOpen(false) }
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    if (!open && !contactOpen) return
+    const closeAll = () => { setOpen(false); setContactOpen(false) }
+    const onDown = (e: MouseEvent) => { if (navRef.current && !navRef.current.contains(e.target as Node)) closeAll() }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeAll() }
     document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey)
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
-  }, [open])
-  const links = [
-    { label: 'For Sale', href: u('shop?tab=buy'), cat: true },
-    { label: 'Rentals', href: u('shop?tab=rent'), cat: true },
-    { label: 'Custom Builds', href: u('shop?tab=custom'), cat: true },
+  }, [open, contactOpen])
+  // Two-tone wordmark: first word in the brand color, the rest in the
+  // accent — "MVP Container" → blue / orange.
+  const [brandWord, ...accentWords] = tenant.logoText.split(' ')
+  const sectionLinks = [
     { label: 'How It Works', href: u('#how-it-works') },
     { label: 'Why Us', href: u('#why-us') },
     { label: 'FAQ', href: u('#faq') },
     { label: 'Service Area', href: u('service-area/') },
-    { label: 'Contact', href: tenant.phoneHref },
   ]
+  // Category item: an in-page tab button on the marketplace, a link elsewhere.
+  const category = (c: { tab: ShopTab; label: string }, cls: string) => onSelect
+    ? (
+      <button
+        key={c.tab} className={`${cls}${active === c.tab ? ' ld-nav-cat--active' : ''}`}
+        onClick={() => { onSelect(c.tab); setOpen(false) }}
+      >
+        {c.label}
+      </button>
+    )
+    : <a key={c.tab} className={cls} href={u(`shop?tab=${c.tab}`)} onClick={() => setOpen(false)}>{c.label}</a>
+  // Brand vars are set here (not only on the .ld page root) so the nav is
+  // fully styled on any page, marketplace included.
+  const brandVars = {
+    '--ld-brand': tenant.brand.primary,
+    '--ld-accent': tenant.brand.accent,
+    '--ld-ink': tenant.brand.ink,
+  } as React.CSSProperties
   return (
-    <header className="ld-nav" ref={navRef}>
-      <div className="ld-wrap">
+    <header className="ld-nav" ref={navRef} style={brandVars}>
+      <div className="ld-nav-wrap">
         <div className="ld-nav-row">
           <a className="ld-logo" href={u('')} aria-label={`${tenant.name} home`}>
-            <span className="ld-logo-mark" aria-hidden="true" />
-            {tenant.logoText}
+            <span className="ld-logo-badge" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><rect x="1" y="6" width="22" height="14" rx="2" /><line x1="6" y1="6" x2="6" y2="20" /><line x1="11" y1="6" x2="11" y2="20" /><line x1="16" y1="6" x2="16" y2="20" /></svg>
+            </span>
+            <span className="ld-logo-word">
+              <span className="ld-logo-brand">{brandWord}</span>
+              {accentWords.length > 0 && <span className="ld-logo-accent">&nbsp;{accentWords.join(' ')}</span>}
+            </span>
           </a>
-          <nav aria-label="Main">
+          <nav aria-label="Main" className="ld-nav-main">
             <ul className="ld-nav-links">
-              {links.map(l => (
-                <li key={l.label} className={l.cat ? '' : 'ld-nav-sec'}>
-                  <a className={l.cat ? 'ld-nav-cat' : ''} href={l.href}>{l.label}</a>
-                </li>
+              {NAV_CATEGORIES.map(c => <li key={c.tab}>{category(c, 'ld-nav-cat')}</li>)}
+              <li className="ld-nav-div ld-nav-sec" aria-hidden="true" />
+              {sectionLinks.map(l => (
+                <li key={l.label} className="ld-nav-sec"><a href={l.href}>{l.label}</a></li>
               ))}
             </ul>
           </nav>
           <div className="ld-nav-right">
             <a className="ld-nav-phone" href={tenant.phoneHref}>{tenant.phone}</a>
-            <a className="ld-btn ld-btn--accent ld-btn--sm" href={u('#instant-price')}>Get Instant Price</a>
+            <span className="ld-nav-contactwrap ld-nav-contact">
+              <button
+                className="ld-btn ld-btn--ghost ld-btn--sm"
+                aria-expanded={contactOpen} aria-haspopup="dialog"
+                onClick={() => setContactOpen(o => !o)}
+              >
+                Contact Us
+              </button>
+              {contactOpen && (
+                <div className="ld-contact-pop" role="dialog" aria-label="Contact information">
+                  <a className="ld-contact-phone" href={tenant.phoneHref}>{tenant.phone}</a>
+                  <a className="ld-contact-email" href={`mailto:${tenant.email}`}>{tenant.email}</a>
+                  <address className="ld-contact-addr">
+                    {tenant.address.street}<br />
+                    {tenant.address.city}, {tenant.address.state} {tenant.address.zip}
+                  </address>
+                </div>
+              )}
+            </span>
+            {right ?? (
+              // Landing/city pages: sign-in / profile lives on the shop, so the
+              // icon deep-links to it (the shop opens its profile sheet on ?profile=1).
+              <a className="ld-nav-profile" href={u('shop?profile=1')} title="Sign in / Profile" aria-label="Sign in or view profile">
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6.5" r="3" /><path d="M3.5 17a6.5 6.5 0 0 1 13 0" /></svg>
+              </a>
+            )}
             <button className="ld-nav-burger" aria-expanded={open} aria-label="Menu" onClick={() => setOpen(o => !o)}>☰</button>
           </div>
         </div>
         {open && (
           <nav className="ld-nav-mobile" aria-label="Menu">
-            {links.map(l => (
-              <a key={l.label} className={l.cat ? 'ld-m-cat' : ''} href={l.href} onClick={() => setOpen(false)}>{l.label}</a>
+            {NAV_CATEGORIES.map(c => category(c, 'ld-m-cat'))}
+            {sectionLinks.map(l => (
+              <a key={l.label} href={l.href} onClick={() => setOpen(false)}>{l.label}</a>
             ))}
+            <a href={tenant.phoneHref} onClick={() => setOpen(false)}>Contact</a>
           </nav>
         )}
       </div>
@@ -91,99 +161,66 @@ export function SiteNav({ tenant }: { tenant: Tenant }) {
 
 // ── Hero ──────────────────────────────────────────────────
 
-function Hero({ tenant, zip, setZip, city }: { tenant: Tenant; zip: string; setZip: (z: string) => void; city?: TenantCity }) {
-  const [input, setInput] = useState(city?.zip ?? '')
+function Hero({ tenant }: { tenant: Tenant }) {
+  const [input, setInput] = useState('')
+  // ZIP the shopper last checked ('' until they submit) — the form answers
+  // "do you deliver to me?", nothing more.
+  const [checked, setChecked] = useState('')
+  // Phones: the hero shrinks to headline + ZIP bar once the shopper scrolls,
+  // so content is one flick away. Hysteresis (collapse >80, expand <10)
+  // prevents jitter from the page shortening under the scroll position.
+  const [collapsed, setCollapsed] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 940px)')
+    const onScroll = () => {
+      const y = window.scrollY
+      setCollapsed(prev => mq.matches && (prev ? y > 10 : y > 80))
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     const v = input.trim().slice(0, 5)
-    if (v.length === 5) {
-      setZip(v)
-      document.getElementById('inventory')?.scrollIntoView({ behavior: 'smooth' })
-    }
+    if (v.length === 5) setChecked(v)
   }
   return (
-    <section className="ld-hero" id="instant-price">
-      <div className="ld-wrap">
-        <div className="ld-hero-grid">
-          <div>
-            <h1>
-              {city
-                ? `Shipping Containers for Sale in ${city.name}, ${city.state}`
-                : 'Shipping Containers With Real Photos, Real Grades, and a Real Delivered Price'}
-            </h1>
-            <p className="ld-hero-sub">
-              {city
-                ? `Field-inspected new and used conex boxes delivered to ${city.name} in 3–5 business days. Every unit photographed, every grade verified, and you don't pay until it's on the ground.`
-                : `Every container on our marketplace is field-inspected, photo-documented, and priced to your ZIP — no "call for price," no mystery box on a truck. Pay when it lands.`}
-            </p>
-            <form className="ld-zip-form" onSubmit={submit}>
-              <label htmlFor="hero-zip" style={{ position: 'absolute', left: '-9999px' }}>Delivery ZIP code</label>
-              <input
-                id="hero-zip" className="ld-zip-input" inputMode="numeric" pattern="[0-9]{5}"
-                placeholder="Delivery ZIP" value={input} maxLength={5}
-                onChange={e => setInput(e.target.value.replace(/\D/g, ''))}
-              />
-              <button className="ld-btn ld-btn--accent" type="submit">See your delivered price</button>
-            </form>
-            {zip && !isZipCovered(zip) && (
-              <p className="ld-hero-secondary" role="status">
-                {zip} is outside our standard delivery area — <a href={tenant.phoneHref}>call {tenant.phone}</a> and we'll quote it anyway.
-              </p>
-            )}
-            <p className="ld-hero-secondary">
-              or <a href={u('shop')}>browse all inventory →</a>
-            </p>
-            <div className="ld-hero-points">
-              <span>16-photo inspection</span>
-              <span>Pay on delivery</span>
-              <span>3–5 day delivery</span>
-            </div>
-          </div>
-          <div className="ld-hero-photo">
-            <img
-              src={heroImg()} width="750" height="1000"
-              alt={`Field-inspected steel shipping container ready for delivery by ${tenant.name}`}
-            />
-          </div>
+    <section className={`ld-hero ld-hero--portal${collapsed ? ' ld-hero--collapsed' : ''}`}>
+      <img className="ld-hero-bgimg" src={heroImg()} alt="" aria-hidden="true" />
+      <div className="ld-hero-inner">
+        <h1>Real Photos. Real Grades. A Real Delivered Price.</h1>
+        <p className="ld-hero-sub">
+          Every container on our marketplace is field-inspected, photo-documented, and priced to your ZIP — no "call for price," no mystery box on a truck.
+        </p>
+        <form className="ld-searchbar" onSubmit={submit}>
+          <label htmlFor="hero-zip" style={{ position: 'absolute', left: '-9999px' }}>Delivery ZIP code</label>
+          <input
+            id="hero-zip" inputMode="numeric" pattern="[0-9]{5}"
+            placeholder="Enter your delivery ZIP" value={input} maxLength={5}
+            onChange={e => setInput(e.target.value.replace(/\D/g, ''))}
+          />
+          <button className="ld-btn ld-btn--brand" type="submit">Check delivery</button>
+        </form>
+        {checked && (
+          <p className="ld-hero-secondary" role="status">
+            {isZipCovered(checked)
+              ? <>✓ Yes — we deliver to {checked}, typically within 3–5 business days.</>
+              : <>{checked} is outside our standard delivery area — <a href={tenant.phoneHref}>call {tenant.phone}</a> and we'll see what we can do.</>}
+          </p>
+        )}
+        <div className="ld-hero-ctas">
+          <a className="ld-btn ld-btn--accent" href={u('shop')}>Browse all inventory</a>
+        </div>
+        <div className="ld-hero-points">
+          <span>8-photo inspection</span>
+          <span>3–5 day delivery</span>
         </div>
       </div>
     </section>
   )
 }
 
-// ── Shop-by strip ─────────────────────────────────────────
-
-function ShopBy() {
-  const cards: { title: string; sub: string; href: string }[] = [
-    { title: '20ft Containers', sub: 'Standard & high cube', href: u('shop?size=20ft-std,20ft-hc') },
-    { title: '40ft Containers', sub: 'Standard & high cube', href: u('shop?size=40ft-std,40ft-hc') },
-    { title: 'Standard Height', sub: `8'6" — the workhorse`, href: u('shop?size=20ft-std,40ft-std') },
-    { title: 'High Cube', sub: `9'6" — extra ceiling`, href: u('shop?size=20ft-hc,40ft-hc') },
-    ...GRADE_ORDER.filter(g => g !== 'X').map(g => ({
-      title: `Grade ${g} · ${GRADE_META[g].label}`, sub: GRADE_META[g].desc.split('.')[0], href: u(`shop?grade=${g}`),
-    })),
-    { title: 'Conex Boxes', sub: 'New one-trip units', href: u('shop?cond=new') },
-    { title: 'Used Conex Boxes', sub: 'Inspected & watertight', href: u('shop?cond=used') },
-  ]
-  return (
-    <section className="ld-shopby" aria-labelledby="shopby-h">
-      <div className="ld-wrap">
-        <p className="ld-kicker">Shop by</p>
-        <h2 id="shopby-h" className="ld-h2">Find the right box fast</h2>
-        <div className="ld-shopby-row">
-          {cards.map(c => (
-            <a key={c.title} className="ld-shopby-card" href={c.href}>
-              <b>{c.title}</b>
-              <span>{c.sub}</span>
-            </a>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// ── Live inventory grid ───────────────────────────────────
+// ── Live inventory grid (city pages) ──────────────────────
 
 function UnitCard({ c, zip }: { c: Container; zip: string }) {
   const photo = c.photos?.filter(Boolean)[0]
@@ -279,8 +316,8 @@ export function InventorySection({ tenant, zip, initialInventory, city }: {
 
 export function HowItWorks() {
   const steps = [
-    { t: 'Pick your grade', d: 'A through R, each verified in a field inspection with a full photo set — you see exactly what "used" means on that unit.', href: u('shop?grade=A') },
     { t: 'Pick your size', d: `20ft or 40ft, standard or high cube. Not sure? The specs on every card show floor space, ceiling, and payload.`, href: u('shop') },
+    { t: 'Pick your grade', d: 'A through R, each verified in a field inspection with a full photo set — you see exactly what "used" means on that unit.', href: u('shop?grade=A') },
     { t: 'Add your options', d: 'Rental term, custom modifications, lock boxes — options price out on the spot, not in a callback.', href: u('shop?tab=custom') },
     { t: 'Schedule delivery', d: `Pick a window that works. Payment is held until the container is set on your site and you've walked around it.`, href: u('shop') },
   ]
@@ -307,9 +344,8 @@ export function HowItWorks() {
 
 export function TrustBand({ tenant }: { tenant: Tenant }) {
   const cards = [
-    { t: '16-photo inspection', d: 'Roof, seals, floor, corners, doors open and closed — the full set on every listing, taken in our yard, of your exact unit.' },
+    { t: '8-photo inspection', d: 'Roof, seals, floor, corners, doors open and closed — the full set on every listing, taken in our yard, of your exact unit.' },
     { t: 'Verified grade', d: 'Grades are assigned by our field inspectors against a written standard, not by whoever answers the phone.' },
-    { t: 'Pay on delivery', d: 'Your card is authorized at checkout but only charged after the container is delivered and you\'ve confirmed it matches the listing.' },
     { t: 'Local trucks, local yards', d: `Dispatched from ${tenant.depots.join(', ')} — a real dispatcher you can text, not a broker in another time zone.` },
   ]
   return (
@@ -383,44 +419,13 @@ export function Teasers() {
     <section className="ld-section ld-section--tint" aria-labelledby="teaser-h">
       <div className="ld-wrap">
         <h2 id="teaser-h" className="ld-h2" style={{ marginBottom: 20 }}>Not buying today?</h2>
-        <div className="ld-teasers">
+        <div className="ld-teasers" style={{ gridTemplateColumns: '1fr', maxWidth: 640 }}>
           <div className="ld-teaser">
             <h3>Container rentals by the month</h3>
             <p>One flat monthly rate on inspected units, delivered and picked back up on our trucks. Perfect for renovations, jobsites, and seasonal overflow.</p>
             <a className="ld-btn ld-btn--brand ld-btn--sm" href={u('shop?tab=rent')} style={{ marginBottom: 14 }}>See rental inventory</a>
             <LeadQuickForm need="rent-short" source="landing-rental-teaser" buttonLabel="Get a rental quote" />
           </div>
-          <div className="ld-teaser">
-            <h3>Custom builds from our fab shop</h3>
-            <ul>
-              {CUSTOM_MODS.slice(0, 5).map(m => <li key={m.name}><b>{m.name}</b> — {m.blurb}</li>)}
-            </ul>
-            <a className="ld-btn ld-btn--brand ld-btn--sm" href={u('shop?tab=custom')} style={{ marginBottom: 14 }}>Browse custom builds</a>
-            <LeadQuickForm need="custom" source="landing-custom-teaser" buttonLabel="Get a build quote" />
-          </div>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// ── Service area ──────────────────────────────────────────
-
-export function ServiceAreaSection({ tenant, heading = 'Delivering across the Gulf Coast' }: { tenant: Tenant; heading?: string }) {
-  return (
-    <section className="ld-section" id="service-area" aria-labelledby="area-h">
-      <div className="ld-wrap">
-        <p className="ld-kicker">Service area</p>
-        <h2 id="area-h" className="ld-h2">{heading}</h2>
-        <p className="ld-section-sub">
-          Our trucks run Louisiana, Mississippi, Alabama, Texas, Arkansas, and the Florida Panhandle from yards in {tenant.depots.join(', ')}. Pick your city for local delivered pricing:
-        </p>
-        <div className="ld-cities">
-          {tenant.cities.map(c => (
-            <a key={c.slug} className="ld-city-link" href={u(`service-area/${c.slug}/`)}>
-              {c.name}, {c.state}
-            </a>
-          ))}
         </div>
       </div>
     </section>
@@ -512,7 +517,7 @@ export function SiteFooter({ tenant }: { tenant: Tenant }) {
             <ul>
               <li><a href={u('shop?tab=buy')}>Containers for sale</a></li>
               <li><a href={u('shop?tab=rent')}>Container rentals</a></li>
-              <li><a href={u('shop?tab=custom')}>Custom builds</a></li>
+              <li><a href={u('shop?tab=bulk')}>Bulk &amp; B2B</a></li>
               <li><a href={u('shop?cond=used')}>Used conex boxes</a></li>
             </ul>
           </div>
@@ -550,7 +555,7 @@ export function CallBar({ tenant }: { tenant: Tenant }) {
     <div className="ld-callbar" role="navigation" aria-label="Quick contact">
       <a className="ld-btn ld-btn--brand" href={tenant.phoneHref}>Call</a>
       <a className="ld-btn ld-btn--ghost" href={tenant.smsHref}>Text</a>
-      <a className="ld-btn ld-btn--accent" href={u('#instant-price')}>Instant price</a>
+      <a className="ld-btn ld-btn--accent" href={u('shop')}>Shop</a>
     </div>
   )
 }
@@ -562,8 +567,14 @@ export interface LandingPageProps {
   initialInventory: Container[] | null
 }
 
-export default function LandingPage({ tenant, initialInventory }: LandingPageProps) {
-  const [zip, setZip] = useState('')
+export default function LandingPage({ tenant }: LandingPageProps) {
+  // Arriving at /#faq etc. from another page: the sections don't exist
+  // until after hydration/first render, so the browser's native anchor
+  // jump finds nothing — re-run it once the content is mounted.
+  useEffect(() => {
+    const id = window.location.hash.slice(1)
+    if (id) document.getElementById(id)?.scrollIntoView()
+  }, [])
   const brandVars = {
     '--ld-brand': tenant.brand.primary,
     '--ld-accent': tenant.brand.accent,
@@ -573,20 +584,16 @@ export default function LandingPage({ tenant, initialInventory }: LandingPagePro
     <div className="ld" style={brandVars}>
       <SiteNav tenant={tenant} />
       <main>
-        <Hero tenant={tenant} zip={zip} setZip={setZip} />
-        <ShopBy />
-        <InventorySection tenant={tenant} zip={zip} initialInventory={initialInventory} />
+        <Hero tenant={tenant} />
         <HowItWorks />
         <TrustBand tenant={tenant} />
         <Teasers />
-        <ServiceAreaSection tenant={tenant} />
         <FaqSection tenant={tenant} />
         <EmailCaptureBand />
       </main>
       <SiteFooter tenant={tenant} />
       <CallBar tenant={tenant} />
       <JsonLd data={jsonLdLocalBusiness(tenant)} />
-      <JsonLd data={jsonLdProducts(tenant, initialInventory)} />
       <JsonLd data={jsonLdBreadcrumb([{ name: 'Home', path: '/' }], tenant.primaryDomain)} />
     </div>
   )
