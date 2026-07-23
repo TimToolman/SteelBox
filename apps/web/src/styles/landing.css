@@ -78,9 +78,10 @@
 .ld-nav-burger { display: none; background: none; border: 1px solid #d5dbe3; border-radius: 8px; padding: 8px 10px; cursor: pointer; font-size: 16px; flex-shrink: 0; }
 /* Burger dropdown — a floating panel anchored under the nav bar, not an
    inline block (inline pushes the hero down and reads as broken layout).
-   Rendered only while open (React conditional), so no width gate. */
+   Rendered only while open (React conditional), so no width gate.
+   Anchored left to match the burger button at the far left of the bar. */
 .ld-nav-mobile {
-  position: absolute; top: calc(100% + 6px); right: 20px; min-width: 250px;
+  position: absolute; top: calc(100% + 6px); left: 20px; min-width: 250px;
   background: #fff; border: 1px solid #e2e7ee; border-radius: 14px;
   box-shadow: 0 14px 36px rgba(19, 41, 61, .16); padding: 8px; z-index: 70;
 }

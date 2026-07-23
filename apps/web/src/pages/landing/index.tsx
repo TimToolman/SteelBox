@@ -93,6 +93,7 @@ export function SiteNav({ tenant, active, onSelect, right }: {
     <header className="ld-nav" ref={navRef} style={brandVars}>
       <div className="ld-nav-wrap">
         <div className="ld-nav-row">
+          <button className="ld-nav-burger" aria-expanded={open} aria-label="Menu" onClick={() => setOpen(o => !o)}>☰</button>
           <a className="ld-logo" href={u('')} aria-label={`${tenant.name} home`}>
             <span className="ld-logo-badge" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><rect x="1" y="6" width="22" height="14" rx="2" /><line x1="6" y1="6" x2="6" y2="20" /><line x1="11" y1="6" x2="11" y2="20" /><line x1="16" y1="6" x2="16" y2="20" /></svg>
@@ -139,7 +140,6 @@ export function SiteNav({ tenant, active, onSelect, right }: {
                 <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6.5" r="3" /><path d="M3.5 17a6.5 6.5 0 0 1 13 0" /></svg>
               </a>
             )}
-            <button className="ld-nav-burger" aria-expanded={open} aria-label="Menu" onClick={() => setOpen(o => !o)}>☰</button>
           </div>
         </div>
         {open && (
