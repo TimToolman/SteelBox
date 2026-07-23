@@ -185,9 +185,9 @@ function Hero({ tenant }: { tenant: Tenant }) {
     <section className={`ld-hero ld-hero--portal${collapsed ? ' ld-hero--collapsed' : ''}`}>
       <img className="ld-hero-bgimg" src={heroImg()} alt="" aria-hidden="true" />
       <div className="ld-hero-inner">
-        <h1>Real Photos. Real Grades. A Real Delivered Price.</h1>
+        <h1>See YOUR Container. Know YOUR Price. Track It Home.'</h1>
         <p className="ld-hero-sub">
-          Every container on our marketplace is field-inspected, photo-documented, and priced to your ZIP — no "call for price," no mystery box on a truck.
+          Every container on our marketplace is field-inspected, photo-documented, and priced to your ZIP — no "calling," no mystery, no friction.
         </p>
         <form className="ld-searchbar" onSubmit={submit}>
           <label htmlFor="hero-zip" style={{ position: 'absolute', left: '-9999px' }}>Delivery ZIP code</label>
