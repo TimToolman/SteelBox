@@ -209,7 +209,7 @@ function Hero({ tenant }: { tenant: Tenant }) {
           <a className="ld-btn ld-btn--accent" href={u('shop')}>Browse all inventory</a>
         </div>
         <div className="ld-hero-points">
-          <span>8-photo inspection</span>
+          <span>Photo inspected</span>
           <span>3–5 day delivery</span>
         </div>
       </div>
