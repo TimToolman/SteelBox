@@ -34,6 +34,8 @@ function notify(table: LiveTable) {
 }
 
 function connect() {
+  // Static demo mode has no server to stream from — stay silent.
+  if (import.meta.env.VITE_DEMO_STATIC === '1') return
   if (source) return
   source = new EventSource(`${BASE}/events`)
 

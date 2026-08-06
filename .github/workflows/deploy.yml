@@ -31,6 +31,10 @@ jobs:
           # and variables → Actions → Variables) once the API is hosted;
           # left unset, the site falls back to http://localhost:4000.
           VITE_API_URL: ${{ vars.VITE_API_URL }}
+          # Static demo: no backend — inventory comes from the bundled
+          # snapshot (src/lib/demo-data.json) and writes pretend to succeed.
+          # Remove this line to reconnect the site to a live API.
+          VITE_DEMO_STATIC: '1'
           # GitHub Pages is a TEST BED only. Every prerendered page gets
           # <meta name="robots" content="noindex"> plus a canonical link to
           # production, so Pages never competes with www.mvpcontainers.com

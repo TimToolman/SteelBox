@@ -6,11 +6,20 @@
 // `||` (not ??) so an empty build-time var still falls back to localhost.
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000'
 
+// Static demo mode: no backend at all — reads come from the bundled data
+// snapshot, writes pretend to succeed (see lib/demo.ts). Set at build time
+// for API-less deploys like the GitHub Pages demo.
+const DEMO = import.meta.env.VITE_DEMO_STATIC === '1'
+
 function getToken(): string | null {
   return localStorage.getItem('sbx_token')
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  if (DEMO) {
+    const { demoRequest } = await import('./demo')
+    return demoRequest<T>(path, options)
+  }
   const token = getToken()
   let res: Response
   try {
@@ -270,7 +279,10 @@ export const containers = {
 // Photo URLs in CSV are API-relative (/photos/x.jpg) — resolve against the API host.
 export function photoUrl(p: string | undefined | null): string {
   if (!p) return ''
-  return /^https?:|^data:/.test(p) ? p : `${BASE}${p}`
+  if (/^https?:|^data:/.test(p)) return p
+  // Static demo: the documented units' photo files ship with the site.
+  if (DEMO && p.startsWith('/photos/')) return `${import.meta.env.BASE_URL}demo-photos/${p.slice('/photos/'.length)}`
+  return `${BASE}${p}`
 }
 
 // The 8-shot documentation standard — one slot per labelled shot. Shared by
