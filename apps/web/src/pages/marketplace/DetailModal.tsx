@@ -5,10 +5,11 @@
 import React, { useState, useEffect } from 'react'
 import { Modal } from '../../components/ui'
 import { useIsMobile } from '../../hooks'
-import { isZipCovered, estimateDelivery, type Container } from '../../lib/api'
+import { isZipCovered, estimateDelivery, type Container, type Seller } from '../../lib/api'
 import { GRADE_META } from '../../lib/specs'
 import { allowedModes, condOf, SIZE_LABELS, type CartMode } from './shared'
 import { PhotoGallery } from './PhotoGallery'
+import { SellerLogo } from './SellerMark'
 
 // ── Container Detail Modal ─────────────────────────────────
 
@@ -21,9 +22,10 @@ interface DetailModalProps {
   onNavigate: (dir: -1 | 1) => void
   index: number
   total: number
+  seller?: Seller   // multi-tenant: the seller who owns/fulfills this unit
 }
 
-export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onNavigate, index, total }: DetailModalProps) {
+export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onNavigate, index, total, seller }: DetailModalProps) {
   const isMobile = useIsMobile()
   const [delivery, setDelivery] = useState('Enter your ZIP above')
   const [zip, setZip] = useState('')
@@ -102,6 +104,33 @@ export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onN
               </div>
             ))}
           </div>
+
+          {/* Multi-tenant: who sells, services, and delivers this unit.
+              The marketplace is Nationwide SteelBox; the sale itself — pricing,
+              drivers, delivery, and the service agreement — is this seller's. */}
+          {(seller || container.sellerName) && (
+            <div style={{ background: 'var(--surf1)', borderRadius: 'var(--r12)', padding: '13px 14px', border: '1px solid var(--div)' }}>
+              <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--ink3)', fontWeight: 700, marginBottom: '8px' }}>Sold &amp; serviced by</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <SellerLogo seller={seller} size={30} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: '15px', fontWeight: 700 }}>{seller?.name || container.sellerName}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--ink3)' }}>
+                    Delivery, drivers &amp; support handled by {seller?.legalName || seller?.name || container.sellerName}
+                    {seller?.phone ? <> · <a href={`tel:${seller.phone.replace(/\D/g, '')}`} style={{ color: 'var(--primary)', fontWeight: 700, textDecoration: 'none' }}>{seller.phone}</a></> : null}
+                  </div>
+                </div>
+              </div>
+              {seller?.tos && (
+                <details style={{ marginTop: '10px' }}>
+                  <summary style={{ fontSize: '11px', fontWeight: 700, color: 'var(--primary)', cursor: 'pointer' }}>
+                    {seller.name} service agreement
+                  </summary>
+                  <p style={{ fontSize: '11px', color: 'var(--ink2)', lineHeight: 1.6, marginTop: '6px' }}>{seller.tos}</p>
+                </details>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Price card */}

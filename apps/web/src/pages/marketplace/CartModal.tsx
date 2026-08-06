@@ -174,6 +174,8 @@ export function CartModal({ open, cart, user, onClose, onRemove, onUpdateItem, o
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: '13px', fontWeight: 700 }}>{SIZE_LABELS[c.size]} <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--ink3)', fontWeight: 400 }}>· {c.sku}</span></div>
                       <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '1px' }}>Grade {c.grade} · {GRADE_META[c.grade].label}</div>
+                      {/* Multi-tenant: each line is sold & fulfilled by its own seller */}
+                      {c.sellerName && <div style={{ fontSize: '10px', color: 'var(--ink3)', marginTop: '1px' }}>Sold &amp; delivered by <b>{c.sellerName}</b></div>}
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
                       <div style={{ fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '14px' }}>{mode === 'rent' ? `${num(rate)}/mo` : num(c.buyPrice)}</div>
@@ -351,6 +353,13 @@ export function CartModal({ open, cart, user, onClose, onRemove, onUpdateItem, o
             </div>
           )}
           {user && !canPlace && !placing && <div style={{ fontSize: '10px', color: 'var(--ink3)', textAlign: 'center', marginTop: '8px' }}>Complete contact & delivery{rentItems.length > 0 ? ' & rental' : ''} details to continue</div>}
+          {/* Multi-tenant: each order is a contract with that item's seller */}
+          {cart.length > 0 && (
+            <div style={{ fontSize: '10px', color: 'var(--ink3)', textAlign: 'center', marginTop: '8px', lineHeight: 1.5 }}>
+              By placing this order you agree to the service agreement of each item's seller
+              ({[...new Set(cart.map(i => i.container.sellerName).filter(Boolean))].join(', ') || 'the seller'}), who fulfills and services your order directly.
+            </div>
+          )}
         </div>
       </div>
     </Modal>

@@ -9,7 +9,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Modal, Snackbar, BuildClipart } from '../../components/ui'
 import { useContainers, useSnackbar, useAuth, useIsMobile, useLive } from '../../hooks'
 import { LoginForm } from '../../lib/auth'
-import { containers, orders, messages as messagesApi, customBuilds as customBuildsApi, depots as depotsApi, photoUrl, type Container, type ContainerGrade, type ContainerSize, type ContainerCondition, type CustomBuild, type Depot } from '../../lib/api'
+import { containers, orders, messages as messagesApi, customBuilds as customBuildsApi, depots as depotsApi, sellers as sellersApi, photoUrl, type Container, type ContainerGrade, type ContainerSize, type ContainerCondition, type CustomBuild, type Depot, type Seller } from '../../lib/api'
 import { GRADE_META } from '../../lib/specs'
 import { SiteNav } from '../landing'
 import { resolveTenant } from '../../tenant'
@@ -124,6 +124,11 @@ export default function MarketplacePage() {
 
   // Custom Builds catalog (admin-managed) + the order-a-build dialog.
   const [builds, setBuilds] = useState<CustomBuild[]>([])
+  // Multi-tenant: seller directory (logos, contact, service agreements) —
+  // containers carry sellerId/sellerName; this map fills in the rest.
+  const [sellerList, setSellerList] = useState<Seller[]>([])
+  useEffect(() => { sellersApi.list().then(setSellerList).catch(() => {}) }, [])
+  const sellerById = new Map(sellerList.map(s => [s.id, s]))
   const [orderBuild, setOrderBuild] = useState<CustomBuild | null>(null)
   const loadBuilds = useCallback(() => customBuildsApi.list().then(setBuilds).catch(() => {}), [])
   useEffect(() => { loadBuilds() }, [loadBuilds])
@@ -550,7 +555,7 @@ export default function MarketplacePage() {
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
                       {group.map(c => (
-                        <ContainerCard key={c.id} container={c} onSelect={setSelectedContainer} mode={activeTab === 'rent' ? 'rent' : 'buy'} inCart={inCart(c.id)} onAddToCart={addToCart} />
+                        <ContainerCard key={c.id} container={c} onSelect={setSelectedContainer} mode={activeTab === 'rent' ? 'rent' : 'buy'} inCart={inCart(c.id)} onAddToCart={addToCart} seller={sellerById.get(c.sellerId)} />
                       ))}
                     </div>
                   </div>
@@ -559,7 +564,7 @@ export default function MarketplacePage() {
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
                 {filtered.map(c => (
-                  <ContainerCard key={c.id} container={c} onSelect={setSelectedContainer} mode={activeTab === 'rent' ? 'rent' : 'buy'} inCart={inCart(c.id)} onAddToCart={addToCart} />
+                  <ContainerCard key={c.id} container={c} onSelect={setSelectedContainer} mode={activeTab === 'rent' ? 'rent' : 'buy'} inCart={inCart(c.id)} onAddToCart={addToCart} seller={sellerById.get(c.sellerId)} />
                 ))}
               </div>
             )}
@@ -636,6 +641,7 @@ export default function MarketplacePage() {
         onClose={() => setSelectedContainer(null)}
         onAddToCart={addToCart}
         mode={activeTab === 'rent' ? 'rent' : 'buy'}
+        seller={selectedContainer ? sellerById.get(selectedContainer.sellerId) : undefined}
         inCart={selectedContainer ? inCart(selectedContainer.id) : false}
         index={selectedContainer ? filtered.findIndex(c => c.id === selectedContainer.id) : -1}
         total={filtered.length}

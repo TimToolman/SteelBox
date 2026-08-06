@@ -73,11 +73,11 @@ const MVP_CITIES: TenantCity[] = [
 
 const MVP_CONTAINER: Tenant = {
   id: 'mvp-container',
-  name: 'MVP Container',
-  legalName: 'MVP Container LLC',
+  name: 'Nationwide SteelBox', // the marketplace platform — sellers fulfill
+  legalName: 'Nationwide SteelBox Corp',
   primaryDomain: 'https://www.mvpcontainers.com',
   brand: { primary: '#2B7FD4', accent: '#E65100', ink: '#13293D' },
-  logoText: 'MVP Container',
+  logoText: 'Nationwide SteelBox',
   phone: '(504) 555-0190',
   phoneHref: 'tel:+15045550190',
   smsHref: 'sms:+15045550190',

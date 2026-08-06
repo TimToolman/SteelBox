@@ -17,6 +17,7 @@ const data = demoData as unknown as {
   containers: Container[]
   depots: unknown[]
   customBuilds: { id: string }[]
+  sellers: unknown[]
 }
 
 const uid = (p: string) => `${p}_demo_${Math.random().toString(36).slice(2, 10)}`
@@ -59,6 +60,7 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
     return ok(c)
   }
   if (method === 'GET' && route === '/depots') return ok(data.depots)
+  if (method === 'GET' && route === '/sellers') return ok(data.sellers)
   if (method === 'GET' && route === '/custombuilds') return ok(data.customBuilds)
   if (method === 'GET' && route === '/delivery/estimate') return ok({ days: 4 })
   if (method === 'GET' && route === '/messages') return ok([])

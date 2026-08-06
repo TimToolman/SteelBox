@@ -3,9 +3,10 @@
 // ============================================================
 
 import React from 'react'
-import { photoUrl, type Container, type ContainerSize } from '../../lib/api'
+import { photoUrl, type Container, type ContainerSize, type Seller } from '../../lib/api'
 import { GRADE_META } from '../../lib/specs'
 import { allowedModes, condOf, SIZE_LABELS } from './shared'
+import { SellerMark } from './SellerMark'
 
 // ── Container Card ─────────────────────────────────────────
 
@@ -15,9 +16,10 @@ interface ContainerCardProps {
   mode?: 'buy' | 'rent'
   inCart?: boolean
   onAddToCart?: (c: Container, mode: 'buy' | 'rent') => void
+  seller?: Seller   // multi-tenant: the seller who owns/fulfills this unit
 }
 
-export function ContainerCard({ container, onSelect, mode = 'buy', inCart = false, onAddToCart }: ContainerCardProps) {
+export function ContainerCard({ container, onSelect, mode = 'buy', inCart = false, onAddToCart, seller }: ContainerCardProps) {
   const { sku, grade, status, size, buyPrice, rentMonthly, photos } = container
   const gradeMeta = GRADE_META[grade]
   const allow = allowedModes(container) // the unit's own listing capability
@@ -98,6 +100,13 @@ export function ContainerCard({ container, onSelect, mode = 'buy', inCart = fals
           </span>
         </div>
         <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--ink3)', letterSpacing: '0.3px' }}>{sku}</div>
+        {/* Multi-tenant attribution — who sells & services this unit */}
+        {(seller || container.sellerName) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0 }}>
+            <span style={{ fontSize: '10px', color: 'var(--ink3)', flexShrink: 0 }}>Sold by</span>
+            <SellerMark seller={seller} name={container.sellerName} size="sm" />
+          </div>
+        )}
         <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
           <span style={{ background: condOf(container) === 'new' ? 'var(--green-cont)' : 'var(--surf1)', color: condOf(container) === 'new' ? 'var(--green)' : 'var(--ink2)', borderRadius: 'var(--r4)', padding: '3px 7px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px' }}>{condOf(container) === 'new' ? 'New' : 'Used'}</span>
           <span style={{ background: 'var(--surf1)', borderRadius: 'var(--r4)', padding: '3px 7px', fontSize: '10px', color: 'var(--ink2)', fontFamily: 'var(--mono)' }}>{gradeMeta.label}</span>

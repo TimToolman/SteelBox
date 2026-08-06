@@ -66,6 +66,7 @@ export interface AuthUser {
   createdAt: string
   twoFaVerified?: boolean       // true if checkout 2FA completed recently (per session)
   mustChangePassword?: boolean  // true when signed in with the seeded dev password
+  sellerId?: string             // set on seller-scoped staff accounts
 }
 
 // Login either completes immediately (token+user) or — for admins — asks for
@@ -119,6 +120,32 @@ export const users = {
     request<AuthUser>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   remove: (id: string) =>
     request<{ id: string; archived: true }>(`/users/${id}`, { method: 'DELETE' }),
+}
+
+// ── Sellers (multi-tenant marketplace) ────────────────────
+// The platform is Nationwide SteelBox Corp; each seller owns depots and
+// everything (inventory, orders, drivers, service terms) rolls up from
+// depot ownership. Public list powers seller branding on listings.
+
+export interface Seller {
+  id: string
+  name: string
+  legalName: string
+  brandPrimary: string
+  brandAccent: string
+  phone: string
+  email: string
+  tos: string
+  active?: boolean
+  createdAt?: string
+}
+
+export const sellers = {
+  list: () => request<Seller[]>('/sellers'),
+  create: (data: Partial<Seller>) =>
+    request<Seller>('/sellers', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<Seller>) =>
+    request<Seller>(`/sellers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 }
 
 // ── Outbox (sent email/SMS log — admin only) ──────────────
@@ -225,6 +252,9 @@ export interface Container {
   createdAt: string
   customEta: string          // custom builds: promised completion date (YYYY-MM-DD)
   customBuildName: string    // custom builds: which catalog product is being fabricated
+  // Multi-tenant: derived server-side from the unit's depot ownership.
+  sellerId: string
+  sellerName: string
 }
 
 export interface ContainerFilters {
@@ -438,6 +468,9 @@ export interface Order {
   validatedAt: string | null   // availability confirmed by staff
   calledAt: string | null      // customer reached by phone
   paidAt: string | null        // payment collected (status → confirmed)
+  // Multi-tenant: the seller who owns this sale, snapshotted at order time.
+  sellerId?: string
+  sellerName?: string
 }
 
 export const orders = {
@@ -489,6 +522,7 @@ export interface Driver {
   hourlyWage: number         // used to calculate profit labor cost
   trucks: string             // encoded: "Name~size+size;Name2~size+size"
   workHours: string          // driver availability, encoded: "d:start-end|…" (d 0=Sun..6=Sat, 24h)
+  sellerId?: string          // multi-tenant: which seller's fleet this driver belongs to
 }
 
 export interface DayHours { start: number; end: number }  // hours 6..22, or null = off
@@ -602,6 +636,7 @@ export interface Depot {
   attendantName: string
   attendantCell: string
   code: string        // SKU prefix, e.g. NOLA, BR
+  sellerId?: string   // multi-tenant: which seller owns/services this yard
 }
 
 export const depots = {

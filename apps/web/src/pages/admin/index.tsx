@@ -8,7 +8,7 @@ import React, { useState, useCallback, useEffect } from 'react'
 import { GradeBadge, StatusBadge, Button, Modal, Snackbar, BuildClipart, ProgressRing } from '../../components/ui'
 import { ShowPasswordButton } from '../../lib/auth'
 import { useContainers, useOrders, useDrivers, useLive, useSnackbar, useAuth, useFavicon, useIsMobile } from '../../hooks'
-import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, customBuilds as customBuildsApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, cutoutContainer, SHOT_LABELS, RENDER_SLOT, RENDER_LABEL, EXTRA_SLOT_START, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role, type CustomBuild, type Message, CUSTOM_STAGES, SIZE_LABEL } from '../../lib/api'
+import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, sellers as sellersApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, customBuilds as customBuildsApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, cutoutContainer, SHOT_LABELS, RENDER_SLOT, RENDER_LABEL, EXTRA_SLOT_START, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Seller, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role, type CustomBuild, type Message, CUSTOM_STAGES, SIZE_LABEL } from '../../lib/api'
 
 // Every size/type code, for the container add/edit selects.
 const SIZE_SELECT_OPTIONS = Object.entries(SIZE_LABEL) as [ContainerSize, string][]
@@ -24,7 +24,7 @@ const TRUCK_SIZES: { value: ContainerSize; label: string }[] = [
 
 // ── Types ─────────────────────────────────────────────────
 
-type AdminView = 'dashboard' | 'orders' | 'inventory' | 'schedule' | 'activity' | 'inbox' | 'drivers' | 'customers' | 'users' | 'notifications' | 'depots' | 'builds'
+type AdminView = 'dashboard' | 'orders' | 'inventory' | 'schedule' | 'activity' | 'inbox' | 'drivers' | 'customers' | 'users' | 'notifications' | 'depots' | 'sellers' | 'builds'
 
 const VIEW_TITLES: Record<AdminView, string> = {
   dashboard:     'Dashboard',
@@ -38,6 +38,7 @@ const VIEW_TITLES: Record<AdminView, string> = {
   users:         'Users & Access',
   notifications: 'Alerts',
   depots:        'Depots',
+  sellers:       'Sellers',
   builds:        'Custom Builds',
 }
 
@@ -918,14 +919,14 @@ function CustomBuildModal({ target, onClose, onSaved }: {
 
 // ── Depot Add/Edit Modal ───────────────────────────────────
 
-function DepotModal({ target, onClose, onSaved }: { target: Depot | 'new' | null; onClose: () => void; onSaved: (msg: string) => void }) {
-  const [form, setForm] = useState({ name: '', code: '', address: '', attendantName: '', attendantCell: '' })
+function DepotModal({ target, sellers, onClose, onSaved }: { target: Depot | 'new' | null; sellers: Seller[]; onClose: () => void; onSaved: (msg: string) => void }) {
+  const [form, setForm] = useState({ name: '', code: '', address: '', attendantName: '', attendantCell: '', sellerId: 'sel_mvp' })
   const [saving, setSaving] = useState(false)
   const isNew = target === 'new'
 
   React.useEffect(() => {
-    if (target && target !== 'new') setForm({ name: target.name, code: target.code || '', address: target.address, attendantName: target.attendantName, attendantCell: target.attendantCell })
-    else if (target === 'new') setForm({ name: '', code: '', address: '', attendantName: '', attendantCell: '' })
+    if (target && target !== 'new') setForm({ name: target.name, code: target.code || '', address: target.address, attendantName: target.attendantName, attendantCell: target.attendantCell, sellerId: target.sellerId || 'sel_mvp' })
+    else if (target === 'new') setForm({ name: '', code: '', address: '', attendantName: '', attendantCell: '', sellerId: sellers[0]?.id || 'sel_mvp' })
   }, [target])
 
   const handle = async () => {
@@ -960,9 +961,86 @@ function DepotModal({ target, onClose, onSaved }: { target: Depot | 'new' | null
       {fld('Physical address', 'address', '4200 Chef Menteur Hwy, New Orleans, LA 70126')}
       {fld('Lot attendant', 'attendantName', 'Marcus Boudreaux')}
       {fld('Attendant cell', 'attendantCell', '(504) 555-0142')}
+      <div style={{ marginBottom: '12px' }}>
+        <label style={lbl}>Owned &amp; serviced by <span style={{ textTransform: 'none', fontWeight: 400, color: 'var(--ink3)' }}>· this seller's inventory, drivers &amp; terms apply to every unit here</span></label>
+        <select value={form.sellerId} onChange={e => setForm(p => ({ ...p, sellerId: e.target.value }))} style={{ ...inp, cursor: 'pointer' }}>
+          {sellers.map(sl => <option key={sl.id} value={sl.id}>{sl.name}</option>)}
+        </select>
+      </div>
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '20px' }}>
         <Button variant="ghost" onClick={onClose}>Cancel</Button>
         <Button variant="primary" onClick={handle} disabled={saving || !form.name}>{saving ? 'Saving…' : isNew ? 'Add Depot' : 'Save Changes'}</Button>
+      </div>
+    </Modal>
+  )
+}
+
+// ── Seller modal — multi-tenant marketplace companies ──────
+
+function SellerModal({ target, onClose, onSaved }: { target: Seller | 'new' | null; onClose: () => void; onSaved: (msg: string) => void }) {
+  const EMPTY = { name: '', legalName: '', brandPrimary: '#0057B8', brandAccent: '#E65100', phone: '', email: '', tos: '', active: true }
+  const [form, setForm] = useState(EMPTY)
+  const [saving, setSaving] = useState(false)
+  const isNew = target === 'new'
+
+  React.useEffect(() => {
+    if (target && target !== 'new') setForm({ name: target.name, legalName: target.legalName || '', brandPrimary: target.brandPrimary || '#0057B8', brandAccent: target.brandAccent || '#E65100', phone: target.phone || '', email: target.email || '', tos: target.tos || '', active: target.active !== false })
+    else if (target === 'new') setForm(EMPTY)
+  }, [target]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handle = async () => {
+    if (saving || !form.name) return
+    setSaving(true)
+    try {
+      if (isNew) { const x = await sellersApi.create(form); onSaved(`${x.name} added`) }
+      else if (target) { const x = await sellersApi.update(target.id, form); onSaved(`${x.name} updated`) }
+      onClose()
+    } catch (e) { onSaved(`Failed to save seller — ${e instanceof Error ? e.message : 'try again'}`) }
+    finally { setSaving(false) }
+  }
+
+  const lbl = { display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '5px' } as const
+  const inp = { width: '100%', padding: '10px 12px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '13px', outline: 'none', fontFamily: 'var(--sans)' } as const
+  const fld = (label: string, key: 'name' | 'legalName' | 'phone' | 'email', placeholder: string) => (
+    <div style={{ marginBottom: '12px' }}>
+      <label style={lbl}>{label}</label>
+      <input value={form[key]} placeholder={placeholder} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} style={inp} />
+    </div>
+  )
+
+  return (
+    <Modal open={target !== null} onClose={onClose} maxWidth={520}>
+      <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '4px' }}>{isNew ? 'Add Seller' : 'Edit Seller'}</h2>
+      <p style={{ fontSize: '12px', color: 'var(--ink3)', marginBottom: '20px' }}>Sellers own depots and fulfill their own orders — logo colors, contact, and service agreement show on every listing they sell.</p>
+      {fld('Company name', 'name', 'Demo Container Corp')}
+      {fld('Legal name', 'legalName', 'Demo Container Corporation')}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+        <div>
+          <label style={lbl}>Brand color</label>
+          <input type="color" value={form.brandPrimary} onChange={e => setForm(p => ({ ...p, brandPrimary: e.target.value }))} style={{ width: '52px', height: '36px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', padding: '2px', cursor: 'pointer' }} />
+        </div>
+        <div>
+          <label style={lbl}>Accent color</label>
+          <input type="color" value={form.brandAccent} onChange={e => setForm(p => ({ ...p, brandAccent: e.target.value }))} style={{ width: '52px', height: '36px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', padding: '2px', cursor: 'pointer' }} />
+        </div>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+          <span style={{ width: '30px', height: '30px', borderRadius: '8px', background: `linear-gradient(135deg, ${form.brandPrimary} 50%, ${form.brandAccent} 50%)` }} />
+          <span style={{ fontSize: '11px', color: 'var(--ink3)', paddingBottom: '6px' }}>logo mark preview</span>
+        </div>
+      </div>
+      {fld('Phone', 'phone', '(410) 555-0155')}
+      {fld('Email', 'email', 'sales@democontainercorp.com')}
+      <div style={{ marginBottom: '12px' }}>
+        <label style={lbl}>Service agreement <span style={{ textTransform: 'none', fontWeight: 400 }}>· shown to buyers on every listing</span></label>
+        <textarea value={form.tos} rows={5} onChange={e => setForm(p => ({ ...p, tos: e.target.value }))} style={{ ...inp, resize: 'vertical', lineHeight: 1.5 }} placeholder="Delivery terms, guarantees, payment terms…" />
+      </div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', marginBottom: '8px' }}>
+        <input type="checkbox" checked={form.active} onChange={e => setForm(p => ({ ...p, active: e.target.checked }))} />
+        Active — listings from this seller's depots appear on the marketplace
+      </label>
+      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '20px' }}>
+        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button variant="primary" onClick={handle} disabled={saving || !form.name}>{saving ? 'Saving…' : isNew ? 'Add Seller' : 'Save Changes'}</Button>
       </div>
     </Modal>
   )
@@ -1564,6 +1642,12 @@ export default function AdminPage() {
   useLive(['activity'], () => refetchActivity().catch(() => {}))
   const [depotList, setDepotList] = useState<Depot[]>([])
   const [editDepot, setEditDepot] = useState<Depot | 'new' | null>(null)
+  // Multi-tenant sellers — the marketplace's 3rd-party fulfillment companies.
+  const [sellerList, setSellerList] = useState<Seller[]>([])
+  const [editSeller, setEditSeller] = useState<Seller | 'new' | null>(null)
+  const refetchSellers = useCallback(() => sellersApi.list().then(setSellerList).catch(() => {}), [])
+  useEffect(() => { refetchSellers() }, [refetchSellers])
+  const sellerName = (id?: string) => sellerList.find(x => x.id === id)?.name || (id ? id : '—')
   const refetchDepots = useCallback(() => depotsApi.list().then(setDepotList), [])
   useEffect(() => { refetchDepots().catch(() => {}) }, [refetchDepots])
   useLive(['depots'], () => refetchDepots().catch(() => {}))
@@ -1916,6 +2000,7 @@ export default function AdminPage() {
           <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', padding: '16px 18px 3px' }}>System</div>
           <NavItem active={view === 'notifications'} onClick={() => go('notifications')} label="Alerts" badge={reserved.length + orderList.filter(o => !o.driverId && o.status !== 'delivered').length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M4 8A6 6 0 0 1 16 8L16 12L18 14L2 14L4 12Z" /><path d="M8 16a2 2 0 004 0" /></svg>} />
           <NavItem active={view === 'depots'} onClick={() => go('depots')} label="Depots" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2a5.5 5.5 0 0 0-5.5 5.5c0 4 5.5 10 5.5 10s5.5-6 5.5-10A5.5 5.5 0 0 0 10 2z" /><circle cx="10" cy="7.5" r="1.8" /></svg>} />
+          <NavItem active={view === 'sellers'} onClick={() => go('sellers')} label="Sellers" badge={sellerList.filter(x => x.active !== false).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7l1-4h12l1 4" /><path d="M3 7h14v10H3z" /><path d="M8 11h4" /></svg>} />
           <NavItem active={view === 'builds'} onClick={() => go('builds')} label="Custom Builds" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5.5l2 2L7 15H5v-2z" /><path d="M11 7l2 2" /><rect x="2" y="4" width="16" height="13" rx="1.5" /></svg>} />
         </div>
 
@@ -1947,7 +2032,7 @@ export default function AdminPage() {
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: '16px', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{VIEW_TITLES[view]}</div>
             <div style={{ fontSize: '11px', color: 'var(--ink3)', fontFamily: 'var(--mono)' }}>
-              {view === 'dashboard' ? `Overview · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : `MVP Container · Gulf Coast`}
+              {view === 'dashboard' ? `Overview · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : `Nationwide SteelBox · Marketplace Admin`}
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto', alignItems: 'center' }}>
@@ -2098,7 +2183,7 @@ export default function AdminPage() {
                           return (
                             <tr key={o.id}>
                               <Td><div style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700 }}>{o.orderNumber}</div><div style={{ fontSize: '11px', color: 'var(--ink3)' }}>{new Date(o.createdAt).toLocaleDateString()} · {o.saleType === 'rent' ? 'Rental' : 'Purchase'}</div></Td>
-                              <Td mono>{o.containerSku}</Td>
+                              <Td mono><div>{o.containerSku}</div>{o.sellerName && <div style={{ fontSize: '10px', color: 'var(--ink3)', fontFamily: 'var(--sans)' }}>{o.sellerName}</div>}</Td>
                               <Td><div style={{ fontWeight: 600 }}>{o.customerName}</div><div style={{ fontSize: '11px', color: 'var(--ink3)' }}>{o.customerPhone ? <a href={`tel:${o.customerPhone}`} style={{ color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>{o.customerPhone}</a> : o.customerEmail}</div></Td>
                               <Td><span style={{ fontFamily: 'var(--mono)', fontWeight: 700 }}>${o.amount.toLocaleString()}</span></Td>
                               <Td>
@@ -3012,10 +3097,56 @@ export default function AdminPage() {
                         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="var(--ink3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '1px' }}><circle cx="10" cy="6.5" r="3" /><path d="M3.5 17a6.5 6.5 0 0 1 13 0" /></svg>
                         {d.attendantName || '—'} {d.attendantCell && <span style={{ fontFamily: 'var(--mono)', color: 'var(--ink3)' }}>· {d.attendantCell}</span>}
                       </div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="var(--ink3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M3 7l1-4h12l1 4" /><path d="M3 7h14v10H3z" /></svg>
+                        <span>Seller: <b>{sellerName(d.sellerId || 'sel_mvp')}</b></span>
+                      </div>
                     </div>
                   </div>
                 ))}
                 {depotList.length === 0 && <div style={{ fontSize: '13px', color: 'var(--ink3)', padding: '20px' }}>No depots yet. Add your first pickup location.</div>}
+              </div>
+            </div>
+          )}
+
+          {/* ── Sellers — multi-tenant marketplace companies ── */}
+          {view === 'sellers' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <div>
+                  <div style={{ fontSize: '15px', fontWeight: 700 }}>Marketplace Sellers</div>
+                  <div style={{ fontSize: '12px', color: 'var(--ink3)', marginTop: '2px' }}>
+                    Each seller owns depots and fulfills its own orders with its own drivers, pricing, and service agreement — Nationwide SteelBox runs the marketplace. Assign a depot to a seller from Depots → Edit.
+                  </div>
+                </div>
+                <Button variant="primary" size="md" onClick={() => setEditSeller('new')} icon={<span>+</span>}>Add Seller</Button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(340px,1fr))', gap: '14px' }}>
+                {sellerList.map(sl => {
+                  const owned = depotList.filter(d => (d.sellerId || 'sel_mvp') === sl.id)
+                  return (
+                    <div key={sl.id} style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', padding: '16px 18px', opacity: sl.active === false ? 0.55 : 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                          <span style={{ width: '26px', height: '26px', borderRadius: '7px', flexShrink: 0, background: `linear-gradient(135deg, ${sl.brandPrimary || 'var(--primary)'} 50%, ${sl.brandAccent || 'var(--cta)'} 50%)` }} />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: '15px', fontWeight: 700 }}>{sl.name}{sl.active === false && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--ink3)', textTransform: 'uppercase' }}>inactive</span>}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--ink3)' }}>{sl.legalName}</div>
+                          </div>
+                        </div>
+                        <TblBtn iconOnly title="Edit" onClick={() => setEditSeller(sl)}>{EditIcon}</TblBtn>
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--ink2)', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                        <div>{sl.phone || '—'} · {sl.email || '—'}</div>
+                        <div>
+                          <b>{owned.length}</b> depot{owned.length === 1 ? '' : 's'}: {owned.map(d => d.name).join(', ') || 'none assigned'}
+                        </div>
+                        {sl.tos && <div style={{ fontSize: '11px', color: 'var(--ink3)', lineHeight: 1.5 }}>{sl.tos.slice(0, 120)}{sl.tos.length > 120 ? '…' : ''}</div>}
+                      </div>
+                    </div>
+                  )
+                })}
+                {sellerList.length === 0 && <div style={{ fontSize: '13px', color: 'var(--ink3)', padding: '20px' }}>No sellers yet.</div>}
               </div>
             </div>
           )}
@@ -3212,8 +3343,14 @@ export default function AdminPage() {
       />
       <DepotModal
         target={editDepot}
+        sellers={sellerList}
         onClose={() => setEditDepot(null)}
         onSaved={(msg) => { toast(msg); refetchDepots().catch(() => {}) }}
+      />
+      <SellerModal
+        target={editSeller}
+        onClose={() => setEditSeller(null)}
+        onSaved={(msg) => { toast(msg); refetchSellers() }}
       />
       <CustomerModal
         target={editCustomer}

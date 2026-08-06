@@ -254,6 +254,7 @@ export function TrustBand({ tenant }: { tenant: Tenant }) {
   const cards = [
     { t: '8-photo inspection', d: 'Roof, seals, floor, corners, doors open and closed — the full set on every listing, taken in our yard, of your exact unit.' },
     { t: 'Verified grade', d: 'Grades are assigned by our field inspectors against a written standard, not by whoever answers the phone.' },
+    { t: 'One marketplace, local sellers', d: 'Every listing is sold and delivered by the vetted regional seller that owns its yard — their drivers, their pricing, their service agreement, one checkout.' },
     { t: 'Local trucks, local yards', d: `Dispatched from ${tenant.depots.join(', ')} — a real dispatcher you can text, not a broker in another time zone.` },
   ]
   return (

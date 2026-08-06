@@ -106,7 +106,7 @@ const SCHEMAS = {
     // validatedAt/calledAt/paidAt timestamp the phone-payment pipeline:
     // staff validate availability → call the customer → collect payment
     // (status becomes 'confirmed') → assign a driver.
-    headers: ['id','orderNumber','containerId','containerSku','customerId','customerName','customerEmail','customerPhone','deliveryAddress','deliveryZip','amount','status','driverId','driverName','scheduledDate','completedAt','createdAt','saleType','unitCost','deposit','driverHours','validatedAt','calledAt','paidAt'],
+    headers: ['id','orderNumber','containerId','containerSku','customerId','customerName','customerEmail','customerPhone','deliveryAddress','deliveryZip','amount','status','driverId','driverName','scheduledDate','completedAt','createdAt','saleType','unitCost','deposit','driverHours','validatedAt','calledAt','paidAt','sellerId','sellerName'],
     types: {
       amount: 'number', unitCost: 'number', deposit: 'number', driverHours: 'number',
       driverId: 'stringOrNull', driverName: 'stringOrNull',
@@ -116,7 +116,7 @@ const SCHEMAS = {
   },
   drivers: {
     file: 'drivers.csv',
-    headers: ['id','driverCode','name','initials','cdlClass','vehicle','licensePlate','status','rating','deliveriesMonth','deliveriesTotal','onTimePercent','activeOrderId','activeOrderSku','nextShift','colorHex','active','address','cellPhone','hourlyWage','trucks','workHours'],
+    headers: ['id','driverCode','name','initials','cdlClass','vehicle','licensePlate','status','rating','deliveriesMonth','deliveriesTotal','onTimePercent','activeOrderId','activeOrderSku','nextShift','colorHex','active','address','cellPhone','hourlyWage','trucks','workHours','sellerId'],
     types: {
       rating: 'number', deliveriesMonth: 'number', deliveriesTotal: 'number', onTimePercent: 'number', hourlyWage: 'number',
       active: 'boolean',
@@ -132,7 +132,7 @@ const SCHEMAS = {
   // Pickup depots — physical yards with a lot attendant contact.
   depots: {
     file: 'depots.csv',
-    headers: ['id','name','destination','address','attendantName','attendantCell','code'],
+    headers: ['id','name','destination','address','attendantName','attendantCell','code','sellerId'],
     types: {},
   },
   // Pickup/delivery/return/transfer schedule — shared by admin Schedule + field app.
@@ -165,7 +165,7 @@ const SCHEMAS = {
   // driverId links driver accounts to drivers.csv, customerId links buyers to customers.csv.
   users: {
     file: 'users.csv',
-    headers: ['id','email','passwordHash','role','name','phone','driverId','customerId','phoneVerified','active','createdAt'],
+    headers: ['id','email','passwordHash','role','name','phone','driverId','customerId','phoneVerified','active','createdAt','sellerId'],
     types: { phoneVerified: 'boolean', active: 'boolean' },
   },
   // Outbound email + SMS log. In dev nothing actually leaves the machine —
@@ -181,6 +181,15 @@ const SCHEMAS = {
     file: 'custombuilds.csv',
     headers: ['id','name','tag','description','features','fromPrice','photo','sortOrder','active'],
     types: { fromPrice: 'number', sortOrder: 'number', active: 'boolean', features: 'array' },
+  },
+  // Marketplace sellers (multi-tenant): the platform is Nationwide SteelBox
+  // Corp; each seller owns depots (depots.sellerId) and everything rolls up
+  // from there — a container's seller is its depot's seller, orders snapshot
+  // the seller at sale time, and drivers belong to a seller's fleet.
+  sellers: {
+    file: 'sellers.csv',
+    headers: ['id','name','legalName','brandPrimary','brandAccent','phone','email','tos','active','createdAt'],
+    types: { active: 'boolean' },
   },
 }
 
@@ -428,6 +437,63 @@ function ensureSeedUsers() {
     ensure(`${first}@mvpcontainer.com`, { role: 'driver', name: d.name, driverId: d.id, phone: d.cellPhone || '' })
   }
   if (changed) writeTable('users', users)
+}
+
+// ── Sellers (multi-tenant) ────────────────────────────────
+// Seed the two launch sellers, then backfill ownership: every depot and
+// driver without a sellerId defaults to MVP Container, except the Baltimore
+// yard (Container Depot Industries) which seeds under Demo Container Corp so
+// the marketplace demonstrates a genuine multi-seller split.
+
+function ensureSeedSellers() {
+  let sellers = readTable('sellers')
+  if (sellers.length === 0) {
+    sellers = [
+      {
+        id: 'sel_mvp', name: 'MVP Container', legalName: 'MVP Container LLC',
+        brandPrimary: '#2B7FD4', brandAccent: '#E65100',
+        phone: '(504) 555-0190', email: 'sales@mvpcontainers.com',
+        tos: 'Service agreement — MVP Container LLC. Delivery within 3–5 business days of confirmed payment, performed by MVP Container drivers and equipment. Payment is authorized at checkout and captured only after the container is set and inspected on site. 30-day wind-and-watertight guarantee on all graded units. Rentals bill monthly in advance; pickup is scheduled within 5 business days of the end of term. Site must provide the clearances published on the listing.',
+        active: true, createdAt: new Date().toISOString(),
+      },
+      {
+        id: 'sel_demo', name: 'Demo Container Corp', legalName: 'Demo Container Corporation',
+        brandPrimary: '#1B7A5A', brandAccent: '#7C3AED',
+        phone: '(410) 555-0155', email: 'sales@democontainercorp.com',
+        tos: 'Service agreement — Demo Container Corporation. Deliveries are fulfilled by Demo Container Corp within 5 business days of confirmed payment. All units carry a 14-day defect guarantee from the day of delivery. Payment terms, scheduling, and post-sale support are handled directly by Demo Container Corp — Nationwide SteelBox Corp operates the marketplace only.',
+        active: true, createdAt: new Date().toISOString(),
+      },
+    ]
+    writeTable('sellers', sellers)
+    console.log('Seeded sellers: MVP Container, Demo Container Corp')
+  }
+  const depots = readTable('depots')
+  let changed = false
+  for (const d of depots) {
+    if (!d.sellerId) { d.sellerId = d.id === 'dep_cdi' ? 'sel_demo' : 'sel_mvp'; changed = true }
+  }
+  if (changed) writeTable('depots', depots)
+  const drivers = readTable('drivers')
+  changed = false
+  for (const dr of drivers) {
+    if (!dr.sellerId) { dr.sellerId = 'sel_mvp'; changed = true }
+  }
+  if (changed) writeTable('drivers', drivers)
+}
+
+// A container's seller is derived from its depot's owner — so when a depot
+// changes hands, its inventory rolls to the new seller automatically.
+function sellerMaps() {
+  const depotByName = new Map(readTable('depots').map(d => [d.name, d]))
+  const sellerById = new Map(readTable('sellers').map(s => [s.id, s]))
+  return { depotByName, sellerById }
+}
+function withSeller(containers) {
+  const { depotByName, sellerById } = sellerMaps()
+  return containers.map(c => {
+    const seller = sellerById.get(depotByName.get(c.depotLocation)?.sellerId) || sellerById.get('sel_mvp')
+    return { ...c, sellerId: seller?.id || '', sellerName: seller?.name || '' }
+  })
 }
 
 // Seed the Custom Builds catalog once (previously hard-coded in the
@@ -842,6 +908,8 @@ async function handleRequest(req, res) {
           role: ['admin', 'driver', 'customer'].includes(body.role) ? body.role : 'customer',
           name: body.name || email, phone: body.phone || '',
           driverId: body.driverId || '', customerId: body.customerId || '',
+          // Blank sellerId = platform-wide staff; set = scoped to that seller.
+          sellerId: body.sellerId || '',
           phoneVerified: false, active: true, createdAt: new Date().toISOString(),
         }
         users.push(rec)
@@ -885,7 +953,7 @@ async function handleRequest(req, res) {
     if (seg[0] === 'containers') {
       const containers = readTable('containers')
 
-      if (seg.length === 1 && method === 'GET') return send(res, 200, containers)
+      if (seg.length === 1 && method === 'GET') return send(res, 200, withSeller(containers))
 
       if (seg.length === 1 && method === 'POST') {
         if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
@@ -942,7 +1010,7 @@ async function handleRequest(req, res) {
 
       if (seg.length === 2 && method === 'GET') {
         if (idx === -1) return send(res, 404, { message: 'Container not found' })
-        return send(res, 200, containers[idx])
+        return send(res, 200, withSeller([containers[idx]])[0])
       }
 
       if (seg.length === 2 && method === 'PATCH') {
@@ -1085,8 +1153,12 @@ async function handleRequest(req, res) {
 
       if (seg.length === 1 && method === 'GET') {
         if (!user) return denied()
-        // Admin + drivers see everything; customers only their own orders.
-        if (hasRole('admin', 'driver')) return send(res, 200, orders)
+        // Admin + drivers see everything (seller-scoped admins only their
+        // seller's orders); customers only their own orders.
+        if (hasRole('admin', 'driver')) {
+          const scoped = user.role === 'admin' && user.sellerId ? orders.filter(o => (o.sellerId || 'sel_mvp') === user.sellerId) : orders
+          return send(res, 200, scoped)
+        }
         const mine = orders.filter(o => (o.customerEmail || '').toLowerCase() === user.email.toLowerCase())
         return send(res, 200, mine)
       }
@@ -1131,6 +1203,14 @@ async function handleRequest(req, res) {
           deposit: Number(body.deposit) || 0,
           driverHours: Number(body.driverHours) || 0,
           validatedAt: null, calledAt: null, paidAt: null,
+        }
+        // Multi-tenant: snapshot which seller owns this sale (via the unit's
+        // depot at order time) so history is stable across depot transfers.
+        {
+          const unit = readTable('containers').find(c => c.id === record.containerId || c.sku === record.containerSku)
+          const enriched = unit ? withSeller([unit])[0] : null
+          record.sellerId = enriched?.sellerId || 'sel_mvp'
+          record.sellerName = enriched?.sellerName || 'MVP Container'
         }
         orders.push(record)
         writeTable('orders', orders)
@@ -1344,7 +1424,11 @@ async function handleRequest(req, res) {
       if (seg.length === 1 && method === 'GET') {
         // Staff see full records; customers/guests get a sanitized subset
         // (enough for "message your driver" pickers — no wages/addresses).
-        if (hasRole('admin', 'driver')) return send(res, 200, drivers)
+        // Seller-scoped admins (users.sellerId set) see only their own fleet.
+        if (hasRole('admin', 'driver')) {
+          const scoped = user.role === 'admin' && user.sellerId ? drivers.filter(d => (d.sellerId || 'sel_mvp') === user.sellerId) : drivers
+          return send(res, 200, scoped)
+        }
         return send(res, 200, drivers.map(d => ({
           id: d.id, driverCode: d.driverCode, name: d.name, initials: d.initials,
           vehicle: d.vehicle, status: d.status, colorHex: d.colorHex, active: d.active,
@@ -1374,6 +1458,8 @@ async function handleRequest(req, res) {
           hourlyWage: Number(body.hourlyWage) || 0,
           trucks: body.trucks || '',
           workHours: body.workHours || '1:6-18|2:6-18|3:6-18|4:6-18|5:6-18',
+          // Which seller's fleet this driver belongs to (multi-tenant).
+          sellerId: body.sellerId || 'sel_mvp',
         }
         drivers.push(record)
         writeTable('drivers', drivers)
@@ -1633,6 +1719,45 @@ async function handleRequest(req, res) {
     }
 
     // ── Depots (pickup locations) ──
+    // ── Sellers (multi-tenant marketplace) ──
+    if (seg[0] === 'sellers') {
+      const sellers = readTable('sellers')
+
+      if (seg.length === 1 && method === 'GET') {
+        // Admins get everything; the public list powers seller branding on
+        // listings (logo colors, contact, service agreement) — active only.
+        if (hasRole('admin')) return send(res, 200, sellers)
+        return send(res, 200, sellers.filter(x => x.active !== false)
+          .map(({ id, name, legalName, brandPrimary, brandAccent, phone, email, tos }) =>
+            ({ id, name, legalName, brandPrimary, brandAccent, phone, email, tos })))
+      }
+
+      if (seg.length === 1 && method === 'POST') {
+        if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
+        const body = await readBody(req)
+        if (!body.name) return send(res, 400, { message: 'name is required' })
+        const record = {
+          id: uid('sel'), name: body.name, legalName: body.legalName || body.name,
+          brandPrimary: body.brandPrimary || '#0057B8', brandAccent: body.brandAccent || '#E65100',
+          phone: body.phone || '', email: body.email || '', tos: body.tos || '',
+          active: body.active ?? true, createdAt: new Date().toISOString(),
+        }
+        sellers.push(record)
+        writeTable('sellers', sellers)
+        return send(res, 201, record)
+      }
+
+      if (seg.length === 2 && method === 'PATCH') {
+        if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
+        const idx = sellers.findIndex(x => x.id === seg[1])
+        if (idx === -1) return send(res, 404, { message: 'Seller not found' })
+        const body = await readBody(req)
+        sellers[idx] = { ...sellers[idx], ...body, id: sellers[idx].id }
+        writeTable('sellers', sellers)
+        return send(res, 200, sellers[idx])
+      }
+    }
+
     if (seg[0] === 'depots') {
       const depots = readTable('depots')
 
@@ -1657,6 +1782,8 @@ async function handleRequest(req, res) {
           attendantCell: body.attendantCell || '',
           // SKU prefix code; default to the derived code from the name.
           code: (body.code || depotCode(body.name)).toUpperCase(),
+          // Ownership: which seller services this yard (multi-tenant).
+          sellerId: body.sellerId || 'sel_mvp',
         }
         depots.push(record)
         writeTable('depots', depots)
@@ -1953,6 +2080,7 @@ const server = createServer((req, res) => {
 })
 
 ensureSeedUsers()
+ensureSeedSellers()
 ensureSeedCustomBuilds()
 
 server.listen(PORT, () => {
