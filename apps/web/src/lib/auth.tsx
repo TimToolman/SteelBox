@@ -147,10 +147,15 @@ export function LoginForm({ onDone, allowRegister = false, subtitle }: {
     } finally { setBusy(false) }
   }
 
+  // Trailing spaces in a password are almost always autocomplete/paste
+  // artifacts — drop them everywhere a password is submitted or set, so
+  // stored and entered values can never disagree by invisible whitespace.
+  const pw = (s: string) => s.replace(/\s+$/, '')
+
   const submitLogin = () => run(async () => {
     const result = mode === 'login'
-      ? await login(form.email.trim(), form.password)
-      : { user: await register({ name: form.name.trim(), email: form.email.trim(), password: form.password, phone: form.phone.trim() }) }
+      ? await login(form.email.trim(), pw(form.password))
+      : { user: await register({ name: form.name.trim(), email: form.email.trim(), password: pw(form.password), phone: form.phone.trim() }) }
     if (result.pending) {
       setPending(result.pending)
       go('code', `We emailed a 6-digit sign-in code to ${form.email.trim()}. Enter it below.`)
@@ -171,7 +176,7 @@ export function LoginForm({ onDone, allowRegister = false, subtitle }: {
   })
 
   const submitReset = () => run(async () => {
-    await authApi.reset(form.email.trim(), form.code.trim(), form.newPassword)
+    await authApi.reset(form.email.trim(), form.code.trim(), pw(form.newPassword))
     setForm(p => ({ ...p, password: '', code: '', newPassword: '' }))
     go('login', 'Password updated — sign in with your new password.')
   })
@@ -280,11 +285,13 @@ function ChangePasswordGate({ onSkip }: { onSkip: () => void }) {
 
   const submit = async () => {
     if (busy) return
-    if (form.next !== form.confirm) { setError('New passwords don’t match'); return }
+    // Same trailing-space rule as the sign-in form (paste artifacts).
+    const next = form.next.replace(/\s+$/, '')
+    if (next !== form.confirm.replace(/\s+$/, '')) { setError('New passwords don’t match'); return }
     setBusy(true)
     setError('')
     try {
-      await changePassword(form.current, form.next)
+      await changePassword(form.current.replace(/\s+$/, ''), next)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not change the password — try again')
     } finally { setBusy(false) }

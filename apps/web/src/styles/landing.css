@@ -131,9 +131,27 @@
 }
 .ld-searchbar input::placeholder { color: #7b8b9c; }
 .ld-searchbar .ld-btn { flex-shrink: 0; }
-.ld-hero-ctas { display: flex; justify-content: center; margin-top: 22px; }
+.ld-hero-ctas { display: flex; justify-content: center; margin-top: 24px; }
+/* Hero primary CTA — oversized with a breathing glow so it's the obvious
+   next step. Animation is skipped for reduced-motion users. */
+.ld-btn--hero {
+  font-size: 17px; padding: 17px 38px;
+  box-shadow: 0 8px 26px rgba(230, 81, 0, .5);
+}
+.ld-btn--hero:hover { transform: translateY(-1px); }
+@media (prefers-reduced-motion: no-preference) {
+  .ld-btn--hero { animation: ld-cta-pulse 2.4s ease-in-out infinite; }
+  @keyframes ld-cta-pulse {
+    0%, 100% { box-shadow: 0 8px 26px rgba(230, 81, 0, .5); transform: scale(1); }
+    50% { box-shadow: 0 12px 36px rgba(230, 81, 0, .8); transform: scale(1.04); }
+  }
+}
 .ld-hero--portal .ld-hero-points { justify-content: center; color: #fff; margin-top: 22px; }
 .ld-hero--portal .ld-hero-points span::before { color: #4DFFB4; }
+.ld-hero-tagline {
+  margin-top: 18px; font-size: 12px; font-weight: 700; letter-spacing: .8px;
+  text-transform: uppercase; color: rgba(255, 255, 255, .75);
+}
 .ld-hero--portal .ld-hero-secondary { color: rgba(255, 255, 255, .9); }
 .ld-hero--portal .ld-hero-secondary a { color: #fff; text-decoration: underline; font-weight: 700; }
 
@@ -141,13 +159,15 @@
    headline + ZIP bar (class set by Hero's scroll listener, phones only). */
 .ld-hero--portal .ld-hero-sub,
 .ld-hero--portal .ld-hero-ctas,
-.ld-hero--portal .ld-hero-points {
+.ld-hero--portal .ld-hero-points,
+.ld-hero--portal .ld-hero-tagline {
   overflow: hidden; max-height: 220px;
   transition: max-height .25s ease, opacity .25s ease, margin .25s ease;
 }
 .ld-hero--collapsed .ld-hero-sub,
 .ld-hero--collapsed .ld-hero-ctas,
-.ld-hero--collapsed .ld-hero-points { max-height: 0; opacity: 0; margin: 0; }
+.ld-hero--collapsed .ld-hero-points,
+.ld-hero--collapsed .ld-hero-tagline { max-height: 0; opacity: 0; margin: 0; }
 .ld-hero--collapsed .ld-hero-bgimg { opacity: 0; }
 .ld-hero--portal .ld-hero-inner { transition: padding .25s ease; }
 .ld-hero--collapsed .ld-hero-inner { padding: 16px 20px 18px; }

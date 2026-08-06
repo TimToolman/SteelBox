@@ -185,7 +185,7 @@ function Hero({ tenant }: { tenant: Tenant }) {
     <section className={`ld-hero ld-hero--portal${collapsed ? ' ld-hero--collapsed' : ''}`}>
       <img className="ld-hero-bgimg" src={heroImg()} alt="" aria-hidden="true" />
       <div className="ld-hero-inner">
-        <h1>See YOUR Container. Know YOUR Price. Track YOUR delivery.'</h1>
+        <h1>See YOUR Container. Know YOUR Price. Track YOUR delivery.</h1>
         <p className="ld-hero-sub">
           Every container on our marketplace is field-inspected, photo-documented, and priced to your ZIP — no "calling," no mystery, no friction.
         </p>
@@ -206,12 +206,15 @@ function Hero({ tenant }: { tenant: Tenant }) {
           </p>
         )}
         <div className="ld-hero-ctas">
-          <a className="ld-btn ld-btn--accent" href={u('shop')}>Browse all inventory</a>
+          <a className="ld-btn ld-btn--accent ld-btn--hero" href={u('shop')}>
+            Browse all inventory <span aria-hidden="true">→</span>
+          </a>
         </div>
         <div className="ld-hero-points">
           <span>Photo inspected</span>
           <span>3–5 day delivery</span>
         </div>
+        <p className="ld-hero-tagline">Grading performed by Machine Learning / AI technology</p>
       </div>
     </section>
   )

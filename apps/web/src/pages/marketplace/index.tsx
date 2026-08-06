@@ -23,6 +23,37 @@ import { CustomerMessageModal } from './CustomerMessageModal'
 import { BulkForm } from './BulkForm'
 import { CustomerProfileModal, type ProfileTab } from './CustomerProfileModal'
 
+// ── Demo photo fallback ────────────────────────────────────
+// Only three units have real photo documentation so far. Until the rest
+// are photographed, undocumented units borrow one of those three 8-shot
+// sets. The files are bundled with the web app (public/demo-photos/), so
+// this works against any API — including Railway, which has no photo
+// files. DELETE this block and public/demo-photos/ once every unit has
+// real photos.
+const DEMO_PHOTO_SETS: string[][] = [
+  ['CDI-20-0001-01-mre9t7ba.jpg', 'CDI-20-0001-02-mre9tgux.jpg', 'CDI-20-0001-03-mre9tsy3.jpg', 'CDI-20-0001-04-mre9u4if.jpg', 'CDI-20-0001-05-mre9ufqk.jpg', 'CDI-20-0001-06-mre9use7.jpg', 'CDI-20-0001-07-mre9uz12.jpg', 'CDI-20-0001-08-mre9v20t.jpg'],
+  ['CDI-20-0002-01-mreab491.webp', 'CDI-20-0002-02-mreabfpg.webp', 'CDI-20-0002-03-mreac2cs.webp', 'CDI-20-0002-04-mreacgx1.webp', 'CDI-20-0002-05-mreacwmb.webp', 'CDI-20-0002-06-mreadfgd.jpg', 'CDI-20-0002-07-mreadsvk.webp', 'CDI-20-0002-08-mreae0mq.webp'],
+  ['CDI-20-0003-01-mreakeao.webp', 'CDI-20-0003-02-mreakqe7.webp', 'CDI-20-0003-03-mreal5nc.webp', 'CDI-20-0003-04-mrealkqy.webp', 'CDI-20-0003-05-mrealvat.webp', 'CDI-20-0003-06-mreamd6n.jpg', 'CDI-20-0003-07-mreamnrk.webp', 'CDI-20-0003-08-mreamwv9.webp'],
+].map(set => set.map(f =>
+  // Absolute URLs pass through photoUrl() untouched; API-relative paths don't.
+  new URL(`${import.meta.env.BASE_URL}demo-photos/${f}`, window.location.origin).href
+))
+
+// Color variety for the demo grid: a URL fragment tags each borrowed set
+// with a tint. Browsers drop the fragment when fetching (same cached file),
+// but CSS matches it — img[src*="#tint-red"] etc. in tokens.css recolors
+// every rendering of the photo (card, gallery, cart) with no extra markup.
+const DEMO_TINTS = ['', '#tint-red', '#tint-white']
+
+function withDemoPhotos(c: Container): Container {
+  if (c.photos?.filter(Boolean).length) return c
+  // Deterministic picks so a unit keeps the same look across reloads.
+  const h = [...c.id].reduce((n, ch) => n + ch.charCodeAt(0), 0)
+  const set = DEMO_PHOTO_SETS[h % DEMO_PHOTO_SETS.length]
+  const tint = DEMO_TINTS[Math.floor(h / 7) % DEMO_TINTS.length]
+  return { ...c, photos: set.map(p => p + tint) }
+}
+
 // ── Main Marketplace Page ──────────────────────────────────
 
 export default function MarketplacePage() {
@@ -51,7 +82,9 @@ export default function MarketplacePage() {
   })
   // null = no color restriction (all colors checked)
   const [colorSel, setColorSel] = useState<Set<string> | null>(null)
-  // Depot filter — shoppers may only want stock at nearby yards. null = all depots.
+  // Depot filter — shoppers may only want stock at nearby yards. Default is
+  // NOTHING checked, which means no restriction (all depots shown); checking
+  // depots narrows results to just those yards.
   const [depotSel, setDepotSel] = useState<Set<string> | null>(null)
   const [depotList, setDepotList] = useState<Depot[]>([])
   useEffect(() => { depotsApi.list().then(setDepotList).catch(() => {}) }, [])
@@ -134,7 +167,7 @@ export default function MarketplacePage() {
   // Only listed inventory is shown publicly. Drafts (awaiting photo
   // documentation), sold, and in-fulfilment units never reach the marketplace —
   // except admins, who additionally see draft units (badged "Draft") for preview.
-  const listable = allContainers.filter(
+  const listable = allContainers.map(withDemoPhotos).filter(
     c => c.status === 'available' || c.status === 'sale_in_progress' || (isAdmin && c.status === 'draft')
   )
 
@@ -157,7 +190,7 @@ export default function MarketplacePage() {
   const priceOf = (c: Container) => activeTab === 'rent' ? (c.rentMonthly ?? c.buyPrice) : c.buyPrice
   const filtered = tabListable.filter(c => {
     if (condFilter !== 'all' && condOf(c) !== condFilter) return false
-    if (depotSel && !depotSel.has(c.depotLocation)) return false
+    if (depotSel && depotSel.size > 0 && !depotSel.has(c.depotLocation)) return false
     if (!sizeFilters.has(c.size)) return false
     if (condFilter === 'used' && !gradeFilters.has(c.grade)) return false
     if (condFilter === 'new' && colorSel && !colorSel.has(c.color || 'Unspecified')) return false
@@ -194,7 +227,7 @@ export default function MarketplacePage() {
 
   const toggleDepot = (name: string) => {
     setDepotSel(prev => {
-      const next = new Set(prev ?? stockedDepotNames)
+      const next = new Set(prev ?? [])
       next.has(name) ? next.delete(name) : next.add(name)
       return next
     })
@@ -347,24 +380,25 @@ export default function MarketplacePage() {
             {/* Depot — location matters no matter New or Used, so it's not behind the gate.
                 Rendered as a combo-box: closed shows a summary, open shows the grouped list. */}
             {depotGroups.length > 0 && (() => {
-              const selCount = depotSel ? [...depotSel].filter(n => stockedDepotNames.includes(n)).length : stockedDepotNames.length
-              const allOn = !depotSel || selCount === stockedDepotNames.length
+              // Nothing checked (or all checked) = no restriction — "All depots".
+              const selCount = depotSel ? [...depotSel].filter(n => stockedDepotNames.includes(n)).length : 0
+              const filtering = selCount > 0 && selCount < stockedDepotNames.length
               return (
                 <div style={{ marginBottom: '10px' }}>
                   <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Depot</span>
                   <div ref={depotDdRef} style={{ position: 'relative' }}>
-                    <button onClick={() => setDepotDdOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', width: '100%', padding: '8px 10px', borderRadius: 'var(--r8)', border: `1.5px solid ${allOn ? 'var(--div)' : 'var(--primary)'}`, background: 'var(--surf-w)', fontSize: '12px', fontWeight: allOn ? 400 : 600, color: allOn ? 'var(--ink2)' : 'var(--primary)', cursor: 'pointer', fontFamily: 'var(--sans)' }}>
-                      <span>{allOn ? 'All depots' : `${selCount} of ${stockedDepotNames.length} depots`}</span>
+                    <button onClick={() => setDepotDdOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', width: '100%', padding: '8px 10px', borderRadius: 'var(--r8)', border: `1.5px solid ${filtering ? 'var(--primary)' : 'var(--div)'}`, background: 'var(--surf-w)', fontSize: '12px', fontWeight: filtering ? 600 : 400, color: filtering ? 'var(--primary)' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'var(--sans)' }}>
+                      <span>{filtering ? `${selCount} of ${stockedDepotNames.length} depots` : 'All depots'}</span>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0, transform: depotDdOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}><polyline points="6 9 12 15 18 9" /></svg>
                     </button>
                     {depotDdOpen && (
                       <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 60, background: 'var(--surf-w)', border: '1px solid var(--div)', borderRadius: 'var(--r8)', boxShadow: 'var(--sh2)', maxHeight: '280px', overflowY: 'auto', padding: '6px 10px 8px' }}>
-                        <button onClick={() => setDepotSel(null)} style={{ background: 'none', border: 'none', padding: '4px 0', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer', fontFamily: 'var(--sans)' }}>Select all</button>
+                        <button onClick={() => setDepotSel(null)} style={{ background: 'none', border: 'none', padding: '4px 0', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer', fontFamily: 'var(--sans)' }}>Deselect all</button>
                         {depotGroups.map(({ dest, names }) => (
                           <div key={dest}>
                             <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ink3)', padding: '5px 0 2px' }}>{dest}</div>
                             {names.map(name => {
-                              const on = !depotSel || depotSel.has(name)
+                              const on = !!depotSel?.has(name)
                               return (
                                 <div key={name} onClick={() => toggleDepot(name)} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid var(--div)', cursor: 'pointer' }}>
                                   <div style={{ width: '17px', height: '17px', borderRadius: 'var(--r4)', background: on ? 'var(--primary)' : 'var(--surf-w)', border: `1.5px solid ${on ? 'var(--primary)' : 'var(--div)'}`, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
@@ -434,6 +468,9 @@ export default function MarketplacePage() {
                           </span>
                         </div>
                       ))}
+                      <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '6px', lineHeight: 1.45 }}>
+                        Grades are assigned by our AI/ML imaging models from each unit's 8-photo field inspection.
+                      </div>
                     </div>
                   </>
                 )}
@@ -479,6 +516,13 @@ export default function MarketplacePage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '14px', fontWeight: 700 }}>{filtered.length} containers</span>
               <span style={{ fontSize: '13px', color: 'var(--ink3)' }}>· Gulf Coast region</span>
+              <span
+                title="Every unit's condition grade is scored by machine-learning imaging models from its 8-photo field inspection, then verified by our inspectors."
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 10px', borderRadius: 'var(--pill)', background: 'var(--primary-cont)', color: 'var(--primary-dark)', fontSize: '11px', fontWeight: 700, cursor: 'help' }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l1.9 5.8L20 9.7l-5 4 1.6 6.3L12 16.6 7.4 20l1.6-6.3-5-4 6.1-1.9z" /></svg>
+                AI/ML-graded inventory
+              </span>
             </div>
 
             {loading ? (

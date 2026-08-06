@@ -158,3 +158,9 @@ button, input, select, textarea {
 .card-hover-icon { transform: scale(.8); transition: transform .2s; }
 .mkt-card:hover .card-hover-veil { opacity: 1; background: rgba(0,0,0,.3); }
 .mkt-card:hover .card-hover-icon { transform: scale(1); }
+
+/* Demo-only container photo tints — matched by the #tint-* URL fragment
+   that withDemoPhotos() (pages/marketplace/index.tsx) appends to borrowed
+   photo URLs. Delete together with the demo-photo fallback. */
+img[src*="#tint-red"] { filter: hue-rotate(-32deg) saturate(2.2) brightness(.84); }
+img[src*="#tint-white"] { filter: saturate(.25) brightness(1.15); }
