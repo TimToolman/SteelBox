@@ -1,7 +1,7 @@
-id,name,destination,address,attendantName,attendantCell,code,sellerId
-dep_nola,NOLA Depot,"New Orleans, LA","4200 Chef Menteur Hwy, New Orleans, LA 70126",Marcus Boudreaux,(504) 555-0142,NOLA,sel_mvp
-dep_br,Baton Rouge Depot,"Baton Rouge, LA","9800 Airline Hwy, Baton Rouge, LA 70815",Tanya Guidry,(225) 555-0177,BR,sel_mvp
-dep_hou,Houston Depot,"Houston, TX","1100 Port Rd, Houston, TX 77029",Carlos Reyes,(713) 555-0129,HOU,sel_mvp
-dep_fc,FIRST COAST,"Atlanta, GA","Atlanta, GA",,,FC,sel_mvp
-dep_iti,"ITI Intermodal of Georgia, LLC","Atlanta, GA","Atlanta, GA",,,ITI,sel_mvp
-dep_cdi,"Container Depot Industries, Inc.","Baltimore, MD","Baltimore, MD",,,CDI,sel_demo
+id,name,destination,address,attendantName,attendantCell,code,sellerId,zip,serviceRadiusMiles
+dep_nola,NOLA Depot,"New Orleans, LA","4200 Chef Menteur Hwy, New Orleans, LA 70126",Marcus Boudreaux,(504) 555-0142,NOLA,sel_mvp,70126,150
+dep_br,Baton Rouge Depot,"Baton Rouge, LA","9800 Airline Hwy, Baton Rouge, LA 70815",Tanya Guidry,(225) 555-0177,BR,sel_mvp,70815,150
+dep_hou,Houston Depot,"Houston, TX","1100 Port Rd, Houston, TX 77029",Carlos Reyes,(713) 555-0129,HOU,sel_mvp,77029,150
+dep_fc,FIRST COAST,"Atlanta, GA","Atlanta, GA",,,FC,sel_mvp,30336,150
+dep_iti,"ITI Intermodal of Georgia, LLC","Atlanta, GA","Atlanta, GA",,,ITI,sel_mvp,30354,150
+dep_cdi,"Container Depot Industries, Inc.","Baltimore, MD","Baltimore, MD",,,CDI,sel_demo,21224,150

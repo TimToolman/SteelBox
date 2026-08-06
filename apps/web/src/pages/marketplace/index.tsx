@@ -14,6 +14,7 @@ import { GRADE_META } from '../../lib/specs'
 import { SiteNav } from '../landing'
 import { resolveTenant } from '../../tenant'
 import { SIZE_OPTIONS, condOf, type Tab, type SortKey, type CartMode, type CartItem, type CheckoutDetails } from './shared'
+import { depotsServingZip, type DepotInRange } from '../../lib/geo'
 import { QuoteDialog } from './QuoteDialog'
 import { ContainerCard } from './ContainerCard'
 import { DetailModal } from './DetailModal'
@@ -82,20 +83,17 @@ export default function MarketplacePage() {
   })
   // null = no color restriction (all colors checked)
   const [colorSel, setColorSel] = useState<Set<string> | null>(null)
-  // Depot filter — shoppers may only want stock at nearby yards. Default is
-  // NOTHING checked, which means no restriction (all depots shown); checking
-  // depots narrows results to just those yards.
-  const [depotSel, setDepotSel] = useState<Set<string> | null>(null)
+  // Delivery-area filter — the customer tells us WHERE they need the
+  // container. A ZIP is geo-fenced against every depot's service circle
+  // (yard ZIP + the radius the global admin granted it); only inventory
+  // from depots whose circle covers the customer is shown. The dropdown
+  // picks a delivery market directly. null/[] = show every area.
+  const [areaZip, setAreaZip] = useState(() => (qp('zip') ?? '').replace(/\D/g, '').slice(0, 5))
+  const [geoHits, setGeoHits] = useState<DepotInRange[] | null>(null)   // depots covering the ZIP
+  const [geoMiss, setGeoMiss] = useState(false)                          // 5-digit ZIP, nobody covers it
+  const [area, setArea] = useState<string | null>(null)                  // market picked from the dropdown
   const [depotList, setDepotList] = useState<Depot[]>([])
   useEffect(() => { depotsApi.list().then(setDepotList).catch(() => {}) }, [])
-  // Compact combo-box: the depot list lives in a dropdown; closed state shows a summary.
-  const [depotDdOpen, setDepotDdOpen] = useState(false)
-  const depotDdRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => { if (depotDdRef.current && !depotDdRef.current.contains(e.target as Node)) setDepotDdOpen(false) }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [])
   const [minPrice, setMinPrice] = useState('')
   const [maxPrice, setMaxPrice] = useState('')
   const [sort, setSort] = useState<SortKey>('price-asc')
@@ -192,10 +190,34 @@ export default function MarketplacePage() {
   // Filter containers. On the Rent tab, "price" means the monthly rate.
   // Sub-filters are condition-scoped: grade applies when browsing Used,
   // color when browsing New (they're hidden otherwise, so they can't strand results).
+  // Geo-fence the ZIP as soon as 5 digits are typed: which depots' service
+  // circles cover this customer? Typing a ZIP clears any picked market.
+  useEffect(() => {
+    if (areaZip.length === 5) {
+      const hits = depotsServingZip(areaZip, depotList)
+      setGeoHits(hits && hits.length > 0 ? hits : null)
+      setGeoMiss(!hits || hits.length === 0)
+      setArea(null)
+    } else {
+      setGeoHits(null)
+      setGeoMiss(false)
+    }
+  }, [areaZip, depotList])
+  // Markets that actually have browsable stock, for the fallback picker.
+  const marketOf = (c: Container) => depotList.find(d => d.name === c.depotLocation)?.destination || ''
+  const areaMarkets = [...new Set(tabListable.map(marketOf).filter(Boolean))].sort()
+  // Who services the customer — resellers owning the in-range yards.
+  const geoDepotNames = geoHits ? new Set(geoHits.map(h => h.depot.name)) : null
+  const areaSellers = [...new Set(
+    (geoHits ? geoHits.map(h => h.depot) : area ? depotList.filter(d => d.destination === area) : [])
+      .map(d => sellerById.get(d.sellerId || '')?.name).filter(Boolean)
+  )] as string[]
+
   const priceOf = (c: Container) => activeTab === 'rent' ? (c.rentMonthly ?? c.buyPrice) : c.buyPrice
   const filtered = tabListable.filter(c => {
     if (condFilter !== 'all' && condOf(c) !== condFilter) return false
-    if (depotSel && depotSel.size > 0 && !depotSel.has(c.depotLocation)) return false
+    if (geoDepotNames && !geoDepotNames.has(c.depotLocation)) return false
+    if (!geoDepotNames && area && marketOf(c) !== area) return false
     if (!sizeFilters.has(c.size)) return false
     if (condFilter === 'used' && !gradeFilters.has(c.grade)) return false
     if (condFilter === 'new' && colorSel && !colorSel.has(c.color || 'Unspecified')) return false
@@ -224,19 +246,6 @@ export default function MarketplacePage() {
   // Depots with browsable stock in the current tab/condition scope, grouped by
   // the market they serve ("Atlanta, GA" → its two yards). Unknown/legacy
   // depotLocation strings fall under "Other locations".
-  const countByDepot = (name: string) => tabListable.filter(c => c.depotLocation === name && (condFilter === 'all' || condOf(c) === condFilter)).length
-  const stockedDepotNames = [...new Set(tabListable.map(c => c.depotLocation).filter(Boolean))].filter(n => countByDepot(n) > 0)
-  const depotGroups = [...new Set(stockedDepotNames.map(n => depotList.find(d => d.name === n)?.destination || 'Other locations'))]
-    .sort()
-    .map(dest => ({ dest, names: stockedDepotNames.filter(n => (depotList.find(d => d.name === n)?.destination || 'Other locations') === dest).sort() }))
-
-  const toggleDepot = (name: string) => {
-    setDepotSel(prev => {
-      const next = new Set(prev ?? [])
-      next.has(name) ? next.delete(name) : next.add(name)
-      return next
-    })
-  }
 
   const toggleGrade = (g: ContainerGrade) => {
     setGradeFilters(prev => {
@@ -359,7 +368,7 @@ export default function MarketplacePage() {
             : { width: 'var(--sb-w)', flexShrink: 0, borderRight: '1px solid var(--div)', padding: '14px 10px', position: 'sticky', top: 'var(--nav-h)', height: 'calc(100vh - var(--nav-h))', overflowY: 'auto', background: 'var(--surf-w)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.4px' }}>Filters</span>
-              <button onClick={() => { setCondFilter('all'); setSizeFilters(new Set(ALL_SIZES)); setGradeFilters(new Set(['A','B','C','R','X'])); setColorSel(null); setDepotSel(null) }} style={{ background: 'none', border: 'none', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>Reset</button>
+              <button onClick={() => { setCondFilter('all'); setSizeFilters(new Set(ALL_SIZES)); setGradeFilters(new Set(['A','B','C','R','X'])); setColorSel(null); setArea(null); setAreaZip(''); setGeoHits(null); setGeoMiss(false) }} style={{ background: 'none', border: 'none', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>Reset</button>
             </div>
 
             {/* Condition gate — pick New or Used first; sub-filters follow */}
@@ -382,46 +391,48 @@ export default function MarketplacePage() {
               )}
             </div>
 
-            {/* Depot — location matters no matter New or Used, so it's not behind the gate.
-                Rendered as a combo-box: closed shows a summary, open shows the grouped list. */}
-            {depotGroups.length > 0 && (() => {
-              // Nothing checked (or all checked) = no restriction — "All depots".
-              const selCount = depotSel ? [...depotSel].filter(n => stockedDepotNames.includes(n)).length : 0
-              const filtering = selCount > 0 && selCount < stockedDepotNames.length
-              return (
-                <div style={{ marginBottom: '10px' }}>
-                  <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Depot</span>
-                  <div ref={depotDdRef} style={{ position: 'relative' }}>
-                    <button onClick={() => setDepotDdOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', width: '100%', padding: '8px 10px', borderRadius: 'var(--r8)', border: `1.5px solid ${filtering ? 'var(--primary)' : 'var(--div)'}`, background: 'var(--surf-w)', fontSize: '12px', fontWeight: filtering ? 600 : 400, color: filtering ? 'var(--primary)' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'var(--sans)' }}>
-                      <span>{filtering ? `${selCount} of ${stockedDepotNames.length} depots` : 'All depots'}</span>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0, transform: depotDdOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}><polyline points="6 9 12 15 18 9" /></svg>
-                    </button>
-                    {depotDdOpen && (
-                      <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 60, background: 'var(--surf-w)', border: '1px solid var(--div)', borderRadius: 'var(--r8)', boxShadow: 'var(--sh2)', maxHeight: '280px', overflowY: 'auto', padding: '6px 10px 8px' }}>
-                        <button onClick={() => setDepotSel(null)} style={{ background: 'none', border: 'none', padding: '4px 0', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer', fontFamily: 'var(--sans)' }}>Deselect all</button>
-                        {depotGroups.map(({ dest, names }) => (
-                          <div key={dest}>
-                            <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ink3)', padding: '5px 0 2px' }}>{dest}</div>
-                            {names.map(name => {
-                              const on = !!depotSel?.has(name)
-                              return (
-                                <div key={name} onClick={() => toggleDepot(name)} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid var(--div)', cursor: 'pointer' }}>
-                                  <div style={{ width: '17px', height: '17px', borderRadius: 'var(--r4)', background: on ? 'var(--primary)' : 'var(--surf-w)', border: `1.5px solid ${on ? 'var(--primary)' : 'var(--div)'}`, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-                                    {on && <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><polyline points="2,6 5,9 10,3" /></svg>}
-                                  </div>
-                                  <span style={{ fontSize: '12px', color: 'var(--ink2)', flex: 1, lineHeight: 1.3 }}>{name}</span>
-                                  <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', fontWeight: 700, color: 'var(--ink3)' }}>{countByDepot(name)}</span>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+            {/* Delivery area — the customer tells us where the container is
+                going; we resolve their ZIP to a delivery market and show only
+                the inventory serviced by the reseller(s) in that geography. */}
+            <div style={{ marginBottom: '10px' }}>
+              <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Where do you need a container?</span>
+              <input
+                value={areaZip}
+                inputMode="numeric"
+                maxLength={5}
+                placeholder="Enter delivery ZIP"
+                onChange={e => setAreaZip(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                style={{ width: '100%', padding: '9px 11px', border: `1.5px solid ${geoHits ? 'var(--primary)' : 'var(--div)'}`, borderRadius: 'var(--r8)', fontSize: '13px', fontFamily: 'var(--mono)', letterSpacing: '1px', outline: 'none', boxSizing: 'border-box' }}
+              />
+              {geoHits && (
+                <div style={{ fontSize: '11px', color: 'var(--green)', fontWeight: 600, marginTop: '6px', lineHeight: 1.5 }}>
+                  ✓ Serviced by {areaSellers.join(' & ')}
+                  {geoHits.map(h => (
+                    <div key={h.depot.id} style={{ color: 'var(--ink3)', fontWeight: 400 }}>
+                      {h.depot.name} · {h.miles} mi away
+                    </div>
+                  ))}
                 </div>
-              )
-            })()}
+              )}
+              {geoMiss && (
+                <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '6px', lineHeight: 1.45 }}>
+                  No seller's service area covers {areaZip} yet — showing every area. Call us and we'll quote it anyway.
+                </div>
+              )}
+              {!geoHits && !geoMiss && area && (
+                <div style={{ fontSize: '11px', color: 'var(--green)', fontWeight: 600, marginTop: '6px', lineHeight: 1.45 }}>
+                  ✓ {area}{areaSellers.length > 0 && <> — serviced by {areaSellers.join(' & ')}</>}
+                </div>
+              )}
+              <select
+                value={area ?? ''}
+                onChange={e => { setArea(e.target.value || null); setAreaZip(''); setGeoHits(null); setGeoMiss(false) }}
+                style={{ width: '100%', marginTop: '7px', padding: '8px 10px', borderRadius: 'var(--r8)', border: '1.5px solid var(--div)', background: 'var(--surf-w)', fontSize: '12px', cursor: 'pointer', outline: 'none', fontFamily: 'var(--sans)' }}
+              >
+                <option value="">All areas</option>
+                {areaMarkets.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
 
             <hr style={{ border: 'none', borderTop: '1px solid var(--div)', margin: '8px 0' }} />
 
@@ -522,11 +533,11 @@ export default function MarketplacePage() {
               <span style={{ fontSize: '14px', fontWeight: 700 }}>{filtered.length} containers</span>
               <span style={{ fontSize: '13px', color: 'var(--ink3)' }}>· Gulf Coast region</span>
               <span
-                title="Every unit's condition grade is scored by machine-learning imaging models from its 8-photo field inspection, then verified by our inspectors."
+                title="Units marked with the AI badge had their condition grade scored by machine-learning imaging models from the 8-photo field inspection, then verified by our inspectors."
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 10px', borderRadius: 'var(--pill)', background: 'var(--primary-cont)', color: 'var(--primary-dark)', fontSize: '11px', fontWeight: 700, cursor: 'help' }}
               >
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l1.9 5.8L20 9.7l-5 4 1.6 6.3L12 16.6 7.4 20l1.6-6.3-5-4 6.1-1.9z" /></svg>
-                AI/ML-graded inventory
+                AI Graded Inventory
               </span>
             </div>
 

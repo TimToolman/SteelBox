@@ -748,9 +748,10 @@ function PhotosModal({ container, onClose, onChanged }: {
 
 // ── User Add/Edit Modal (RBAC accounts) ────────────────────
 
-function UserModal({ target, drivers, onClose, onSaved }: {
+function UserModal({ target, drivers, sellerId, onClose, onSaved }: {
   target: AuthUser | 'new' | null
   drivers: Driver[]
+  sellerId?: string   // tenant scope: new accounts are created inside this seller
   onClose: () => void
   onSaved: (msg: string) => void
 }) {
@@ -775,7 +776,7 @@ function UserModal({ target, drivers, onClose, onSaved }: {
     setError('')
     try {
       if (isNew) {
-        await usersApi.create({ name: form.name, email: form.email, role: form.role, phone: form.phone, driverId: form.role === 'driver' ? form.driverId : '', password: form.password })
+        await usersApi.create({ name: form.name, email: form.email, role: form.role, phone: form.phone, driverId: form.role === 'driver' ? form.driverId : '', password: form.password, ...(sellerId && form.role === 'admin' ? { sellerId } : {}) } as Parameters<typeof usersApi.create>[0])
         onSaved(`Account created for ${form.email} (${form.role})`)
       } else {
         await usersApi.update((target as AuthUser).id, {
@@ -919,22 +920,23 @@ function CustomBuildModal({ target, onClose, onSaved }: {
 
 // ── Depot Add/Edit Modal ───────────────────────────────────
 
-function DepotModal({ target, sellers, onClose, onSaved }: { target: Depot | 'new' | null; sellers: Seller[]; onClose: () => void; onSaved: (msg: string) => void }) {
-  const [form, setForm] = useState({ name: '', code: '', address: '', attendantName: '', attendantCell: '', sellerId: 'sel_mvp' })
+function DepotModal({ target, sellers, isGlobal, onClose, onSaved }: { target: Depot | 'new' | null; sellers: Seller[]; isGlobal?: boolean; onClose: () => void; onSaved: (msg: string) => void }) {
+  const [form, setForm] = useState({ name: '', code: '', address: '', attendantName: '', attendantCell: '', sellerId: 'sel_mvp', zip: '', serviceRadiusMiles: '150' })
   const [saving, setSaving] = useState(false)
   const isNew = target === 'new'
 
   React.useEffect(() => {
-    if (target && target !== 'new') setForm({ name: target.name, code: target.code || '', address: target.address, attendantName: target.attendantName, attendantCell: target.attendantCell, sellerId: target.sellerId || 'sel_mvp' })
-    else if (target === 'new') setForm({ name: '', code: '', address: '', attendantName: '', attendantCell: '', sellerId: sellers[0]?.id || 'sel_mvp' })
+    if (target && target !== 'new') setForm({ name: target.name, code: target.code || '', address: target.address, attendantName: target.attendantName, attendantCell: target.attendantCell, sellerId: target.sellerId || 'sel_mvp', zip: target.zip || '', serviceRadiusMiles: String(target.serviceRadiusMiles || 150) })
+    else if (target === 'new') setForm({ name: '', code: '', address: '', attendantName: '', attendantCell: '', sellerId: sellers[0]?.id || 'sel_mvp', zip: '', serviceRadiusMiles: '150' })
   }, [target])
 
   const handle = async () => {
     if (saving || !form.name) return
     setSaving(true)
     try {
-      if (isNew) { const d = await depotsApi.create(form); onSaved(`${d.name} added`) }
-      else if (target) { const d = await depotsApi.update(target.id, form); onSaved(`${d.name} updated`) }
+      const payload = { ...form, serviceRadiusMiles: Number(form.serviceRadiusMiles) || 150 }
+      if (isNew) { const d = await depotsApi.create(payload); onSaved(`${d.name} added`) }
+      else if (target) { const d = await depotsApi.update(target.id, payload); onSaved(`${d.name} updated`) }
       onClose()
     } catch (e) { onSaved(`Failed to save depot — ${e instanceof Error ? e.message : 'try again'}`) }
     finally { setSaving(false) }
@@ -961,6 +963,16 @@ function DepotModal({ target, sellers, onClose, onSaved }: { target: Depot | 'ne
       {fld('Physical address', 'address', '4200 Chef Menteur Hwy, New Orleans, LA 70126')}
       {fld('Lot attendant', 'attendantName', 'Marcus Boudreaux')}
       {fld('Attendant cell', 'attendantCell', '(504) 555-0142')}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+        <div style={{ flex: 1 }}>
+          <label style={lbl}>Yard ZIP <span style={{ textTransform: 'none', fontWeight: 400, color: 'var(--ink3)' }}>· anchors the geo-fence</span></label>
+          <input value={form.zip} placeholder="70126" inputMode="numeric" maxLength={5} onChange={e => setForm(p => ({ ...p, zip: e.target.value.replace(/\D/g, '').slice(0, 5) }))} style={{ ...inp, fontFamily: 'var(--mono)' }} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={lbl}>Service radius (mi) <span style={{ textTransform: 'none', fontWeight: 400, color: 'var(--ink3)' }}>· set by Global admin</span></label>
+          <input value={form.serviceRadiusMiles} disabled={!isGlobal} inputMode="numeric" onChange={e => setForm(p => ({ ...p, serviceRadiusMiles: e.target.value.replace(/\D/g, '').slice(0, 4) }))} style={{ ...inp, fontFamily: 'var(--mono)', opacity: isGlobal ? 1 : 0.6, cursor: isGlobal ? 'text' : 'not-allowed' }} title={isGlobal ? '' : "Only the Nationwide (Global) admin can change a service radius"} />
+        </div>
+      </div>
       <div style={{ marginBottom: '12px' }}>
         <label style={lbl}>Owned &amp; serviced by <span style={{ textTransform: 'none', fontWeight: 400, color: 'var(--ink3)' }}>· this seller's inventory, drivers &amp; terms apply to every unit here</span></label>
         <select value={form.sellerId} onChange={e => setForm(p => ({ ...p, sellerId: e.target.value }))} style={{ ...inp, cursor: 'pointer' }}>
@@ -1515,7 +1527,7 @@ export default function AdminPage() {
   useEffect(() => { refetchBuilds().catch(() => {}) }, [refetchBuilds])
   useLive(['custombuilds'], () => refetchBuilds().catch(() => {}))
   // RBAC accounts (users.csv) + sent email/SMS log (outbox.csv)
-  const [userList, setUserList] = useState<AuthUser[]>([])
+  const [userListAll, setUserList] = useState<AuthUser[]>([])
   const [editUser, setEditUser] = useState<AuthUser | 'new' | null>(null)
   const refetchUsers = useCallback(() => usersApi.list().then(setUserList), [])
   useEffect(() => { refetchUsers().catch(() => {}) }, [refetchUsers])
@@ -1525,19 +1537,66 @@ export default function AdminPage() {
   useEffect(() => { refetchOutbox().catch(() => {}) }, [refetchOutbox])
   useLive(['outbox'], () => refetchOutbox().catch(() => {}))
   // Dispatch inbox — all internal messages (driver ⇄ admin ⇄ customer threads)
-  const [msgList, setMsgList] = useState<Message[]>([])
+  const [msgListAll, setMsgList] = useState<Message[]>([])
   const refetchMsgs = useCallback(() => messagesApi.list().then(setMsgList), [])
   useEffect(() => { refetchMsgs().catch(() => {}) }, [refetchMsgs])
   useLive(['messages'], () => refetchMsgs().catch(() => {}))
-  const inboxUnread = msgList.filter(m => m.toRole === 'admin' && !m.read && !m.trashed).length
   const [openMsgId, setOpenMsgId] = useState<string | null>(null)
   const [replyText, setReplyText] = useState('')
   const [replySending, setReplySending] = useState(false)
   const { toast, message, open: snackOpen, close: snackClose } = useSnackbar()
 
-  const { data: containerList, refetch: refetchContainers } = useContainers()
-  const { data: orderList, refetch: refetchOrders } = useOrders()
-  const { data: driverList, refetch: refetchDrivers } = useDrivers()
+  const { data: containerListAll, refetch: refetchContainers } = useContainers()
+  const { data: orderListAll, refetch: refetchOrders } = useOrders()
+  const { data: driverListAll, refetch: refetchDrivers } = useDrivers()
+
+  const [depotListAll, setDepotList] = useState<Depot[]>([])
+  const [editDepot, setEditDepot] = useState<Depot | 'new' | null>(null)
+  // Multi-tenant sellers — the marketplace's 3rd-party fulfillment companies.
+  const [sellerList, setSellerList] = useState<Seller[]>([])
+  const [editSeller, setEditSeller] = useState<Seller | 'new' | null>(null)
+  const refetchSellers = useCallback(() => sellersApi.list().then(setSellerList).catch(() => {}), [])
+  useEffect(() => { refetchSellers() }, [refetchSellers])
+  const sellerName = (id?: string) => sellerList.find(x => x.id === id)?.name || (id ? id : '—')
+  const refetchDepots = useCallback(() => depotsApi.list().then(setDepotList), [])
+  useEffect(() => { refetchDepots().catch(() => {}) }, [refetchDepots])
+  useLive(['depots'], () => refetchDepots().catch(() => {}))
+
+  // ── Tenant scope ──────────────────────────────────────────
+  // The admin is hierarchical: "Global" is the Nationwide SteelBox home
+  // office (every seller's data, for helping tenants); picking a seller
+  // scopes the ENTIRE portal — dashboard, orders, inventory, schedule,
+  // activity, inbox, drivers, customers, users, depots — to that tenant.
+  // Every view below reads the scoped lists, so tenancy is enforced in one
+  // place. Staff accounts with users.sellerId are locked to their tenant
+  // (the API additionally filters their orders/drivers server-side).
+  const lockedSellerId = adminUser?.sellerId || ''
+  const [scopeSel, setScopeSel] = useState<string>('global')
+  const scope = lockedSellerId || scopeSel
+  const inScope = (sellerId?: string) => scope === 'global' || (sellerId || 'sel_mvp') === scope
+  const scopeSeller = sellerList.find(x => x.id === scope)
+  // The Sellers directory is platform-level — leave it when entering a tenant.
+  useEffect(() => { if (scope !== 'global' && view === 'sellers') setView('dashboard') }, [scope]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const containerList = containerListAll.filter(c => inScope(c.sellerId))
+  const orderList = orderListAll.filter(o => inScope(o.sellerId))
+  const driverList = driverListAll.filter(d => inScope(d.sellerId))
+  const depotList = depotListAll.filter(d => inScope(d.sellerId))
+  // Staff accounts scoped by sellerId; driver logins via their driver's fleet.
+  // Platform-wide staff and customer accounts stay in the Global view only.
+  const userList = userListAll.filter(u => {
+    if (scope === 'global') return true
+    if (u.sellerId) return u.sellerId === scope
+    if (u.driverId) return inScope(driverListAll.find(d => d.id === u.driverId)?.sellerId)
+    return false
+  })
+  // Driver threads follow the driver's fleet; customer ↔ office threads
+  // aren't seller-tagged, so they stay visible in every scope.
+  const msgList = msgListAll.filter(m => {
+    if (scope === 'global' || !m.toDriverId) return true
+    return inScope(driverListAll.find(d => d.id === m.toDriverId)?.sellerId)
+  })
+  const inboxUnread = msgList.filter(m => m.toRole === 'admin' && !m.read && !m.trashed).length
 
   // Only active (non-archived) drivers appear in lists and are schedulable.
   const activeDrivers = driverList.filter(d => d.active !== false)
@@ -1561,7 +1620,16 @@ export default function AdminPage() {
   const reserved = containerList.filter(c => c.status === 'sale_in_progress')
   const available = containerList.filter(c => c.status === 'available')
   // ── Combined delivery/return schedule state (shared CSV via API) ──
-  const [scheduleEvents, setScheduleEvents] = useState<SchedJob[]>([])
+  const [scheduleEventsAll, setScheduleEvents] = useState<SchedJob[]>([])
+  // Tenant scope: a job belongs to its driver's seller, or failing that the
+  // seller of the depot it touches.
+  const scheduleEvents = scheduleEventsAll.filter(j => {
+    if (scope === 'global') return true
+    const drv = driverListAll.find(d => d.id === j.driverId)
+    if (drv) return inScope(drv.sellerId)
+    const dep = depotListAll.find(d => d.name === j.origin || d.name === j.destination)
+    return dep ? inScope(dep.sellerId) : true
+  })
   // Returns its promise so explicit refresh buttons can surface failures;
   // background syncs attach a silent catch.
   const refetchSchedule = useCallback(() => scheduleApi.list().then(setScheduleEvents), [])
@@ -1635,24 +1703,26 @@ export default function AdminPage() {
   const driverHours30 = orders30.reduce((s, o) => s + (o.driverHours || 0), 0)
   const labor30 = orders30.reduce((s, o) => s + orderLabor(o), 0)
 
-  const [activityLog, setActivityLog] = useState<ActivityEvent[]>([])
+  const [activityLogAll, setActivityLog] = useState<ActivityEvent[]>([])
+  // Tenant scope: field events follow their container's seller; untagged
+  // rows (no container reference) stay Global-only noise-free.
+  const activityLog = activityLogAll.filter(e => {
+    if (scope === 'global') return true
+    const c = containerListAll.find(x => x.id === e.containerId || x.sku === e.sku)
+    return c ? inScope(c.sellerId) : false
+  })
   const refetchActivity = useCallback(() => activityApi.list().then(setActivityLog), [])
   useEffect(() => { refetchActivity().catch(() => {}) }, [refetchActivity])
   // Live feed of field events (arrivals, photo sessions, deliveries).
   useLive(['activity'], () => refetchActivity().catch(() => {}))
-  const [depotList, setDepotList] = useState<Depot[]>([])
-  const [editDepot, setEditDepot] = useState<Depot | 'new' | null>(null)
-  // Multi-tenant sellers — the marketplace's 3rd-party fulfillment companies.
-  const [sellerList, setSellerList] = useState<Seller[]>([])
-  const [editSeller, setEditSeller] = useState<Seller | 'new' | null>(null)
-  const refetchSellers = useCallback(() => sellersApi.list().then(setSellerList).catch(() => {}), [])
-  useEffect(() => { refetchSellers() }, [refetchSellers])
-  const sellerName = (id?: string) => sellerList.find(x => x.id === id)?.name || (id ? id : '—')
-  const refetchDepots = useCallback(() => depotsApi.list().then(setDepotList), [])
-  useEffect(() => { refetchDepots().catch(() => {}) }, [refetchDepots])
-  useLive(['depots'], () => refetchDepots().catch(() => {}))
   // ── Customers (master list, CRUD) ──
-  const [customerList, setCustomerList] = useState<Customer[]>([])
+  const [customerListAll, setCustomerList] = useState<Customer[]>([])
+  // Tenant scope: a customer belongs to every seller they've ordered from.
+  const customerList = customerListAll.filter(c => {
+    if (scope === 'global') return true
+    const email = (c.email || '').toLowerCase()
+    return orderListAll.some(o => inScope(o.sellerId) && ((o.customerId && o.customerId === c.id) || (o.customerEmail || '').toLowerCase() === email))
+  })
   const [editCustomer, setEditCustomer] = useState<Customer | 'new' | null>(null)
   const refetchCustomers = useCallback(() => customersApi.list().then(setCustomerList), [])
   useEffect(() => { refetchCustomers().catch(() => {}) }, [refetchCustomers])
@@ -1981,8 +2051,36 @@ export default function AdminPage() {
           <div style={{ width: '32px', height: '32px', borderRadius: 'var(--r8)', background: 'var(--primary)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><rect x="1" y="6" width="22" height="14" rx="2" /><line x1="6" y1="6" x2="6" y2="20" /><line x1="11" y1="6" x2="11" y2="20" /><line x1="16" y1="6" x2="16" y2="20" /></svg>
           </div>
-          <span style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.3px', color: '#2B7FD4' }}>MVP&nbsp;<span style={{ color: 'var(--cta)' }}>Container</span></span>
+          <span style={{ fontSize: '15px', fontWeight: 700, letterSpacing: '-0.3px', color: '#2B7FD4', whiteSpace: 'nowrap' }}>Nationwide&nbsp;<span style={{ color: 'var(--cta)' }}>SteelBox</span></span>
           <span style={{ marginLeft: 'auto', background: 'var(--primary-cont)', color: 'var(--primary)', borderRadius: 'var(--r4)', padding: '2px 8px', fontSize: '9px', fontWeight: 700, letterSpacing: '0.8px' }}>ADMIN</span>
+        </div>
+
+        {/* ── Tenant switcher — the admin hierarchy's top node ──
+            Global = Nationwide home office over every seller; picking a
+            seller scopes the whole portal to that tenant. Seller-scoped
+            staff accounts are pinned to their own company. */}
+        <div style={{ padding: '12px 14px 4px', flexShrink: 0 }}>
+          <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '5px' }}>Managing</div>
+          {lockedSellerId ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 11px', borderRadius: 'var(--r8)', border: '1.5px solid var(--div)', background: 'var(--surf1)' }}>
+              <span style={{ width: '16px', height: '16px', borderRadius: '4px', flexShrink: 0, background: `linear-gradient(135deg, ${scopeSeller?.brandPrimary || 'var(--primary)'} 50%, ${scopeSeller?.brandAccent || 'var(--cta)'} 50%)` }} />
+              <span style={{ fontSize: '12px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sellerName(lockedSellerId)}</span>
+            </div>
+          ) : (
+            <select
+              value={scope}
+              onChange={e => setScopeSel(e.target.value)}
+              style={{ width: '100%', padding: '9px 10px', borderRadius: 'var(--r8)', fontSize: '12px', fontWeight: 700, cursor: 'pointer', outline: 'none', fontFamily: 'var(--sans)', border: `1.5px solid ${scope === 'global' ? 'var(--div)' : (scopeSeller?.brandPrimary || 'var(--primary)')}`, background: 'var(--surf-w)', color: scope === 'global' ? 'var(--ink)' : (scopeSeller?.brandPrimary || 'var(--primary)') }}
+            >
+              <option value="global">🌐 Global — all sellers</option>
+              {sellerList.map(sl => <option key={sl.id} value={sl.id}>{sl.name}</option>)}
+            </select>
+          )}
+          {scope !== 'global' && !lockedSellerId && (
+            <div style={{ fontSize: '10px', color: 'var(--ink3)', marginTop: '5px', lineHeight: 1.4 }}>
+              Viewing {sellerName(scope)}'s tenant — everything below is their data only.
+            </div>
+          )}
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '10px 0' }}>
@@ -2000,7 +2098,7 @@ export default function AdminPage() {
           <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', padding: '16px 18px 3px' }}>System</div>
           <NavItem active={view === 'notifications'} onClick={() => go('notifications')} label="Alerts" badge={reserved.length + orderList.filter(o => !o.driverId && o.status !== 'delivered').length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M4 8A6 6 0 0 1 16 8L16 12L18 14L2 14L4 12Z" /><path d="M8 16a2 2 0 004 0" /></svg>} />
           <NavItem active={view === 'depots'} onClick={() => go('depots')} label="Depots" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2a5.5 5.5 0 0 0-5.5 5.5c0 4 5.5 10 5.5 10s5.5-6 5.5-10A5.5 5.5 0 0 0 10 2z" /><circle cx="10" cy="7.5" r="1.8" /></svg>} />
-          <NavItem active={view === 'sellers'} onClick={() => go('sellers')} label="Sellers" badge={sellerList.filter(x => x.active !== false).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7l1-4h12l1 4" /><path d="M3 7h14v10H3z" /><path d="M8 11h4" /></svg>} />
+          {scope === 'global' && <NavItem active={view === 'sellers'} onClick={() => go('sellers')} label="Sellers" badge={sellerList.filter(x => x.active !== false).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7l1-4h12l1 4" /><path d="M3 7h14v10H3z" /><path d="M8 11h4" /></svg>} />}
           <NavItem active={view === 'builds'} onClick={() => go('builds')} label="Custom Builds" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5.5l2 2L7 15H5v-2z" /><path d="M11 7l2 2" /><rect x="2" y="4" width="16" height="13" rx="1.5" /></svg>} />
         </div>
 
@@ -2032,7 +2130,7 @@ export default function AdminPage() {
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: '16px', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{VIEW_TITLES[view]}</div>
             <div style={{ fontSize: '11px', color: 'var(--ink3)', fontFamily: 'var(--mono)' }}>
-              {view === 'dashboard' ? `Overview · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : `Nationwide SteelBox · Marketplace Admin`}
+              {view === 'dashboard' ? `Overview · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : scope === 'global' ? `Nationwide SteelBox · Global` : `${sellerName(scope)} · Tenant admin`}
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto', alignItems: 'center' }}>
@@ -3101,6 +3199,10 @@ export default function AdminPage() {
                         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="var(--ink3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M3 7l1-4h12l1 4" /><path d="M3 7h14v10H3z" /></svg>
                         <span>Seller: <b>{sellerName(d.sellerId || 'sel_mvp')}</b></span>
                       </div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="var(--ink3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="10" cy="10" r="7.5" /><circle cx="10" cy="10" r="2.5" /></svg>
+                        <span>Services <b>{d.serviceRadiusMiles || 150} mi</b> around {d.zip || 'no ZIP set'}</span>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -3333,6 +3435,7 @@ export default function AdminPage() {
       <UserModal
         target={editUser}
         drivers={activeDrivers}
+        sellerId={scope === 'global' ? undefined : scope}
         onClose={() => setEditUser(null)}
         onSaved={(msg) => { toast(msg); refetchUsers().catch(() => {}) }}
       />
@@ -3343,7 +3446,8 @@ export default function AdminPage() {
       />
       <DepotModal
         target={editDepot}
-        sellers={sellerList}
+        isGlobal={scope === 'global'}
+        sellers={scope === 'global' ? sellerList : sellerList.filter(x => x.id === scope)}
         onClose={() => setEditDepot(null)}
         onSaved={(msg) => { toast(msg); refetchDepots().catch(() => {}) }}
       />

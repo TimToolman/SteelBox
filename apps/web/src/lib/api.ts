@@ -252,6 +252,7 @@ export interface Container {
   createdAt: string
   customEta: string          // custom builds: promised completion date (YYYY-MM-DD)
   customBuildName: string    // custom builds: which catalog product is being fabricated
+  aiGraded?: boolean         // grade assigned by the AI/ML imaging pipeline (set by the field app)
   // Multi-tenant: derived server-side from the unit's depot ownership.
   sellerId: string
   sellerName: string
@@ -637,6 +638,8 @@ export interface Depot {
   attendantCell: string
   code: string        // SKU prefix, e.g. NOLA, BR
   sellerId?: string   // multi-tenant: which seller owns/services this yard
+  zip?: string                // yard location (drives the geo-fence)
+  serviceRadiusMiles?: number // geo-fence radius, set by the global admin
 }
 
 export const depots = {

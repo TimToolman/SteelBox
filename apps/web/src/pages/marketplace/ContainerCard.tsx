@@ -64,6 +64,14 @@ export function ContainerCard({ container, onSelect, mode = 'buy', inCart = fals
         )}
         {/* Grade badge */}
         <span style={{ position: 'absolute', top: '8px', right: '8px', background: gradeMeta.color, color: '#fff', borderRadius: 'var(--r4)', padding: '3px 8px', fontSize: '10px', fontWeight: 700 }}>{grade}</span>
+        {/* AI-graded chip — only on units whose grade came from the AI/ML
+            imaging pipeline (flag set by the field app at documentation time) */}
+        {container.aiGraded && (
+          <span title="Condition grade scored by AI/ML imaging from the 8-photo field inspection" style={{ position: 'absolute', bottom: '8px', left: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'linear-gradient(135deg,#4338CA,#7C3AED)', color: '#fff', borderRadius: 'var(--pill)', padding: '3px 9px', fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px', boxShadow: '0 2px 6px rgba(67,56,202,.4)' }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff"><path d="M12 2l1.9 5.8L20 9.7l-5 4 1.6 6.3L12 16.6 7.4 20l1.6-6.3-5-4 6.1-1.9z" /></svg>
+            AI GRADED
+          </span>
+        )}
         {/* Draft badge — admin-only preview of unlisted units */}
         {isDraft && (
           <span style={{ position: 'absolute', top: '8px', left: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'var(--amber, #B45309)', color: '#fff', borderRadius: 'var(--r4)', padding: '3px 8px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase' }}>

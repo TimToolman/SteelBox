@@ -86,7 +86,15 @@ export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onN
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'var(--surf1)', borderRadius: 'var(--r12)', padding: '13px 14px', marginBottom: '16px', border: '1px solid var(--div)' }}>
             <div style={{ width: '48px', height: '48px', borderRadius: 'var(--r12)', background: gradeMeta.color, display: 'grid', placeItems: 'center', fontSize: '24px', fontWeight: 700, color: '#fff', flexShrink: 0 }}>{grade}</div>
             <div>
-              <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--ink3)', fontWeight: 700 }}>Condition Grade</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--ink3)', fontWeight: 700 }}>Condition Grade</span>
+                {container.aiGraded && (
+                  <span title="Condition grade scored by AI/ML imaging from the 8-photo field inspection" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'linear-gradient(135deg,#4338CA,#7C3AED)', color: '#fff', borderRadius: 'var(--pill)', padding: '2px 8px', fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px' }}>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="#fff"><path d="M12 2l1.9 5.8L20 9.7l-5 4 1.6 6.3L12 16.6 7.4 20l1.6-6.3-5-4 6.1-1.9z" /></svg>
+                    AI GRADED
+                  </span>
+                )}
+              </div>
               <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px' }}>{condOf(container) === 'new' ? 'New' : 'Used'} · Grade {grade} — {gradeMeta.label}{container.color ? ` · ${container.color}` : ''}</div>
               <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '2px', lineHeight: 1.5 }}>{gradeMeta.desc}</div>
             </div>

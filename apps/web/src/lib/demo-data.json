@@ -26,6 +26,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -55,6 +56,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -84,6 +86,7 @@
    "conditionScore": 4,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -113,6 +116,7 @@
    "conditionScore": 3,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -142,6 +146,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -171,6 +176,7 @@
    "conditionScore": 4,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -200,6 +206,7 @@
    "conditionScore": 4,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -229,6 +236,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -258,6 +266,7 @@
    "conditionScore": 0,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -287,6 +296,7 @@
    "conditionScore": 4,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -316,6 +326,7 @@
    "conditionScore": 3,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -345,6 +356,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -374,6 +386,7 @@
    "conditionScore": 4,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -403,6 +416,7 @@
    "conditionScore": 0,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -432,6 +446,7 @@
    "conditionScore": 0,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -461,6 +476,7 @@
    "conditionScore": 0,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -490,6 +506,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -519,6 +536,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -548,6 +566,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -577,6 +596,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -606,6 +626,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -635,6 +656,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -664,6 +686,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -693,6 +716,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -722,6 +746,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -751,6 +776,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -780,6 +806,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -809,6 +836,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -838,6 +866,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -867,6 +896,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -896,6 +926,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -925,6 +956,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -954,6 +986,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -983,6 +1016,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1012,6 +1046,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1041,6 +1076,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1070,6 +1106,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1099,6 +1136,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1128,6 +1166,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1157,6 +1196,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1186,6 +1226,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1215,6 +1256,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1244,6 +1286,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1273,6 +1316,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1302,6 +1346,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1331,6 +1376,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1360,6 +1406,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1389,6 +1436,7 @@
    "conditionScore": 3,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1418,6 +1466,7 @@
    "conditionScore": 3,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1447,6 +1496,7 @@
    "conditionScore": 3,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1476,6 +1526,7 @@
    "conditionScore": 3,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1505,6 +1556,7 @@
    "conditionScore": 3,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1534,6 +1586,7 @@
    "conditionScore": 3,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1563,6 +1616,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1592,6 +1646,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1621,6 +1676,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1650,6 +1706,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1679,6 +1736,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1708,6 +1766,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1737,6 +1796,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1766,6 +1826,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1795,6 +1856,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1824,6 +1886,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1853,6 +1916,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1882,6 +1946,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1911,6 +1976,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1940,6 +2006,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1969,6 +2036,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -1998,6 +2066,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -2027,6 +2096,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -2056,6 +2126,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -2085,6 +2156,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -2114,6 +2186,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -2143,6 +2216,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -2172,6 +2246,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -2201,6 +2276,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -2230,6 +2306,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -2259,6 +2336,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -2288,6 +2366,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -2317,6 +2396,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_mvp",
    "sellerName": "MVP Container"
   },
@@ -2355,6 +2435,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2367,7 +2448,7 @@
    "grade": "A",
    "condition": "new",
    "color": "Beige",
-   "status": "available",
+   "status": "sold",
    "buyPrice": 2525,
    "rentMonthly": 95,
    "photos": [
@@ -2393,6 +2474,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2405,7 +2487,7 @@
    "grade": "A",
    "condition": "new",
    "color": "Beige",
-   "status": "available",
+   "status": "sold",
    "buyPrice": 2525,
    "rentMonthly": 95,
    "photos": [
@@ -2431,6 +2513,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2460,6 +2543,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2489,6 +2573,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2518,6 +2603,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2547,6 +2633,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2576,6 +2663,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2605,6 +2693,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2634,6 +2723,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2663,6 +2753,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2692,6 +2783,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2721,6 +2813,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2750,6 +2843,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2779,6 +2873,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2808,6 +2903,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2837,6 +2933,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2866,6 +2963,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2895,6 +2993,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2924,6 +3023,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2953,6 +3053,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -2982,6 +3083,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -3011,6 +3113,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -3040,6 +3143,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -3069,6 +3173,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -3098,6 +3203,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": false,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   },
@@ -3127,6 +3233,7 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
+   "aiGraded": true,
    "sellerId": "sel_demo",
    "sellerName": "Demo Container Corp"
   }
@@ -3136,37 +3243,55 @@
    "id": "dep_nola",
    "name": "NOLA Depot",
    "destination": "New Orleans, LA",
-   "code": "NOLA"
+   "code": "NOLA",
+   "sellerId": "sel_mvp",
+   "zip": "70126",
+   "serviceRadiusMiles": 150
   },
   {
    "id": "dep_br",
    "name": "Baton Rouge Depot",
    "destination": "Baton Rouge, LA",
-   "code": "BR"
+   "code": "BR",
+   "sellerId": "sel_mvp",
+   "zip": "70815",
+   "serviceRadiusMiles": 150
   },
   {
    "id": "dep_hou",
    "name": "Houston Depot",
    "destination": "Houston, TX",
-   "code": "HOU"
+   "code": "HOU",
+   "sellerId": "sel_mvp",
+   "zip": "77029",
+   "serviceRadiusMiles": 150
   },
   {
    "id": "dep_fc",
    "name": "FIRST COAST",
    "destination": "Atlanta, GA",
-   "code": "FC"
+   "code": "FC",
+   "sellerId": "sel_mvp",
+   "zip": "30336",
+   "serviceRadiusMiles": 150
   },
   {
    "id": "dep_iti",
    "name": "ITI Intermodal of Georgia, LLC",
    "destination": "Atlanta, GA",
-   "code": "ITI"
+   "code": "ITI",
+   "sellerId": "sel_mvp",
+   "zip": "30354",
+   "serviceRadiusMiles": 150
   },
   {
    "id": "dep_cdi",
    "name": "Container Depot Industries, Inc.",
    "destination": "Baltimore, MD",
-   "code": "CDI"
+   "code": "CDI",
+   "sellerId": "sel_demo",
+   "zip": "21224",
+   "serviceRadiusMiles": 150
   }
  ],
  "customBuilds": [

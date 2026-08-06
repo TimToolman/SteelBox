@@ -94,10 +94,10 @@ const SCHEMAS = {
     // customEta/customBuildName only apply to custom-build orders
     // (status custom_in_progress): the promised completion date + which
     // catalog build the unit is being fabricated as.
-    headers: ['id','sku','guid','stockNumber','size','grade','condition','color','status','buyPrice','rentMonthly','photos','photoCount','has360','depotLocation','bayNumber','inspectorName','inspectedAt','deliveryIncluded','listingType','createdAt','purchaseCost','conditionScore','customEta','customBuildName'],
+    headers: ['id','sku','guid','stockNumber','size','grade','condition','color','status','buyPrice','rentMonthly','photos','photoCount','has360','depotLocation','bayNumber','inspectorName','inspectedAt','deliveryIncluded','listingType','createdAt','purchaseCost','conditionScore','customEta','customBuildName','aiGraded'],
     types: {
       buyPrice: 'number', rentMonthly: 'numberOrNull', photoCount: 'number', purchaseCost: 'number', conditionScore: 'number',
-      has360: 'boolean', deliveryIncluded: 'boolean',
+      has360: 'boolean', deliveryIncluded: 'boolean', aiGraded: 'boolean',
       photos: 'array', inspectedAt: 'stringOrNull',
     },
   },
@@ -132,8 +132,8 @@ const SCHEMAS = {
   // Pickup depots — physical yards with a lot attendant contact.
   depots: {
     file: 'depots.csv',
-    headers: ['id','name','destination','address','attendantName','attendantCell','code','sellerId'],
-    types: {},
+    headers: ['id','name','destination','address','attendantName','attendantCell','code','sellerId','zip','serviceRadiusMiles'],
+    types: { serviceRadiusMiles: 'number' },
   },
   // Pickup/delivery/return/transfer schedule — shared by admin Schedule + field app.
   schedule: {
@@ -469,8 +469,13 @@ function ensureSeedSellers() {
   }
   const depots = readTable('depots')
   let changed = false
+  // Yard coordinates come from the depot's ZIP; radius is the geo-fence the
+  // global admin grants each yard (customer ZIPs inside it are serviced).
+  const DEPOT_ZIPS = { dep_nola: '70126', dep_br: '70815', dep_hou: '77029', dep_fc: '30336', dep_iti: '30354', dep_cdi: '21224' }
   for (const d of depots) {
     if (!d.sellerId) { d.sellerId = d.id === 'dep_cdi' ? 'sel_demo' : 'sel_mvp'; changed = true }
+    if (!d.zip && DEPOT_ZIPS[d.id]) { d.zip = DEPOT_ZIPS[d.id]; changed = true }
+    if (!d.serviceRadiusMiles) { d.serviceRadiusMiles = 150; changed = true }
   }
   if (changed) writeTable('depots', depots)
   const drivers = readTable('drivers')
@@ -479,6 +484,18 @@ function ensureSeedSellers() {
     if (!dr.sellerId) { dr.sellerId = 'sel_mvp'; changed = true }
   }
   if (changed) writeTable('drivers', drivers)
+  // Demo seed: mark ~2/3 of units AI-graded (deterministic by SKU sequence)
+  // so the marketplace shows the mix. Runs once; after that the field app is
+  // the source of truth for the flag.
+  const units = readTable('containers')
+  if (!units.some(c => c.aiGraded === true)) {
+    for (const c of units) {
+      const seq = Number(String(c.sku).slice(-4)) || 0
+      c.aiGraded = seq % 3 !== 0
+    }
+    writeTable('containers', units)
+    console.log(`Seeded aiGraded on ${units.filter(c => c.aiGraded).length}/${units.length} units`)
+  }
 }
 
 // A container's seller is derived from its depot's owner — so when a depot
@@ -998,6 +1015,9 @@ async function handleRequest(req, res) {
           inspectorName: body.inspectorName || '',
           inspectedAt: null,
           deliveryIncluded: body.deliveryIncluded ?? true,
+          // Whether the grade came from the AI/ML imaging pipeline — set by the
+          // field app at documentation time.
+          aiGraded: body.aiGraded ?? false,
           createdAt: new Date().toISOString(),
         })
         containers.push(record)
@@ -1765,7 +1785,8 @@ async function handleRequest(req, res) {
         // Staff see the full record; shoppers get a sanitized list (no yard
         // address or attendant contact) so the marketplace can filter by depot.
         if (hasRole('admin', 'driver')) return send(res, 200, depots)
-        return send(res, 200, depots.map(d => ({ id: d.id, name: d.name, destination: d.destination || '', code: d.code })))
+        // sellerId included so the marketplace can say who services an area.
+        return send(res, 200, depots.map(d => ({ id: d.id, name: d.name, destination: d.destination || '', code: d.code, sellerId: d.sellerId || 'sel_mvp', zip: d.zip || '', serviceRadiusMiles: d.serviceRadiusMiles || 150 })))
       }
 
       if (seg.length === 1 && method === 'POST') {
@@ -1784,6 +1805,9 @@ async function handleRequest(req, res) {
           code: (body.code || depotCode(body.name)).toUpperCase(),
           // Ownership: which seller services this yard (multi-tenant).
           sellerId: body.sellerId || 'sel_mvp',
+          // Geo-fence: yard location (ZIP) + service radius in miles.
+          zip: String(body.zip || '').replace(/\D/g, '').slice(0, 5),
+          serviceRadiusMiles: Number(body.serviceRadiusMiles) || 150,
         }
         depots.push(record)
         writeTable('depots', depots)
