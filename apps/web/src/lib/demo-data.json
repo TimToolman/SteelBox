@@ -12,7 +12,9 @@
    "status": "available",
    "buyPrice": 3850,
    "rentMonthly": 566,
-   "photos": [],
+   "photos": [
+    "/photos/gen/NOLA-20-0001.svg"
+   ],
    "photoCount": 8,
    "has360": true,
    "depotLocation": "NOLA Depot",
@@ -42,7 +44,9 @@
    "status": "assigned",
    "buyPrice": 4850,
    "rentMonthly": 180,
-   "photos": [],
+   "photos": [
+    "/photos/gen/NOLA-20-0002.svg"
+   ],
    "photoCount": 8,
    "has360": true,
    "depotLocation": "NOLA Depot",
@@ -66,13 +70,15 @@
    "guid": "7f3a1c20-0038-4a1b-9c11-000000000038",
    "stockNumber": "STK-0038",
    "size": "40ft-hc",
-   "grade": "B",
+   "grade": "R",
    "condition": "used",
-   "color": "",
+   "color": "Green",
    "status": "in_transit",
    "buyPrice": 5600,
    "rentMonthly": 240,
-   "photos": [],
+   "photos": [
+    "/photos/gen/HOU-40-0001.svg"
+   ],
    "photoCount": 8,
    "has360": false,
    "depotLocation": "Houston Depot",
@@ -96,13 +102,15 @@
    "guid": "7f3a1c20-0029-4a1b-9c11-000000000029",
    "stockNumber": "STK-0029",
    "size": "20ft-std",
-   "grade": "C",
+   "grade": "B",
    "condition": "used",
-   "color": "",
+   "color": "Tan",
    "status": "delivered",
    "buyPrice": 2950,
    "rentMonthly": 110,
-   "photos": [],
+   "photos": [
+    "/photos/gen/HOU-20-0001.svg"
+   ],
    "photoCount": 8,
    "has360": false,
    "depotLocation": "Houston Depot",
@@ -132,7 +140,9 @@
    "status": "delivered",
    "buyPrice": 3990,
    "rentMonthly": 150,
-   "photos": [],
+   "photos": [
+    "/photos/gen/NOLA-20-0003.svg"
+   ],
    "photoCount": 8,
    "has360": true,
    "depotLocation": "NOLA Depot",
@@ -156,13 +166,15 @@
    "guid": "7f3a1c20-0044-4a1b-9c11-000000000044",
    "stockNumber": "STK-0044",
    "size": "40ft-std",
-   "grade": "B",
+   "grade": "A",
    "condition": "used",
-   "color": "",
+   "color": "Green",
    "status": "draft",
    "buyPrice": 5200,
    "rentMonthly": 225,
-   "photos": [],
+   "photos": [
+    "/photos/gen/BR-40-0001.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Baton Rouge Depot",
@@ -186,13 +198,15 @@
    "guid": "7f3a1c20-0067-4a1b-9c11-000000000067",
    "stockNumber": "STK-0067",
    "size": "20ft-std",
-   "grade": "B",
+   "grade": "X",
    "condition": "used",
-   "color": "",
+   "color": "Green",
    "status": "assigned",
    "buyPrice": 3400,
    "rentMonthly": null,
-   "photos": [],
+   "photos": [
+    "/photos/gen/NOLA-20-0004.svg"
+   ],
    "photoCount": 8,
    "has360": true,
    "depotLocation": "NOLA Depot",
@@ -222,7 +236,9 @@
    "status": "assigned",
    "buyPrice": 3990,
    "rentMonthly": null,
-   "photos": [],
+   "photos": [
+    "/photos/gen/NOLA-20-0005.svg"
+   ],
    "photoCount": 8,
    "has360": true,
    "depotLocation": "NOLA Depot",
@@ -246,13 +262,15 @@
    "guid": "7f3a1c20-0070-4a1b-9c11-000000000070",
    "stockNumber": "STK-0070",
    "size": "20ft-std",
-   "grade": "B",
+   "grade": "A",
    "condition": "used",
-   "color": "",
+   "color": "Beige",
    "status": "draft",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/NOLA-20-0006.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "NOLA Depot",
@@ -278,11 +296,13 @@
    "size": "20ft-hc",
    "grade": "B",
    "condition": "used",
-   "color": "",
+   "color": "Blue",
    "status": "delivered",
    "buyPrice": 4600,
    "rentMonthly": 175,
-   "photos": [],
+   "photos": [
+    "/photos/gen/NOLA-20-0007.svg"
+   ],
    "photoCount": 8,
    "has360": false,
    "depotLocation": "NOLA Depot",
@@ -308,11 +328,13 @@
    "size": "20ft-std",
    "grade": "C",
    "condition": "used",
-   "color": "",
+   "color": "Tan",
    "status": "delivered",
    "buyPrice": 2900,
    "rentMonthly": 110,
-   "photos": [],
+   "photos": [
+    "/photos/gen/HOU-20-0002.svg"
+   ],
    "photoCount": 8,
    "has360": false,
    "depotLocation": "Houston Depot",
@@ -342,7 +364,9 @@
    "status": "available",
    "buyPrice": 6400,
    "rentMonthly": 260,
-   "photos": [],
+   "photos": [
+    "/photos/gen/NOLA-40-0001.svg"
+   ],
    "photoCount": 8,
    "has360": true,
    "depotLocation": "NOLA Depot",
@@ -366,13 +390,15 @@
    "guid": "7f3a1c20-0074-4a1b-9c11-000000000074",
    "stockNumber": "STK-0074",
    "size": "20ft-std",
-   "grade": "B",
+   "grade": "A",
    "condition": "used",
-   "color": "",
+   "color": "Blue",
    "status": "available",
    "buyPrice": 3548,
    "rentMonthly": null,
-   "photos": [],
+   "photos": [
+    "/photos/gen/BR-20-0001.svg"
+   ],
    "photoCount": 8,
    "has360": false,
    "depotLocation": "Baton Rouge Depot",
@@ -402,7 +428,9 @@
    "status": "available",
    "buyPrice": 3650,
    "rentMonthly": null,
-   "photos": [],
+   "photos": [
+    "/photos/gen/NOLA-20-0008.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "NOLA Depot",
@@ -426,13 +454,15 @@
    "guid": "3e446261-0495-497b-9279-0a3c96e3b73f",
    "stockNumber": "STK-0003",
    "size": "20ft-hc",
-   "grade": "B",
+   "grade": "X",
    "condition": "used",
-   "color": "",
+   "color": "Tan",
    "status": "available",
    "buyPrice": 4200,
    "rentMonthly": 165,
-   "photos": [],
+   "photos": [
+    "/photos/gen/HOU-20-0003.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Houston Depot",
@@ -457,12 +487,14 @@
    "stockNumber": "STK-0002",
    "size": "40ft-std",
    "grade": "A",
-   "condition": "new",
-   "color": "",
+   "condition": "used",
+   "color": "Red",
    "status": "available",
    "buyPrice": 5900,
    "rentMonthly": 250,
-   "photos": [],
+   "photos": [
+    "/photos/gen/BR-40-0002.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Baton Rouge Depot",
@@ -492,7 +524,9 @@
    "status": "available",
    "buyPrice": 5700,
    "rentMonthly": 215,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0001.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -518,11 +552,13 @@
    "size": "20ft-dvos",
    "grade": "A",
    "condition": "new",
-   "color": "Beige",
+   "color": "Green",
    "status": "available",
    "buyPrice": 5700,
    "rentMonthly": 215,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0002.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -552,7 +588,9 @@
    "status": "available",
    "buyPrice": 5700,
    "rentMonthly": 215,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0003.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -576,13 +614,15 @@
    "guid": "9b7e5d10-0004-4c2a-8f00-000000000004",
    "stockNumber": "STK-FC-0004",
    "size": "20ft-dvos",
-   "grade": "A",
-   "condition": "new",
-   "color": "Gray",
+   "grade": "B",
+   "condition": "used",
+   "color": "Green",
    "status": "available",
    "buyPrice": 5700,
    "rentMonthly": 215,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0004.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -612,7 +652,9 @@
    "status": "in_transit",
    "buyPrice": 4650,
    "rentMonthly": 175,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0005.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -642,7 +684,9 @@
    "status": "in_transit",
    "buyPrice": 4650,
    "rentMonthly": 175,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0006.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -672,7 +716,9 @@
    "status": "available",
    "buyPrice": 2150,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0007.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -702,7 +748,9 @@
    "status": "available",
    "buyPrice": 2150,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0008.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -732,7 +780,9 @@
    "status": "available",
    "buyPrice": 2150,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0009.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -762,7 +812,9 @@
    "status": "available",
    "buyPrice": 2150,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0010.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -788,11 +840,13 @@
    "size": "20ft-dvq",
    "grade": "A",
    "condition": "new",
-   "color": "Beige",
+   "color": "Blue",
    "status": "available",
    "buyPrice": 2150,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0011.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -822,7 +876,9 @@
    "status": "available",
    "buyPrice": 2150,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0012.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -852,7 +908,9 @@
    "status": "available",
    "buyPrice": 2150,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0013.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -876,13 +934,15 @@
    "guid": "9b7e5d10-0014-4c2a-8f00-000000000014",
    "stockNumber": "STK-FC-0014",
    "size": "20ft-dvq",
-   "grade": "A",
-   "condition": "new",
-   "color": "Beige",
+   "grade": "B",
+   "condition": "used",
+   "color": "Orange",
    "status": "available",
    "buyPrice": 2150,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0014.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -912,7 +972,9 @@
    "status": "available",
    "buyPrice": 2150,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0015.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -942,7 +1004,9 @@
    "status": "available",
    "buyPrice": 2150,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0016.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -968,11 +1032,13 @@
    "size": "20ft-dvq",
    "grade": "A",
    "condition": "new",
-   "color": "Beige",
+   "color": "Tan",
    "status": "available",
    "buyPrice": 2150,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0017.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -998,11 +1064,13 @@
    "size": "20ft-dvq",
    "grade": "A",
    "condition": "new",
-   "color": "Beige",
+   "color": "Green",
    "status": "available",
    "buyPrice": 2150,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0018.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1032,7 +1100,9 @@
    "status": "available",
    "buyPrice": 2150,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0019.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1062,7 +1132,9 @@
    "status": "in_transit",
    "buyPrice": 2150,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0020.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1092,7 +1164,9 @@
    "status": "in_transit",
    "buyPrice": 2150,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0021.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1122,7 +1196,9 @@
    "status": "in_transit",
    "buyPrice": 2150,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0022.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1152,7 +1228,9 @@
    "status": "in_transit",
    "buyPrice": 2150,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0023.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1182,7 +1260,9 @@
    "status": "in_transit",
    "buyPrice": 2150,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0024.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1208,11 +1288,13 @@
    "size": "20ft-dvq",
    "grade": "A",
    "condition": "new",
-   "color": "Gray",
+   "color": "Blue",
    "status": "in_transit",
    "buyPrice": 2200,
    "rentMonthly": 85,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0025.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1242,7 +1324,9 @@
    "status": "in_transit",
    "buyPrice": 2200,
    "rentMonthly": 85,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-20-0026.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1268,11 +1352,13 @@
    "size": "40ft-hcq",
    "grade": "A",
    "condition": "new",
-   "color": "Beige",
+   "color": "Tan",
    "status": "available",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-40-0001.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1298,11 +1384,13 @@
    "size": "40ft-hcq",
    "grade": "A",
    "condition": "new",
-   "color": "Beige",
+   "color": "Tan",
    "status": "available",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-40-0002.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1326,13 +1414,15 @@
    "guid": "9b7e5d10-0029-4c2a-8f00-000000000029",
    "stockNumber": "STK-FC-0003",
    "size": "40ft-hcq",
-   "grade": "A",
-   "condition": "new",
-   "color": "Beige",
+   "grade": "C",
+   "condition": "used",
+   "color": "Green",
    "status": "available",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-40-0003.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1362,7 +1452,9 @@
    "status": "available",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-40-0004.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1388,11 +1480,13 @@
    "size": "40ft-hcq",
    "grade": "A",
    "condition": "new",
-   "color": "Beige",
+   "color": "Tan",
    "status": "in_transit",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-40-0005.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1416,13 +1510,15 @@
    "guid": "9b7e5d10-0032-4c2a-8f00-000000000032",
    "stockNumber": "STK-FC-0006",
    "size": "40ft-hc",
-   "grade": "B",
+   "grade": "C",
    "condition": "used",
-   "color": "",
+   "color": "Green",
    "status": "available",
    "buyPrice": 1700,
    "rentMonthly": 65,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-40-0006.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1446,13 +1542,15 @@
    "guid": "9b7e5d10-0033-4c2a-8f00-000000000033",
    "stockNumber": "STK-FC-0007",
    "size": "40ft-hc",
-   "grade": "B",
+   "grade": "C",
    "condition": "used",
-   "color": "",
+   "color": "Tan",
    "status": "available",
    "buyPrice": 1700,
    "rentMonthly": 65,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-40-0007.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1476,13 +1574,15 @@
    "guid": "9b7e5d10-0034-4c2a-8f00-000000000034",
    "stockNumber": "STK-FC-0008",
    "size": "40ft-hc",
-   "grade": "B",
+   "grade": "R",
    "condition": "used",
-   "color": "",
+   "color": "Orange",
    "status": "available",
    "buyPrice": 1700,
    "rentMonthly": 65,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-40-0008.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1506,13 +1606,15 @@
    "guid": "9b7e5d10-0035-4c2a-8f00-000000000035",
    "stockNumber": "STK-FC-0009",
    "size": "40ft-hc",
-   "grade": "B",
+   "grade": "R",
    "condition": "used",
-   "color": "",
+   "color": "Blue",
    "status": "available",
    "buyPrice": 1700,
    "rentMonthly": 65,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-40-0009.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1536,13 +1638,15 @@
    "guid": "9b7e5d10-0036-4c2a-8f00-000000000036",
    "stockNumber": "STK-FC-0010",
    "size": "40ft-hc",
-   "grade": "B",
+   "grade": "R",
    "condition": "used",
-   "color": "",
+   "color": "Orange",
    "status": "available",
    "buyPrice": 1700,
    "rentMonthly": 65,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-40-0010.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1566,13 +1670,15 @@
    "guid": "9b7e5d10-0037-4c2a-8f00-000000000037",
    "stockNumber": "STK-FC-0011",
    "size": "40ft-hc",
-   "grade": "B",
+   "grade": "X",
    "condition": "used",
-   "color": "",
+   "color": "Gray",
    "status": "available",
    "buyPrice": 1700,
    "rentMonthly": 65,
-   "photos": [],
+   "photos": [
+    "/photos/gen/FC-40-0011.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "FIRST COAST",
@@ -1598,11 +1704,13 @@
    "size": "40ft-hcdd",
    "grade": "A",
    "condition": "new",
-   "color": "Beige",
+   "color": "Green",
    "status": "available",
    "buyPrice": 3750,
    "rentMonthly": 145,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0001.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -1632,7 +1740,9 @@
    "status": "available",
    "buyPrice": 3750,
    "rentMonthly": 145,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0002.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -1662,7 +1772,9 @@
    "status": "available",
    "buyPrice": 3750,
    "rentMonthly": 145,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0003.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -1688,11 +1800,13 @@
    "size": "40ft-hcdd",
    "grade": "A",
    "condition": "new",
-   "color": "Beige",
+   "color": "Red",
    "status": "available",
    "buyPrice": 3750,
    "rentMonthly": 145,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0004.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -1722,7 +1836,9 @@
    "status": "available",
    "buyPrice": 3750,
    "rentMonthly": 145,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0005.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -1748,11 +1864,13 @@
    "size": "40ft-hcdd",
    "grade": "A",
    "condition": "new",
-   "color": "Beige",
+   "color": "Blue",
    "status": "available",
    "buyPrice": 3750,
    "rentMonthly": 145,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0006.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -1776,13 +1894,15 @@
    "guid": "9b7e5d10-0044-4c2a-8f00-000000000044",
    "stockNumber": "STK-ITI-0007",
    "size": "40ft-hcdd",
-   "grade": "A",
-   "condition": "new",
-   "color": "Beige",
+   "grade": "X",
+   "condition": "used",
+   "color": "Tan",
    "status": "available",
    "buyPrice": 3750,
    "rentMonthly": 145,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0007.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -1808,11 +1928,13 @@
    "size": "40ft-hcdd",
    "grade": "A",
    "condition": "new",
-   "color": "Beige",
+   "color": "Blue",
    "status": "in_transit",
    "buyPrice": 3750,
    "rentMonthly": 145,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0008.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -1838,11 +1960,13 @@
    "size": "40ft-hcdd",
    "grade": "A",
    "condition": "new",
-   "color": "Gray",
+   "color": "Tan",
    "status": "in_transit",
    "buyPrice": 3750,
    "rentMonthly": 145,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0009.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -1872,7 +1996,9 @@
    "status": "in_transit",
    "buyPrice": 5700,
    "rentMonthly": 215,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0010.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -1902,7 +2028,9 @@
    "status": "in_transit",
    "buyPrice": 5700,
    "rentMonthly": 215,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0011.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -1932,7 +2060,9 @@
    "status": "available",
    "buyPrice": 5700,
    "rentMonthly": 215,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0012.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -1962,7 +2092,9 @@
    "status": "available",
    "buyPrice": 5700,
    "rentMonthly": 215,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0013.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -1992,7 +2124,9 @@
    "status": "available",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0014.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -2022,7 +2156,9 @@
    "status": "in_transit",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0015.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -2052,7 +2188,9 @@
    "status": "in_transit",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0016.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -2082,7 +2220,9 @@
    "status": "in_transit",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0017.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -2112,7 +2252,9 @@
    "status": "in_transit",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0018.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -2142,7 +2284,9 @@
    "status": "available",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0019.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -2168,11 +2312,13 @@
    "size": "40ft-hcq",
    "grade": "A",
    "condition": "new",
-   "color": "Gray",
+   "color": "White",
    "status": "available",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0020.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -2198,11 +2344,13 @@
    "size": "40ft-hcq",
    "grade": "A",
    "condition": "new",
-   "color": "Gray",
+   "color": "Tan",
    "status": "available",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0021.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -2228,11 +2376,13 @@
    "size": "40ft-hcq",
    "grade": "A",
    "condition": "new",
-   "color": "Gray",
+   "color": "White",
    "status": "available",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0022.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -2258,11 +2408,13 @@
    "size": "40ft-hcq",
    "grade": "A",
    "condition": "new",
-   "color": "Gray",
+   "color": "White",
    "status": "in_transit",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0023.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -2288,11 +2440,13 @@
    "size": "40ft-hcq",
    "grade": "A",
    "condition": "new",
-   "color": "Gray",
+   "color": "Green",
    "status": "in_transit",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0024.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -2318,11 +2472,13 @@
    "size": "40ft-hcq",
    "grade": "A",
    "condition": "new",
-   "color": "Gray",
+   "color": "Green",
    "status": "in_transit",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0025.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -2348,11 +2504,13 @@
    "size": "40ft-hcq",
    "grade": "A",
    "condition": "new",
-   "color": "Gray",
+   "color": "Red",
    "status": "in_transit",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0026.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -2378,11 +2536,13 @@
    "size": "40ft-hcq",
    "grade": "A",
    "condition": "new",
-   "color": "Gray",
+   "color": "Green",
    "status": "in_transit",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/ITI-40-0027.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "ITI Intermodal of Georgia, LLC",
@@ -2525,11 +2685,13 @@
    "size": "20ft-dd",
    "grade": "A",
    "condition": "new",
-   "color": "Beige",
+   "color": "Blue",
    "status": "available",
    "buyPrice": 2525,
    "rentMonthly": 95,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-20-0004.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -2559,7 +2721,9 @@
    "status": "in_transit",
    "buyPrice": 2525,
    "rentMonthly": 95,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-20-0005.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -2589,7 +2753,9 @@
    "status": "in_transit",
    "buyPrice": 2525,
    "rentMonthly": 95,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-20-0006.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -2615,11 +2781,13 @@
    "size": "20ft-dd",
    "grade": "A",
    "condition": "new",
-   "color": "Beige",
+   "color": "Orange",
    "status": "in_transit",
    "buyPrice": 2525,
    "rentMonthly": 95,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-20-0007.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -2649,7 +2817,9 @@
    "status": "available",
    "buyPrice": 2525,
    "rentMonthly": 95,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-20-0008.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -2679,7 +2849,9 @@
    "status": "available",
    "buyPrice": 2525,
    "rentMonthly": 95,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-20-0009.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -2709,7 +2881,9 @@
    "status": "in_transit",
    "buyPrice": 2050,
    "rentMonthly": 80,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-20-0010.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -2735,11 +2909,13 @@
    "size": "20ft-dvq",
    "grade": "A",
    "condition": "new",
-   "color": "Gray",
+   "color": "Beige",
    "status": "available",
    "buyPrice": 1975,
    "rentMonthly": 75,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-20-0011.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -2769,7 +2945,9 @@
    "status": "available",
    "buyPrice": 1975,
    "rentMonthly": 75,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-20-0012.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -2795,11 +2973,13 @@
    "size": "20ft-dvq",
    "grade": "A",
    "condition": "new",
-   "color": "Gray",
+   "color": "Green",
    "status": "available",
    "buyPrice": 1975,
    "rentMonthly": 75,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-20-0013.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -2829,7 +3009,9 @@
    "status": "available",
    "buyPrice": 1975,
    "rentMonthly": 75,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-20-0014.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -2854,12 +3036,14 @@
    "stockNumber": "STK-CDI-0015",
    "size": "20ft-dvq",
    "grade": "A",
-   "condition": "new",
-   "color": "Gray",
+   "condition": "used",
+   "color": "Beige",
    "status": "available",
    "buyPrice": 1975,
    "rentMonthly": 75,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-20-0015.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -2885,11 +3069,13 @@
    "size": "20ft-dvq",
    "grade": "A",
    "condition": "new",
-   "color": "Gray",
+   "color": "Tan",
    "status": "available",
    "buyPrice": 1975,
    "rentMonthly": 75,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-20-0016.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -2919,7 +3105,9 @@
    "status": "available",
    "buyPrice": 1975,
    "rentMonthly": 75,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-20-0017.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -2945,11 +3133,13 @@
    "size": "20ft-dvq",
    "grade": "A",
    "condition": "new",
-   "color": "Gray",
+   "color": "Tan",
    "status": "available",
    "buyPrice": 1975,
    "rentMonthly": 75,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-20-0018.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -2975,11 +3165,13 @@
    "size": "20ft-dvq",
    "grade": "A",
    "condition": "new",
-   "color": "Gray",
+   "color": "Blue",
    "status": "available",
    "buyPrice": 1975,
    "rentMonthly": 75,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-20-0019.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -3005,11 +3197,13 @@
    "size": "20ft-dvq",
    "grade": "A",
    "condition": "new",
-   "color": "Gray",
+   "color": "Beige",
    "status": "available",
    "buyPrice": 1975,
    "rentMonthly": 75,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-20-0020.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -3039,7 +3233,9 @@
    "status": "available",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-40-0001.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -3069,7 +3265,9 @@
    "status": "available",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-40-0002.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -3093,13 +3291,15 @@
    "guid": "9b7e5d10-0087-4c2a-8f00-000000000087",
    "stockNumber": "STK-CDI-0003",
    "size": "40ft-hcdd",
-   "grade": "A",
-   "condition": "new",
-   "color": "Gray",
+   "grade": "B",
+   "condition": "used",
+   "color": "Blue",
    "status": "available",
    "buyPrice": 3300,
    "rentMonthly": 125,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-40-0003.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -3129,7 +3329,9 @@
    "status": "available",
    "buyPrice": 5875,
    "rentMonthly": 225,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-40-0004.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -3155,11 +3357,13 @@
    "size": "40ft-hcos",
    "grade": "A",
    "condition": "new",
-   "color": "Beige",
+   "color": "Orange",
    "status": "available",
    "buyPrice": 5875,
    "rentMonthly": 225,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-40-0005.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -3189,7 +3393,9 @@
    "status": "available",
    "buyPrice": 5875,
    "rentMonthly": 225,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-40-0006.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
@@ -3215,11 +3421,13 @@
    "size": "40ft-hcos",
    "grade": "A",
    "condition": "new",
-   "color": "Gray",
+   "color": "Blue",
    "status": "available",
    "buyPrice": 5875,
    "rentMonthly": 225,
-   "photos": [],
+   "photos": [
+    "/photos/gen/CDI-40-0007.svg"
+   ],
    "photoCount": 0,
    "has360": false,
    "depotLocation": "Container Depot Industries, Inc.",
