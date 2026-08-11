@@ -8,8 +8,8 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useSnackbar, useAuth, useFavicon, useLive } from '../../hooks'
 import { Snackbar, ProgressRing } from '../../components/ui'
-import { GradeScreen, FlowGradeCard } from './grade'
-import { gradeLabel, type GradeResult } from '../../lib/grading'
+import { GradeScreen, FlowGradeCard, GradeReviewScreen } from './grade'
+import { gradeContainer, gradeLabel, ADJUSTER_QUESTIONS, type PhotoFeatures } from '../../lib/grading'
 import { activity, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, containers as containersApi, availability as availabilityApi, messages as messagesApi, customers as customersApi, orders as ordersApi, parseTrucks, parseWorkHours, encodeWorkHours, photoUrl, fileToDataUrl, cutoutContainer, type ActivityEvent, type Depot, type Driver, type SchedJob, type DayHours, type Availability, type Message, type Customer, type Container, type Order } from '../../lib/api'
 
 // Fallback driver when an admin opens the field app (admin accounts have no
@@ -139,7 +139,7 @@ const fmtTime = (iso: string) => { const d = new Date(iso); return d.toLocaleStr
 
 // ── Types ─────────────────────────────────────────────────
 
-type Screen = 'dashboard' | 'jobs' | 'flow' | 'camera' | 'review' | 'success' | 'schedule' | 'grade' | 'inbox'
+type Screen = 'dashboard' | 'jobs' | 'flow' | 'camera' | 'review' | 'success' | 'schedule' | 'grade' | 'gradeReview' | 'inbox'
 
 interface PhotoShot {
   id: number
@@ -306,9 +306,15 @@ export default function FieldAppPage() {
   const [signed, setSigned] = useState(false)
   const [returnPhoto, setReturnPhoto] = useState(false)
   const [condScore, setCondScore] = useState(0)  // legacy manual score (kept for job summary display)
-  // AI verdict for the active job's "Score condition" step — set by the
-  // FlowGradeCard once photos are analyzed and all five questions answered.
-  const [aiResult, setAiResult] = useState<GradeResult | null>(null)
+  // AI grading state for the active job's "Score condition" step: the card
+  // owns the analysis + questions, the verdict is reviewed and approved on
+  // its own screen ('gradeReview'), then the flow resumes at the next step.
+  const [aiFeatures, setAiFeatures] = useState<PhotoFeatures[] | null>(null)
+  const [aiAnswers, setAiAnswers] = useState<Record<string, number>>({})
+  const [aiApplying, setAiApplying] = useState(false)
+  const aiResult = aiFeatures && Object.keys(aiAnswers).length === ADJUSTER_QUESTIONS.length
+    ? gradeContainer(aiFeatures, aiAnswers)
+    : null
   const [inspectorNotes, setInspectorNotes] = useState('')  // optional notes attached to the photo submission
   const { toast, message, open: snackOpen, close: snackClose } = useSnackbar()
 
@@ -496,6 +502,47 @@ export default function FieldAppPage() {
     }
   }
 
+  // Delete one documentation shot (flow photo review / retake support).
+  const deleteShot = async (shot: PhotoShot) => {
+    const job = activeJob
+    if (!job || shotProgress[shot.id]) return
+    const target = job.containerId || job.sku
+    try {
+      const updated = await containersApi.deletePhoto(target, shot.id - 1)
+      setShots(prev => prev.map(x => x.id === shot.id ? { ...x, done: false, url: undefined } : x))
+      setContainerList(prev => prev.map(c => c.id === updated.id ? updated : c))
+      toast(`${shot.label} removed — retake when ready`)
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not remove the photo')
+    }
+  }
+
+  // Approve the AI grade from the review screen: apply to the shared record,
+  // mark the score step done, and return to the job's task list.
+  const approveGrade = async () => {
+    const job = activeJob
+    if (!job || !aiResult || aiApplying) return
+    setAiApplying(true)
+    try {
+      await containersApi.update(job.containerId || job.sku, {
+        grade: aiResult.grade, conditionScore: aiResult.sub, aiGraded: true,
+        inspectorName: user?.name || 'Field Inspector', inspectedAt: new Date().toISOString(),
+      } as Partial<Container>)
+      fetchContainers().catch(() => {})
+      setCondScore(aiResult.sub)
+      logActivity(job, 'event', `AI graded ${gradeLabel(aiResult.grade, aiResult.sub)} (${aiResult.score}/100)`)
+      toast(`This container is a ${gradeLabel(aiResult.grade, aiResult.sub)} — grade applied`)
+      // Mark the score step complete and land back on the job's task list.
+      const steps = stepsFor(job)
+      if (steps[stepIndex]?.key === 'score') setStepIndex(i => i + 1)
+      goTo('flow')
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Grade didn’t sync — check connection')
+    } finally {
+      setAiApplying(false)
+    }
+  }
+
   // Hydrate the checklist from photos already on the container (resume a
   // partially documented unit; also lets admins see what's been shot).
   const hydrateShots = (job: Job) => {
@@ -541,6 +588,7 @@ export default function FieldAppPage() {
     setCondScore(0)
     setInspectorNotes('')
     if (job.kind === 'pickup') hydrateShots(job)
+    setAiFeatures(null); setAiAnswers({})
     goTo('flow')
   }
 
@@ -594,19 +642,7 @@ export default function FieldAppPage() {
       case 'sms':       logActivity(job, 'sms_sent', `ETA text sent to ${job.customer}`); toast('ETA text sent to customer'); break
       case 'photos12':  if (doneCount < PHOTO_TARGET) { hydrateShots(job); goTo('camera'); return } break // photos_submitted logged on submit
       case 'photo1':    capturePhoto1(job); return // advances after the photo uploads
-      case 'score': {
-        if (!aiResult) break
-        setCondScore(aiResult.sub)
-        containersApi.update(job.containerId || job.sku, {
-          grade: aiResult.grade, conditionScore: aiResult.sub, aiGraded: true,
-          inspectorName: user?.name || 'Field Inspector', inspectedAt: new Date().toISOString(),
-        } as Partial<Container>)
-          .then(() => fetchContainers().catch(() => {}))
-          .catch(() => toast('Grade didn’t sync — check connection'))
-        logActivity(job, 'event', `AI graded ${gradeLabel(aiResult.grade, aiResult.sub)} (${aiResult.score}/100)`)
-        toast(`This container is a ${gradeLabel(aiResult.grade, aiResult.sub)} — grade applied`)
-        break
-      }
+      case 'score': return // driven by the grading card's Finished → review → Approve
       case 'signature': setSigned(true); logActivity(job, 'signature', 'Customer signature captured'); break
       case 'receipt':   sendReceipt(job); break
       case 'complete':
@@ -829,11 +865,9 @@ export default function FieldAppPage() {
         // Whether the current step's action can run. Photo steps are always
         // actionable — their button opens the camera / photo session (they
         // used to gate on photos already existing, which dead-locked the flow).
-        const stepReady = step?.key === 'signature' ? signed : step?.key === 'score' ? !!aiResult : true
+        const stepReady = step?.key === 'signature' ? signed : true
         const flowCont = containerList.find(c => c.id === job.containerId || c.sku === job.sku) ?? null
-        const photoCta = step?.key === 'photos12' && doneCount >= PHOTO_TARGET ? 'Photos on file — Continue'
-          : step?.key === 'score' && aiResult ? `Apply grade ${gradeLabel(aiResult.grade, aiResult.sub)}`
-          : step?.cta
+        const photoCta = step?.key === 'photos12' && doneCount >= PHOTO_TARGET ? 'Photos on file — Continue' : step?.cta
 
         return (
           <>
@@ -848,8 +882,10 @@ export default function FieldAppPage() {
               </div>
             </div>
 
-            {/* Primary step action — first thing on screen, no scrolling to act */}
-            {step && (
+            {/* Primary step action — first thing on screen, no scrolling to
+                act. The score step has no top button: its Finished action
+                sits at the bottom of the question card. */}
+            {step && step.key !== 'score' && (
               <div style={{ padding: '12px 12px 4px' }}>
                 <button
                   onClick={advanceStep}
@@ -863,7 +899,6 @@ export default function FieldAppPage() {
                   {photoCta}
                 </button>
                 {step.key === 'signature' && !signed && <div style={{ textAlign: 'center', fontSize: '11px', color: '#44475A', marginTop: '8px' }}>Capture the signature below to continue</div>}
-                {step.key === 'score' && !aiResult && <div style={{ textAlign: 'center', fontSize: '11px', color: '#44475A', marginTop: '8px' }}>Answer the five questions below — the AI model rates the unit</div>}
                 {isCustomer && step.key === 'sms' && (
                   <div style={{ fontSize: '11px', color: '#44475A', textAlign: 'center', marginTop: '8px' }}>Customer delivery — notify, arrive, unload, sign, receipt.</div>
                 )}
@@ -881,14 +916,26 @@ export default function FieldAppPage() {
                   Photo documentation · {shots.filter(sh => sh.url).length}/{PHOTO_TARGET} on file
                 </div>
                 <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
-                  {shots.filter(sh => sh.url).map(sh => (
+                  {shots.map(sh => (
                     <div key={sh.id} style={{ flexShrink: 0, width: '86px' }}>
-                      <img src={photoUrl(sh.url!)} alt={sh.label} style={{ width: '86px', height: '64px', objectFit: 'cover', borderRadius: '8px', display: 'block' }} />
-                      <div style={{ fontSize: '9px', color: '#44475A', marginTop: '3px', lineHeight: 1.3 }}>{sh.label}</div>
+                      <div style={{ position: 'relative' }}>
+                        {sh.url
+                          ? <img src={photoUrl(sh.url)} alt={sh.label} style={{ width: '86px', height: '64px', objectFit: 'cover', borderRadius: '8px', display: 'block', opacity: shotProgress[sh.id] ? 0.4 : 1 }} />
+                          : <div style={{ width: '86px', height: '64px', borderRadius: '8px', border: '1.5px dashed #C4C6D0', display: 'grid', placeItems: 'center', color: '#44475A' }}><Icon name="camera" size={18} /></div>}
+                        {sh.url && !shotProgress[sh.id] && (
+                          <button onClick={() => deleteShot(sh)} title="Delete photo" aria-label={`Delete ${sh.label}`}
+                            style={{ position: 'absolute', top: '3px', right: '3px', width: '20px', height: '20px', borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,.55)', color: '#fff', fontSize: '11px', fontWeight: 700, cursor: 'pointer', display: 'grid', placeItems: 'center', lineHeight: 0 }}>✕</button>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '9px', color: '#44475A', margin: '3px 0 2px', lineHeight: 1.3 }}>{sh.label}</div>
+                      <button onClick={() => captureShot(sh, true)} disabled={!!shotProgress[sh.id]}
+                        style={{ width: '100%', padding: '4px 0', borderRadius: '7px', border: '1px solid #C4C6D0', background: '#fff', color: '#0057B8', fontSize: '10px', fontWeight: 700, cursor: 'pointer' }}>
+                        {shotProgress[sh.id] ? `${shotProgress[sh.id].pct}%` : sh.url ? 'Retake' : 'Capture'}
+                      </button>
                     </div>
                   ))}
                 </div>
-                <div style={{ fontSize: '11px', color: '#44475A', marginTop: '8px' }}>Review the shots, re-shoot any slot from the photo session, then continue.</div>
+                <div style={{ fontSize: '11px', color: '#44475A', marginTop: '8px' }}>Retake or delete any shot here, or re-shoot everything from the photo session, then continue.</div>
               </div>
             )}
 
@@ -896,7 +943,13 @@ export default function FieldAppPage() {
                 documentation + the adjuster's five answers ("this container
                 is a B·4"); the step CTA applies the verdict to the listing. */}
             {step?.key === 'score' && (
-              <FlowGradeCard container={flowCont} onResult={setAiResult} />
+              <FlowGradeCard
+                container={flowCont}
+                features={aiFeatures} setFeatures={setAiFeatures}
+                answers={aiAnswers} setAnswers={setAiAnswers}
+                result={aiResult}
+                onFinished={() => goTo('gradeReview')}
+              />
             )}
 
             {/* Signature pad — shown when the active step needs it */}
@@ -1466,10 +1519,21 @@ export default function FieldAppPage() {
       />
     ),
     inbox:     renderInbox(),
+    // Grading verdict + approval — its own screen after the questions'
+    // Finished button; Approve returns to the job's task list.
+    gradeReview: (
+      <GradeReviewScreen
+        sku={activeJob?.sku ?? ''}
+        result={aiResult}
+        applying={aiApplying}
+        onApprove={approveGrade}
+        onBack={() => goTo('flow')}
+      />
+    ),
   }
 
   // Camera/review/success and the job flow all belong to the Pickups & Returns tab.
-  const navActive: Screen = ['review', 'success', 'flow', 'camera'].includes(screen) ? 'jobs' : screen
+  const navActive: Screen = ['review', 'success', 'flow', 'camera', 'gradeReview'].includes(screen) ? 'jobs' : screen
 
   return (
     <div style={page}>
