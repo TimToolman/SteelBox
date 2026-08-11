@@ -421,7 +421,19 @@ function ensureSeedUsers() {
   const users = readTable('users')
   let changed = false
   const ensure = (email, fields) => {
-    if (users.some(u => (u.email || '').toLowerCase() === email)) return
+    const existing = users.find(u => (u.email || '').toLowerCase() === email)
+    if (existing) {
+      // The default admin address may have self-registered on the marketplace
+      // before this seed ever ran (that path always creates role=customer,
+      // and its existence makes the seed skip) — locking the owner out of
+      // /admin. Repair the role in place; the account keeps its password.
+      if (fields.role === 'admin' && existing.role !== 'admin' && existing.active !== false) {
+        console.log(`Promoted ${email} to admin (was ${existing.role || 'unset'})`)
+        existing.role = 'admin'
+        changed = true
+      }
+      return
+    }
     users.push({
       id: uid('usr'), email, passwordHash: hashPassword('test1234'),
       phone: '', driverId: '', customerId: '', phoneVerified: false, active: true,

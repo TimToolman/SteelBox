@@ -1,44 +1,48 @@
 // ============================================================
 // Static demo mode (VITE_DEMO_STATIC=1)
 //
-// Serves the whole public site with NO backend: reads come from
-// demo-data.json (a snapshot of the dev API taken with the
-// script in the file header of demo-data.json's git commit),
-// writes pretend to succeed, and sign-in mints a local demo
-// customer. api.ts routes every request here when the flag is
-// set at build time — used for the GitHub Pages demo while the
-// hosted API is offline. Nothing is persisted server-side.
+// Serves the whole site — marketplace, admin portal, AND field
+// app — with NO backend. Reads come from demo-data.json (a full
+// snapshot of the dev API; regenerate with the script in this
+// file's git commit message), writes mutate an in-memory copy
+// that lives until the page reloads, and sign-in looks the email
+// up in the snapshot's users table so the seeded admin and
+// driver accounts land in their real portals (any password is
+// accepted — there is no server to check it against). Unknown
+// emails sign in as a demo customer. api.ts routes every request
+// here when the flag is set at build time — used for the GitHub
+// Pages deployment while no API is hosted. Nothing persists.
 // ============================================================
 
 import demoData from './demo-data.json'
 import type { AuthUser, Container, Order } from './api'
 
-const data = demoData as unknown as {
-  containers: Container[]
-  depots: unknown[]
-  customBuilds: { id: string }[]
-  sellers: unknown[]
-}
+type Row = Record<string, unknown> & { id: string }
+
+const snapshot = demoData as unknown as Record<string, Row[]>
+
+// In-memory database, keyed by REST route segment. Deep-copied from the
+// snapshot so demo writes never bleed into the imported module data.
+const db: Record<string, Row[]> = Object.fromEntries([
+  ['containers', snapshot.containers],
+  ['depots', snapshot.depots],
+  ['custombuilds', (demoData as { customBuilds: Row[] }).customBuilds],
+  ['sellers', snapshot.sellers],
+  ['drivers', snapshot.drivers],
+  ['customers', snapshot.customers],
+  ['orders', snapshot.orders],
+  ['schedule', snapshot.schedule],
+  ['activity', snapshot.activity],
+  ['availability', snapshot.availability],
+  ['messages', snapshot.messages],
+  ['users', snapshot.users],
+  ['outbox', snapshot.outbox],
+].map(([k, v]) => [k as string, JSON.parse(JSON.stringify(v ?? []))]))
 
 const uid = (p: string) => `${p}_demo_${Math.random().toString(36).slice(2, 10)}`
 
-// Session-only state (survives navigation, not reloads — by design).
-const sessionOrders: Order[] = []
-
 const DEMO_TOKEN = 'demo-token'
 const DEMO_USER_KEY = 'sbx_demo_user'
-
-// Known demo accounts — mirrors the seeded users so each portal is reachable
-// in the static demo: the owner gets the admin portal, drivers and the
-// container adjuster get the field app (incl. the AI grading flow). There is
-// no server to check a password against, so any password signs in.
-const DEMO_ACCOUNTS: Record<string, Partial<AuthUser>> = {
-  'tgmoore@gmail.com': { role: 'admin', name: 'Tim Moore' },
-  'mike@mvpcontainer.com': { role: 'driver', name: 'Mike Torres', driverId: 'drv_01' },
-  'dan@mvpcontainer.com': { role: 'driver', name: 'Dan Park', driverId: 'drv_02' },
-  'luis@mvpcontainer.com': { role: 'driver', name: 'Luis Mendez', driverId: 'drv_03' },
-  'adjuster@mvpcontainer.com': { role: 'adjuster', name: 'Container Adjuster' },
-}
 
 function demoUser(overrides: Partial<AuthUser> = {}): AuthUser {
   return {
@@ -47,7 +51,18 @@ function demoUser(overrides: Partial<AuthUser> = {}): AuthUser {
     phoneVerified: true, active: true, createdAt: new Date().toISOString(),
     twoFaVerified: true, mustChangePassword: false,
     ...overrides,
-  }
+  } as AuthUser
+}
+
+// The snapshot's users table decides who's who: the seeded admin email gets
+// the admin portal, driver emails get the field app, everyone else shops.
+function accountFor(email: string): Partial<AuthUser> {
+  const norm = String(email || '').trim().toLowerCase()
+  // Demo-only extra account: the container adjuster role — lands in the
+  // field app with access to the AI condition-grading flow.
+  if (norm === 'adjuster@mvpcontainer.com') return { email: norm, role: 'adjuster', name: 'Container Adjuster' }
+  const acct = db.users.find(u => String(u.email || '').toLowerCase() === norm && u.active !== false)
+  return acct ? (acct as unknown as Partial<AuthUser>) : { email: norm || 'demo@mvpcontainers.com' }
 }
 
 function signIn(overrides: Partial<AuthUser>): { token: string; user: AuthUser } {
@@ -56,80 +71,127 @@ function signIn(overrides: Partial<AuthUser>): { token: string; user: AuthUser }
   return { token: DEMO_TOKEN, user }
 }
 
+function storedUser(): AuthUser | null {
+  const stored = localStorage.getItem(DEMO_USER_KEY)
+  if (!stored || localStorage.getItem('sbx_token') !== DEMO_TOKEN) return null
+  try { return JSON.parse(stored) as AuthUser } catch { return null }
+}
+
 // Mirrors request<T>'s contract: resolve with the parsed payload or throw
 // an Error whose message is shown to the user.
 export async function demoRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const method = (options.method ?? 'GET').toUpperCase()
-  const body = typeof options.body === 'string' ? JSON.parse(options.body) : {}
+  const body: Record<string, unknown> = typeof options.body === 'string' ? JSON.parse(options.body) : {}
   const route = path.split('?')[0]
   const ok = (v: unknown) => v as T
 
-  // ── Public reads ──
-  if (method === 'GET' && route === '/containers') return ok(data.containers)
-  if (method === 'GET' && /^\/containers\/[^/]+$/.test(route)) {
-    const c = data.containers.find(x => x.id === route.split('/')[2])
-    if (!c) throw new Error('Container not found')
-    return ok(c)
-  }
-  if (method === 'GET' && route === '/depots') return ok(data.depots)
-  if (method === 'GET' && route === '/sellers') return ok(data.sellers)
-  if (method === 'GET' && route === '/custombuilds') return ok(data.customBuilds)
+  // ── Marketplace specials ──
   if (method === 'GET' && route === '/delivery/estimate') return ok({ days: 4 })
-  if (method === 'GET' && route === '/messages') return ok([])
-  if (method === 'GET' && route === '/orders') return ok(sessionOrders)
-
-  // ── Shopping writes — pretend success ──
   if (method === 'POST' && /^\/containers\/[^/]+\/reserve$/.test(route)) {
     return ok({ lockExpiresAt: new Date(Date.now() + 15 * 60_000).toISOString() })
   }
-  if (method === 'POST' && route === '/orders') {
-    const order = { id: uid('ord'), status: 'sale_in_progress', createdAt: new Date().toISOString(), ...body } as Order
-    sessionOrders.push(order)
-    return ok(order)
-  }
   if (method === 'POST' && route === '/quotes') return ok({ id: uid('quote') })
   if (method === 'POST' && /^\/custombuilds\/[^/]+\/order$/.test(route)) {
-    const order = { id: uid('ord'), status: 'estimate_requested', createdAt: new Date().toISOString(), ...body } as Order
-    sessionOrders.push(order)
-    return ok({ order, container: data.containers[0] })
+    const order = { id: uid('ord'), orderNumber: `SO-D${Math.floor(Math.random() * 9000 + 1000)}`, status: 'estimate_requested', createdAt: new Date().toISOString(), ...body } as Row
+    db.orders.push(order)
+    return ok({ order, container: db.containers[0] })
   }
 
-  // ── Field app: apply an AI condition grade (or any admin edit) ──
-  // Session-only merge into the bundled snapshot — the marketplace picks the
-  // new grade up immediately; a reload returns to the shipped data.
-  if (method === 'PATCH' && /^\/containers\/[^/]+$/.test(route)) {
-    const c = data.containers.find(x => x.id === route.split('/')[2])
+  // ── Order pipeline actions (admin / field) ──
+  const action = route.match(/^\/orders\/([^/]+)\/(custom-stage|review-step|assign-driver|delivered)$/)
+  if (method === 'POST' && action) {
+    const order = db.orders.find(o => o.id === action[1]) as (Row & Partial<Order>) | undefined
+    if (!order) throw new Error('Order not found')
+    const now = new Date().toISOString()
+    if (action[2] === 'review-step') {
+      const step = body.step
+      if (step === 'validated') order.validatedAt = now
+      if (step === 'called') order.calledAt = now
+      if (step === 'paid') { order.paidAt = now; order.status = 'confirmed' }
+      if (step === 'reject') {
+        order.status = 'cancelled'
+        const c = db.containers.find(x => x.id === order.containerId)
+        if (c) c.status = 'available'
+      }
+    }
+    if (action[2] === 'custom-stage') {
+      order.status = body.stage as Order['status']
+      if (body.amount != null) order.amount = Number(body.amount)
+    }
+    if (action[2] === 'assign-driver') {
+      const d = db.drivers.find(x => x.id === body.driverId)
+      order.driverId = String(body.driverId || '')
+      order.driverName = d ? String(d.name) : ''
+      order.scheduledDate = String(body.scheduledDate || '')
+      order.status = 'assigned'
+    }
+    if (action[2] === 'delivered') { order.status = 'delivered'; order.completedAt = now }
+    return ok(order)
+  }
+
+  // Container photo uploads can't work on static hosting — pretend success
+  // so the admin flow continues, but nothing is stored.
+  const photoRoute = route.match(/^\/containers\/([^/]+)\/photos(\/\d+)?$/)
+  if (photoRoute && (method === 'POST' || method === 'DELETE')) {
+    const c = db.containers.find(x => x.id === photoRoute[1])
     if (!c) throw new Error('Container not found')
-    Object.assign(c, body)
     return ok(c)
   }
-  // Collections the field app reads at boot but the snapshot doesn't carry —
-  // empty lists keep every screen alive without a backend.
-  if (method === 'GET' && ['/schedule', '/drivers', '/activity', '/availability', '/customers', '/outbox'].includes(route)) {
-    return ok([])
-  }
 
-  // ── Auth — roles come from the demo account map ──
+  // ── Auth — roles come from the snapshot users table ──
   if (method === 'POST' && route === '/auth/login') {
-    const email = String(body.email || 'demo@mvpcontainers.com').trim().toLowerCase()
-    const acct = DEMO_ACCOUNTS[email]
-    return ok(signIn(acct ? { email, ...acct } : { email, name: 'Demo Customer' }))
+    return ok(signIn(accountFor(String(body.email || ''))))
   }
   if (method === 'POST' && route === '/auth/register') {
-    return ok(signIn({ email: body.email, name: body.name || 'Demo Customer', phone: body.phone || '' }))
+    const rec = { id: uid('usr'), email: String(body.email || '').toLowerCase(), role: 'customer', name: String(body.name || 'Demo Customer'), phone: String(body.phone || ''), driverId: '', customerId: '', phoneVerified: false, active: true, createdAt: new Date().toISOString() }
+    db.users.push(rec as Row)
+    return ok(signIn(rec as unknown as Partial<AuthUser>))
   }
   if (method === 'GET' && route === '/auth/me') {
-    const stored = localStorage.getItem(DEMO_USER_KEY)
-    if (!stored || localStorage.getItem('sbx_token') !== DEMO_TOKEN) throw new Error('Not signed in')
-    return ok(JSON.parse(stored))
+    const u = storedUser()
+    if (!u) throw new Error('Not signed in')
+    return ok(u)
   }
-  if (method === 'POST' && route === '/auth/login/verify') return ok(signIn({}))
+  if (method === 'POST' && route === '/auth/login/verify') {
+    return ok({ token: DEMO_TOKEN, user: storedUser() ?? demoUser() })
+  }
   if (method === 'POST' && route === '/auth/forgot') return ok({ sent: true, devCode: '123456' })
   if (method === 'POST' && route === '/auth/reset') return ok({ reset: true })
   if (method === 'POST' && route === '/auth/change-password') return ok({ changed: true })
   if (method === 'POST' && route === '/auth/2fa/send') return ok({ sent: true, devCode: '123456' })
   if (method === 'POST' && route === '/auth/2fa/verify') return ok({ verified: true })
 
-  // Everything else (admin/field portals, uploads, …) isn't part of the demo.
+  // ── Generic collection CRUD — covers the admin & field portals ──
+  const [, col, rid, extra] = route.split('/')
+  if (col && !extra && col in db) {
+    const rows = db[col]
+    if (method === 'GET' && !rid) return ok(rows)
+    if (method === 'GET' && rid) {
+      const r = rows.find(x => x.id === rid)
+      if (!r) throw new Error('Not found')
+      return ok(r)
+    }
+    if (method === 'POST' && !rid) {
+      delete body.password // users.create — never keep a password around
+      const row = { id: uid(col.slice(0, 3)), createdAt: new Date().toISOString(), active: true, ...body } as Row
+      if (col === 'orders' && !row.orderNumber) row.orderNumber = `SO-D${Math.floor(Math.random() * 9000 + 1000)}`
+      rows.push(row)
+      return ok(row)
+    }
+    if (method === 'PATCH' && rid) {
+      const i = rows.findIndex(x => x.id === rid)
+      if (i === -1) throw new Error('Not found')
+      delete body.password
+      rows[i] = { ...rows[i], ...body }
+      return ok(rows[i])
+    }
+    if (method === 'DELETE' && rid) {
+      const i = rows.findIndex(x => x.id === rid)
+      if (i !== -1) rows.splice(i, 1)
+      return ok({ deleted: true })
+    }
+  }
+
+  // Everything else (photo uploads elsewhere, SSE, …) isn't part of the demo.
   throw new Error('This action is disabled in the demo — call us at (504) 555-0190.')
 }
