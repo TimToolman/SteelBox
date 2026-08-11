@@ -129,12 +129,21 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
     return ok(order)
   }
 
-  // Container photo uploads can't work on static hosting — pretend success
-  // so the admin flow continues, but nothing is stored.
+  // Container photo upload / retake / delete — session-side. Uploads keep the
+  // captured image as a data: URL in the slot (photoUrl passes data: URLs
+  // through), deletes clear the slot; a reload returns to the shipped set.
   const photoRoute = route.match(/^\/containers\/([^/]+)\/photos(\/\d+)?$/)
   if (photoRoute && (method === 'POST' || method === 'DELETE')) {
     const c = db.containers.find(x => x.id === photoRoute[1])
     if (!c) throw new Error('Container not found')
+    const photos = [...((c.photos as string[] | undefined) ?? [])]
+    if (method === 'POST') {
+      const slot = Number((body as { slot?: number }).slot ?? 0)
+      photos[slot] = String((body as { dataUrl?: string }).dataUrl || '')
+    } else {
+      photos[Number(photoRoute[2]!.slice(1))] = ''
+    }
+    c.photos = photos
     return ok(c)
   }
 
