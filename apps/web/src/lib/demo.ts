@@ -58,6 +58,9 @@ function demoUser(overrides: Partial<AuthUser> = {}): AuthUser {
 // the admin portal, driver emails get the field app, everyone else shops.
 function accountFor(email: string): Partial<AuthUser> {
   const norm = String(email || '').trim().toLowerCase()
+  // Demo-only extra account: the container adjuster role — lands in the
+  // field app with access to the AI condition-grading flow.
+  if (norm === 'adjuster@mvpcontainer.com') return { email: norm, role: 'adjuster', name: 'Container Adjuster' }
   const acct = db.users.find(u => String(u.email || '').toLowerCase() === norm && u.active !== false)
   return acct ? (acct as unknown as Partial<AuthUser>) : { email: norm || 'demo@mvpcontainers.com' }
 }

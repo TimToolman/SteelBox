@@ -51,7 +51,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 // ── Auth ──────────────────────────────────────────────────
 
-export type Role = 'customer' | 'driver' | 'admin'
+export type Role = 'customer' | 'driver' | 'adjuster' | 'admin'
 
 export interface AuthUser {
   id: string

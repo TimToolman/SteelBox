@@ -38,7 +38,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             </RequireRole>
           } />
           <Route path="/field" element={
-            <RequireRole roles={['driver', 'admin']} title="Field App">
+            <RequireRole roles={['driver', 'adjuster', 'admin']} title="Field App">
               <FieldAppPage />
             </RequireRole>
           } />
