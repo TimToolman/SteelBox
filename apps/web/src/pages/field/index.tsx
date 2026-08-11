@@ -8,7 +8,8 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useSnackbar, useAuth, useFavicon, useLive } from '../../hooks'
 import { Snackbar, ProgressRing } from '../../components/ui'
-import { GradeScreen } from './grade'
+import { GradeScreen, FlowGradeCard } from './grade'
+import { gradeLabel, type GradeResult } from '../../lib/grading'
 import { activity, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, containers as containersApi, availability as availabilityApi, messages as messagesApi, customers as customersApi, orders as ordersApi, parseTrucks, parseWorkHours, encodeWorkHours, photoUrl, fileToDataUrl, cutoutContainer, type ActivityEvent, type Depot, type Driver, type SchedJob, type DayHours, type Availability, type Message, type Customer, type Container, type Order } from '../../lib/api'
 
 // Fallback driver when an admin opens the field app (admin accounts have no
@@ -304,7 +305,10 @@ export default function FieldAppPage() {
   const [locOpen, setLocOpen] = useState(false)
   const [signed, setSigned] = useState(false)
   const [returnPhoto, setReturnPhoto] = useState(false)
-  const [condScore, setCondScore] = useState(0)  // driver's 1–5 condition score for the active job
+  const [condScore, setCondScore] = useState(0)  // legacy manual score (kept for job summary display)
+  // AI verdict for the active job's "Score condition" step — set by the
+  // FlowGradeCard once photos are analyzed and all five questions answered.
+  const [aiResult, setAiResult] = useState<GradeResult | null>(null)
   const [inspectorNotes, setInspectorNotes] = useState('')  // optional notes attached to the photo submission
   const { toast, message, open: snackOpen, close: snackClose } = useSnackbar()
 
@@ -590,11 +594,19 @@ export default function FieldAppPage() {
       case 'sms':       logActivity(job, 'sms_sent', `ETA text sent to ${job.customer}`); toast('ETA text sent to customer'); break
       case 'photos12':  if (doneCount < PHOTO_TARGET) { hydrateShots(job); goTo('camera'); return } break // photos_submitted logged on submit
       case 'photo1':    capturePhoto1(job); return // advances after the photo uploads
-      case 'score':
-        containersApi.update(job.containerId || job.sku, { conditionScore: condScore })
+      case 'score': {
+        if (!aiResult) break
+        setCondScore(aiResult.sub)
+        containersApi.update(job.containerId || job.sku, {
+          grade: aiResult.grade, conditionScore: aiResult.sub, aiGraded: true,
+          inspectorName: user?.name || 'Field Inspector', inspectedAt: new Date().toISOString(),
+        } as Partial<Container>)
           .then(() => fetchContainers().catch(() => {}))
-          .catch(() => toast('Condition score didn’t sync — check connection'))
-        logActivity(job, 'event', `Condition scored ${condScore}/5`); toast(`Condition ${condScore}/5 saved`); break
+          .catch(() => toast('Grade didn’t sync — check connection'))
+        logActivity(job, 'event', `AI graded ${gradeLabel(aiResult.grade, aiResult.sub)} (${aiResult.score}/100)`)
+        toast(`This container is a ${gradeLabel(aiResult.grade, aiResult.sub)} — grade applied`)
+        break
+      }
       case 'signature': setSigned(true); logActivity(job, 'signature', 'Customer signature captured'); break
       case 'receipt':   sendReceipt(job); break
       case 'complete':
@@ -817,8 +829,11 @@ export default function FieldAppPage() {
         // Whether the current step's action can run. Photo steps are always
         // actionable — their button opens the camera / photo session (they
         // used to gate on photos already existing, which dead-locked the flow).
-        const stepReady = step?.key === 'signature' ? signed : step?.key === 'score' ? condScore > 0 : true
-        const photoCta = step?.key === 'photos12' && doneCount >= PHOTO_TARGET ? 'Continue' : step?.cta
+        const stepReady = step?.key === 'signature' ? signed : step?.key === 'score' ? !!aiResult : true
+        const flowCont = containerList.find(c => c.id === job.containerId || c.sku === job.sku) ?? null
+        const photoCta = step?.key === 'photos12' && doneCount >= PHOTO_TARGET ? 'Photos on file — Continue'
+          : step?.key === 'score' && aiResult ? `Apply grade ${gradeLabel(aiResult.grade, aiResult.sub)}`
+          : step?.cta
 
         return (
           <>
@@ -848,7 +863,7 @@ export default function FieldAppPage() {
                   {photoCta}
                 </button>
                 {step.key === 'signature' && !signed && <div style={{ textAlign: 'center', fontSize: '11px', color: '#44475A', marginTop: '8px' }}>Capture the signature below to continue</div>}
-                {step.key === 'score' && condScore === 0 && <div style={{ textAlign: 'center', fontSize: '11px', color: '#44475A', marginTop: '8px' }}>Rate the container below to continue</div>}
+                {step.key === 'score' && !aiResult && <div style={{ textAlign: 'center', fontSize: '11px', color: '#44475A', marginTop: '8px' }}>Answer the five questions below — the AI model rates the unit</div>}
                 {isCustomer && step.key === 'sms' && (
                   <div style={{ fontSize: '11px', color: '#44475A', textAlign: 'center', marginTop: '8px' }}>Customer delivery — notify, arrive, unload, sign, receipt.</div>
                 )}
@@ -858,19 +873,30 @@ export default function FieldAppPage() {
               </div>
             )}
 
-            {/* Condition scorer — 1–5 stars, shown when the active step needs it */}
-            {step?.key === 'score' && (
-              <div style={{ margin: '0 12px 10px', background: '#fff', border: '1px solid #E1E2EC', borderRadius: '16px', padding: '18px 16px', textAlign: 'center', boxShadow: '0 1px 4px rgba(26,28,46,.08)' }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '10px' }}>Rate container condition</div>
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
-                  {[1, 2, 3, 4, 5].map(n => (
-                    <button key={n} onClick={() => setCondScore(n)} aria-label={`${n} of 5`} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 0 }}>
-                      <Icon name="star" size={34} color={n <= condScore ? '#F5A623' : '#D6D9E4'} sw={1.4} />
-                    </button>
+            {/* Photo review — when the unit's 8 shots are already on file the
+                photo step shows them for review instead of doing nothing. */}
+            {step?.key === 'photos12' && shots.some(sh => sh.url) && (
+              <div style={{ margin: '0 12px 10px', background: '#fff', border: '1px solid #E1E2EC', borderRadius: '16px', padding: '14px', boxShadow: '0 1px 4px rgba(26,28,46,.08)' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#44475A', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '10px' }}>
+                  Photo documentation · {shots.filter(sh => sh.url).length}/{PHOTO_TARGET} on file
+                </div>
+                <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+                  {shots.filter(sh => sh.url).map(sh => (
+                    <div key={sh.id} style={{ flexShrink: 0, width: '86px' }}>
+                      <img src={photoUrl(sh.url!)} alt={sh.label} style={{ width: '86px', height: '64px', objectFit: 'cover', borderRadius: '8px', display: 'block' }} />
+                      <div style={{ fontSize: '9px', color: '#44475A', marginTop: '3px', lineHeight: 1.3 }}>{sh.label}</div>
+                    </div>
                   ))}
                 </div>
-                <div style={{ fontSize: '11px', color: '#44475A', marginTop: '8px' }}>{condScore ? `${condScore} / 5 — ${['', 'Poor', 'Fair', 'Good', 'Very good', 'Excellent'][condScore]}` : 'Tap a star (1 = poor, 5 = excellent)'}</div>
+                <div style={{ fontSize: '11px', color: '#44475A', marginTop: '8px' }}>Review the shots, re-shoot any slot from the photo session, then continue.</div>
               </div>
+            )}
+
+            {/* Condition scoring — the AI model rates the unit from its photo
+                documentation + the adjuster's five answers ("this container
+                is a B·4"); the step CTA applies the verdict to the listing. */}
+            {step?.key === 'score' && (
+              <FlowGradeCard container={flowCont} onResult={setAiResult} />
             )}
 
             {/* Signature pad — shown when the active step needs it */}
