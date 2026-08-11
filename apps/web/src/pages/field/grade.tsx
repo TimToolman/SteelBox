@@ -9,7 +9,7 @@
 // admin portal and marketplace read.
 // ============================================================
 
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { containers as containersApi, photoUrl, SHOT_LABELS, type Container } from '../../lib/api'
 import { GRADE_META } from '../../lib/specs'
 import {
@@ -257,6 +257,81 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
             style={{ width: '100%', padding: '15px', borderRadius: '999px', border: 'none', fontSize: '14px', fontWeight: 700, cursor: 'pointer', background: '#E65100', color: '#fff', boxShadow: '0 3px 10px rgba(230,81,0,.3)' }}>
             {applying ? 'Applying…' : `Apply grade ${gradeLabel(result.grade, result.sub)} to ${unit.sku}`}
           </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Inline grading card for the pickup/return job flow ─────
+// Same model as the AI Grade tab, compacted into the "Score condition"
+// step: photo analysis starts automatically, the adjuster answers the five
+// questions, and the verdict reads out as "This container is a B·4". The
+// parent gates its step CTA on onResult receiving a non-null result.
+
+export function FlowGradeCard({ container, onResult }: { container: Container | null; onResult: (r: GradeResult | null) => void }) {
+  const [features, setFeatures] = useState<PhotoFeatures[] | null>(null)
+  const [prog, setProg] = useState<[number, number]>([0, 0])
+  const [answers, setAnswers] = useState<Record<string, number>>({})
+  const [result, setResult] = useState<GradeResult | null>(null)
+
+  useEffect(() => {
+    setFeatures(null); setAnswers({}); setResult(null); onResult(null)
+    if (!container) return
+    let alive = true
+    setProg([0, (container.photos || []).filter(Boolean).length])
+    analyzeContainerPhotos(container, (d, t) => { if (alive) setProg([d, t]) })
+      .then(f => { if (alive) setFeatures(f) })
+    return () => { alive = false }
+  }, [container?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The verdict appears the moment photos are read AND all five are answered.
+  useEffect(() => {
+    if (features && Object.keys(answers).length === ADJUSTER_QUESTIONS.length) {
+      const r = gradeContainer(features, answers)
+      setResult(r); onResult(r)
+    } else {
+      setResult(null); onResult(null)
+    }
+  }, [features, answers]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const meta = result ? GRADE_META[result.grade] : null
+  return (
+    <div style={{ margin: '0 12px 10px', background: '#fff', border: `1px solid ${DIV}`, borderRadius: '16px', padding: '14px', boxShadow: '0 1px 4px rgba(26,28,46,.08)' }}>
+      <div style={{ fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '8px' }}>
+        AI condition rating · photos {features ? '✓ analyzed' : prog[1] ? `${prog[0]}/${prog[1]}…` : '— none on file'}
+      </div>
+      {ADJUSTER_QUESTIONS.map((q, qi) => (
+        <div key={q.key} style={{ padding: '8px 0', borderBottom: `1px solid ${DIV}` }}>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: INK, marginBottom: '6px' }}>{qi + 1}. {q.title}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            {q.options.map((o, oi) => {
+              const on = answers[q.key] === oi
+              return (
+                <button key={oi} onClick={() => setAnswers(p => ({ ...p, [q.key]: oi }))}
+                  style={{ textAlign: 'left', padding: '8px 11px', borderRadius: '9px', fontSize: '12px', fontWeight: on ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit', border: `1.5px solid ${on ? BLUE : DIV}`, background: on ? '#D6E4FF' : '#fff', color: on ? BLUE : INK2 }}>
+                  {o.label}{o.capGrade ? ' ⚠' : ''}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+      {result ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingTop: '12px' }}>
+          <div style={{ width: '52px', height: '52px', borderRadius: '12px', background: meta!.color, display: 'grid', placeItems: 'center', color: '#fff', flexShrink: 0, fontSize: '24px', fontWeight: 700 }}>{result.grade}</div>
+          <div>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: INK }}>This container is a {gradeLabel(result.grade, result.sub)} — {meta!.label}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px' }}>
+              <SubPips sub={result.sub} color={meta!.color} />
+              <span style={{ fontSize: '11px', color: INK2 }}>{result.sub}/5 within grade · {result.score}/100</span>
+            </div>
+            {result.capped && <div style={{ fontSize: '11px', color: '#B3261E', fontWeight: 600, marginTop: '2px' }}>⚠ Structural finding capped this unit at grade C</div>}
+          </div>
+        </div>
+      ) : (
+        <div style={{ paddingTop: '10px', fontSize: '11px', color: INK2, textAlign: 'center' }}>
+          {features ? 'Answer all five questions — the model rates the unit automatically.' : 'Reading the photo documentation…'}
         </div>
       )}
     </div>
