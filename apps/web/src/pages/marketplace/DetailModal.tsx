@@ -7,6 +7,7 @@ import { Modal } from '../../components/ui'
 import { useIsMobile } from '../../hooks'
 import { isZipCovered, estimateDelivery, type Container, type Seller } from '../../lib/api'
 import { GRADE_META } from '../../lib/specs'
+import { gradeLabel } from '../../lib/grading'
 import { allowedModes, condOf, SIZE_LABELS, type CartMode } from './shared'
 import { PhotoGallery } from './PhotoGallery'
 import { SellerLogo } from './SellerMark'
@@ -95,7 +96,18 @@ export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onN
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px' }}>{condOf(container) === 'new' ? 'New' : 'Used'} · Grade {grade} — {gradeMeta.label}{container.color ? ` · ${container.color}` : ''}</div>
+              <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px' }}>{condOf(container) === 'new' ? 'New' : 'Used'} · Grade {gradeLabel(grade, container.conditionScore)} — {gradeMeta.label}{container.color ? ` · ${container.color}` : ''}</div>
+              {/* 1–5 sub-score pips — quality within the grade, from the field inspection */}
+              {(container.conditionScore ?? 0) > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                  <span style={{ display: 'inline-flex', gap: '3px' }}>
+                    {[1, 2, 3, 4, 5].map(i => (
+                      <span key={i} style={{ width: '8px', height: '8px', borderRadius: '50%', background: i <= (container.conditionScore || 0) ? gradeMeta.color : 'var(--div2)' }} />
+                    ))}
+                  </span>
+                  <span style={{ fontSize: '10px', color: 'var(--ink3)', fontWeight: 600 }}>{container.conditionScore}/5 within grade{container.inspectedAt ? ` · inspected ${new Date(container.inspectedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}</span>
+                </div>
+              )}
               <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '2px', lineHeight: 1.5 }}>{gradeMeta.desc}</div>
             </div>
           </div>

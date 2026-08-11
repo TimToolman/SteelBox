@@ -28,6 +28,18 @@ const sessionOrders: Order[] = []
 const DEMO_TOKEN = 'demo-token'
 const DEMO_USER_KEY = 'sbx_demo_user'
 
+// Known demo accounts — mirrors the seeded users so each portal is reachable
+// in the static demo: the owner gets the admin portal, drivers and the
+// container adjuster get the field app (incl. the AI grading flow). There is
+// no server to check a password against, so any password signs in.
+const DEMO_ACCOUNTS: Record<string, Partial<AuthUser>> = {
+  'tgmoore@gmail.com': { role: 'admin', name: 'Tim Moore' },
+  'mike@mvpcontainer.com': { role: 'driver', name: 'Mike Torres', driverId: 'drv_01' },
+  'dan@mvpcontainer.com': { role: 'driver', name: 'Dan Park', driverId: 'drv_02' },
+  'luis@mvpcontainer.com': { role: 'driver', name: 'Luis Mendez', driverId: 'drv_03' },
+  'adjuster@mvpcontainer.com': { role: 'adjuster', name: 'Container Adjuster' },
+}
+
 function demoUser(overrides: Partial<AuthUser> = {}): AuthUser {
   return {
     id: 'usr_demo', email: 'demo@mvpcontainers.com', role: 'customer',
@@ -82,9 +94,26 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
     return ok({ order, container: data.containers[0] })
   }
 
-  // ── Auth — a local demo customer, no server ──
+  // ── Field app: apply an AI condition grade (or any admin edit) ──
+  // Session-only merge into the bundled snapshot — the marketplace picks the
+  // new grade up immediately; a reload returns to the shipped data.
+  if (method === 'PATCH' && /^\/containers\/[^/]+$/.test(route)) {
+    const c = data.containers.find(x => x.id === route.split('/')[2])
+    if (!c) throw new Error('Container not found')
+    Object.assign(c, body)
+    return ok(c)
+  }
+  // Collections the field app reads at boot but the snapshot doesn't carry —
+  // empty lists keep every screen alive without a backend.
+  if (method === 'GET' && ['/schedule', '/drivers', '/activity', '/availability', '/customers', '/outbox'].includes(route)) {
+    return ok([])
+  }
+
+  // ── Auth — roles come from the demo account map ──
   if (method === 'POST' && route === '/auth/login') {
-    return ok(signIn({ email: body.email || 'demo@mvpcontainers.com', name: 'Demo Customer' }))
+    const email = String(body.email || 'demo@mvpcontainers.com').trim().toLowerCase()
+    const acct = DEMO_ACCOUNTS[email]
+    return ok(signIn(acct ? { email, ...acct } : { email, name: 'Demo Customer' }))
   }
   if (method === 'POST' && route === '/auth/register') {
     return ok(signIn({ email: body.email, name: body.name || 'Demo Customer', phone: body.phone || '' }))

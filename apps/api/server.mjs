@@ -751,7 +751,10 @@ async function handleRequest(req, res) {
     // Resolve the signed-in user (if any) once for the whole request.
     const user = currentUser(req)
     const denied = (status = 401, message = 'Sign in required') => send(res, status, { message })
-    const hasRole = (...roles) => !!user && roles.includes(user.role)
+    // 'adjuster' (container condition grader) carries driver-level access:
+    // field-app reads plus container updates from the grading flow.
+    const hasRole = (...roles) => !!user &&
+      (roles.includes(user.role) || (user.role === 'adjuster' && roles.includes('driver')))
 
     // ── Auth ──
     if (path === '/auth/login' && method === 'POST') {

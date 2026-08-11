@@ -8,6 +8,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useSnackbar, useAuth, useFavicon, useLive } from '../../hooks'
 import { Snackbar, ProgressRing } from '../../components/ui'
+import { GradeScreen } from './grade'
 import { activity, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, containers as containersApi, availability as availabilityApi, messages as messagesApi, customers as customersApi, orders as ordersApi, parseTrucks, parseWorkHours, encodeWorkHours, photoUrl, fileToDataUrl, cutoutContainer, type ActivityEvent, type Depot, type Driver, type SchedJob, type DayHours, type Availability, type Message, type Customer, type Container, type Order } from '../../lib/api'
 
 // Fallback driver when an admin opens the field app (admin accounts have no
@@ -137,7 +138,7 @@ const fmtTime = (iso: string) => { const d = new Date(iso); return d.toLocaleStr
 
 // ── Types ─────────────────────────────────────────────────
 
-type Screen = 'dashboard' | 'jobs' | 'flow' | 'camera' | 'review' | 'success' | 'schedule' | 'inbox'
+type Screen = 'dashboard' | 'jobs' | 'flow' | 'camera' | 'review' | 'success' | 'schedule' | 'grade' | 'inbox'
 
 interface PhotoShot {
   id: number
@@ -193,6 +194,7 @@ function BottomNav({ active, onNav, unread = 0 }: { active: Screen; onNav: (s: S
     { id: 'dashboard', label: 'Home', icon: 'home' },
     { id: 'jobs',      label: 'Pickups & Returns', icon: 'truck' },
     { id: 'schedule',  label: 'Schedule', icon: 'calendar' },
+    { id: 'grade',     label: 'AI Grade', icon: 'star' },
     { id: 'inbox',     label: 'Inbox', icon: 'inbox', badge: unread },
   ]
   return (
@@ -1426,6 +1428,17 @@ export default function FieldAppPage() {
     review:    renderReview(),
     success:   renderSuccess(),
     schedule:  renderSchedule(),
+    // Drivers and container adjusters rate units from their photo set + a
+    // 5-question walk-around; the model writes grade + 1–5 sub-score back
+    // to the shared container record.
+    grade: (
+      <GradeScreen
+        containers={containerList}
+        inspectorName={user?.name || 'Field Inspector'}
+        toast={toast}
+        onApplied={() => fetchContainers().catch(() => {})}
+      />
+    ),
     inbox:     renderInbox(),
   }
 

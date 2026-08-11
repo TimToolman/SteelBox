@@ -9,7 +9,8 @@
 // ============================================================
 
 import { spawn } from 'node:child_process'
-import { mkdtempSync, cpSync, rmSync } from 'node:fs'
+import { mkdtempSync, cpSync, rmSync, readFileSync, writeFileSync } from 'node:fs'
+import { randomBytes, scryptSync } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -20,6 +21,22 @@ const BASE = `http://localhost:${PORT}`
 
 const dataDir = mkdtempSync(join(tmpdir(), 'sbx-test-'))
 cpSync(join(__dirname, 'data'), dataDir, { recursive: true })
+
+// The repo users.csv sometimes gets committed from a live instance, carrying
+// real (changed) password hashes — which would break every login below.
+// Reset all accounts in the throwaway copy to the seed password.
+{
+  const salt = randomBytes(8).toString('hex')
+  const seedHash = `${salt}$${scryptSync('test1234', salt, 32).toString('hex')}`
+  const usersCsv = join(dataDir, 'users.csv')
+  const rows = readFileSync(usersCsv, 'utf8').split(/\r?\n/)
+  writeFileSync(usersCsv, rows.map((line, i) => {
+    if (i === 0 || !line.trim()) return line
+    const cols = line.split(',')
+    cols[2] = seedHash // id,email,passwordHash,… — no quoted commas before col 2
+    return cols.join(',')
+  }).join('\n'))
+}
 
 const server = spawn(process.execPath, [join(__dirname, 'server.mjs')], {
   env: { ...process.env, DATA_DIR: dataDir, PORT: String(PORT), SMTP_USER: '', SMTP_PASS: '' },
