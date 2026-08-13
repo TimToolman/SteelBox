@@ -23,6 +23,7 @@ import { OrderBuildModal } from './OrderBuildModal'
 import { CustomerMessageModal } from './CustomerMessageModal'
 import { BulkForm } from './BulkForm'
 import { CustomerProfileModal, type ProfileTab } from './CustomerProfileModal'
+import { InsightsPanel } from './Insights'
 
 // ── Demo photo fallback ────────────────────────────────────
 // Only three units have real photo documentation so far. Until the rest
@@ -63,7 +64,7 @@ export default function MarketplacePage() {
   const qp = (k: string) => new URLSearchParams(window.location.search).get(k)
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const t = qp('tab')
-    return t === 'rent' || t === 'custom' || t === 'bulk' ? t : 'buy'
+    return t === 'rent' || t === 'custom' || t === 'bulk' || t === 'insights' ? t : 'buy'
   })
   const ALL_SIZES = SIZE_OPTIONS.map(([v]) => v)
   // Top-level gate: shoppers first pick New or Used ('all' = grouped view);
@@ -628,6 +629,11 @@ export default function MarketplacePage() {
             ))}
           </div>
         </div>
+      )}
+
+      {/* ── Insights panel — review queue + role-aware analytics ── */}
+      {activeTab === 'insights' && (
+        <InsightsPanel user={user} containers={allContainers} />
       )}
 
       {/* ── B2B / Bulk panel ── */}

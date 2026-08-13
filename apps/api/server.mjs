@@ -94,11 +94,11 @@ const SCHEMAS = {
     // customEta/customBuildName only apply to custom-build orders
     // (status custom_in_progress): the promised completion date + which
     // catalog build the unit is being fabricated as.
-    headers: ['id','sku','guid','stockNumber','size','grade','condition','color','status','buyPrice','rentMonthly','photos','photoCount','has360','depotLocation','bayNumber','inspectorName','inspectedAt','deliveryIncluded','listingType','createdAt','purchaseCost','conditionScore','customEta','customBuildName','aiGraded','supplierId','damagePhotos','damageSeverity'],
+    headers: ['id','sku','guid','stockNumber','size','grade','condition','color','status','buyPrice','rentMonthly','photos','photoCount','has360','depotLocation','bayNumber','inspectorName','inspectedAt','deliveryIncluded','listingType','createdAt','purchaseCost','conditionScore','customEta','customBuildName','aiGraded','supplierId','damagePhotos','damageSeverity','preDamagePrice'],
     types: {
       buyPrice: 'number', rentMonthly: 'numberOrNull', photoCount: 'number', purchaseCost: 'number', conditionScore: 'number',
       has360: 'boolean', deliveryIncluded: 'boolean', aiGraded: 'boolean',
-      photos: 'array', inspectedAt: 'stringOrNull', damagePhotos: 'array', damageSeverity: 'number',
+      photos: 'array', inspectedAt: 'stringOrNull', damagePhotos: 'array', damageSeverity: 'number', preDamagePrice: 'number',
     },
   },
   orders: {
@@ -173,8 +173,8 @@ const SCHEMAS = {
   // shipper approval → repair (retail) or sell-as-damaged (wholesale).
   claims: {
     file: 'claims.csv',
-    headers: ['id','claimNumber','containerId','containerSku','supplierId','supplierName','shipperId','shipperName','vesselRef','status','severity','photos','notes','estimateAmount','estimateNotes','shipperDecision','shipperNotes','shipperDecidedAt','repairShopId','repairShopName','repairDate','decision','inspectorName','inspectedAt','createdAt'],
-    types: { severity: 'number', photos: 'array', estimateAmount: 'number', shipperDecidedAt: 'stringOrNull', inspectedAt: 'stringOrNull' },
+    headers: ['id','claimNumber','containerId','containerSku','supplierId','supplierName','shipperId','shipperName','vesselRef','status','severity','photos','notes','estimateAmount','estimateNotes','shipperDecision','shipperNotes','shipperDecidedAt','repairShopId','repairShopName','repairDate','decision','inspectorName','inspectedAt','createdAt','events','sharedAt','shipperViewedAt'],
+    types: { severity: 'number', photos: 'array', estimateAmount: 'number', shipperDecidedAt: 'stringOrNull', inspectedAt: 'stringOrNull', sharedAt: 'stringOrNull', shipperViewedAt: 'stringOrNull' },
   },
   // Messages between drivers, admin dispatch, and customers. Each row is one direction;
   // toDriverId is the driver party in the conversation (whether sending or receiving).
@@ -187,7 +187,7 @@ const SCHEMAS = {
   // driverId links driver accounts to drivers.csv, customerId links buyers to customers.csv.
   users: {
     file: 'users.csv',
-    headers: ['id','email','passwordHash','role','name','phone','driverId','customerId','phoneVerified','active','createdAt','sellerId','supplierId','shipperId'],
+    headers: ['id','email','passwordHash','role','name','phone','driverId','customerId','phoneVerified','active','createdAt','sellerId','supplierId','shipperId','digestFreq','lastDigestAt','lastLoginAt'],
     types: { phoneVerified: 'boolean', active: 'boolean' },
   },
   // Outbound email + SMS log. In dev nothing actually leaves the machine —
@@ -566,6 +566,56 @@ function ensureSeedCustomBuilds() {
   console.log('Seeded custom builds catalog (5 products)')
 }
 
+// ── Claim audit timeline + notifications ──────────────────
+// Every material action lands on the claim's events log (arbitration lives
+// and dies on chain-of-custody). Notifications respect each user's digest
+// preference: per_container emails immediately; daily/weekly sends at most
+// one rolled-up email per period, triggered lazily by the next activity.
+
+const SITE_ORIGIN = process.env.SITE_ORIGIN || 'https://www.mvpcontainers.com'
+
+function addClaimEvent(claim, actor, text) {
+  let events = []
+  try { events = JSON.parse(claim.events || '[]') } catch { /* rebuild */ }
+  events.push({ t: new Date().toISOString(), actor, text })
+  claim.events = JSON.stringify(events)
+}
+
+const DIGEST_MS = { daily: 24 * 60 * 60 * 1000, weekly: 7 * 24 * 60 * 60 * 1000 }
+
+function claimQueueFor(u) {
+  const all = readTable('claims')
+  if (u.supplierId) return all.filter(c => c.supplierId === u.supplierId && ['awaiting_estimate', 'awaiting_decision'].includes(c.status))
+  if (u.shipperId) return all.filter(c => c.shipperId === u.shipperId && c.status === 'awaiting_shipper')
+  return []
+}
+
+// Notify the counterparty about claim activity, honoring their digest pref.
+function notifyClaimParty(link, subject, body) {
+  const users = readTable('users')
+  const u = users.find(x => (link.supplierId && x.supplierId === link.supplierId) || (link.shipperId && x.shipperId === link.shipperId))
+  if (!u) return
+  const pref = u.digestFreq || 'per_container'
+  const queueUrl = `${SITE_ORIGIN}/shop?tab=insights`
+  if (pref === 'per_container') {
+    queueMessage('email', u.email, subject, `${body}\n\nReview it here: ${queueUrl}`, 'claim', link.id || '')
+    return
+  }
+  const period = DIGEST_MS[pref] ?? DIGEST_MS.daily
+  const last = u.lastDigestAt ? new Date(u.lastDigestAt).getTime() : 0
+  if (Date.now() - last < period) return // rolls into the next digest
+  const queue = claimQueueFor(u)
+  if (queue.length === 0) return
+  const lines = queue.map(c => `• ${c.containerSku} (${c.claimNumber}) — ${c.status.replace(/_/g, ' ')}`).join('\n')
+  queueMessage('email', u.email,
+    `Your ${pref} claims digest — ${queue.length} container${queue.length > 1 ? 's' : ''} to review`,
+    `These containers are waiting on you:\n\n${lines}\n\nOpen your review queue: ${queueUrl}`,
+    'digest', u.id)
+  const i = users.findIndex(x => x.id === u.id)
+  users[i] = { ...u, lastDigestAt: new Date().toISOString() }
+  writeTable('users', users)
+}
+
 // Seed the damage-claim reference tables once: two suppliers, two shipping
 // lines, and the approved repair shop directory.
 function ensureSeedClaimTables() {
@@ -847,6 +897,12 @@ async function handleRequest(req, res) {
           ...(smtpConfigured() ? {} : { devCode: code }),
         })
       }
+      // Login audit — arbitration wants proof the shipper actually signed in.
+      {
+        const users = readTable('users')
+        const i = users.findIndex(x => x.id === u.id)
+        if (i !== -1) { users[i] = { ...users[i], lastLoginAt: new Date().toISOString() }; writeTable('users', users) }
+      }
       return send(res, 200, { token: signToken(u.id), user: { ...publicUser(u), mustChangePassword } })
     }
 
@@ -937,6 +993,17 @@ async function handleRequest(req, res) {
         `Hi ${rec.name}, your MVP Container account is ready. Browse containers and order any time — you'll verify your mobile number at checkout.`,
         'user', rec.id)
       return send(res, 201, { token: signToken(rec.id), user: publicUser(rec) })
+    }
+
+    if (path === '/auth/me' && method === 'PATCH') {
+      if (!user) return denied()
+      const body = await readBody(req)
+      const users = readTable('users')
+      const i = users.findIndex(x => x.id === user.id)
+      if (i === -1) return send(res, 404, { message: 'Account not found' })
+      if (['per_container', 'daily', 'weekly'].includes(body.digestFreq)) users[i].digestFreq = body.digestFreq
+      writeTable('users', users)
+      return send(res, 200, publicUser(users[i]))
     }
 
     if (path === '/auth/me' && method === 'GET') {
@@ -1877,6 +1944,21 @@ async function handleRequest(req, res) {
       if (seg.length === 1 && method === 'GET') {
         const rows = visible()
         if (!rows) return denied(user ? 403 : 401, 'Staff access required')
+        // Audit: the first shipper view (and the first after each re-share)
+        // lands on the timeline — proof the line actually looked at it.
+        if (hasRole('shipper') && !hasRole('admin')) {
+          let dirty = false
+          for (const c of rows) {
+            const seen = c.shipperViewedAt ? new Date(c.shipperViewedAt).getTime() : 0
+            const shared = c.sharedAt ? new Date(c.sharedAt).getTime() : 0
+            if (c.status === 'awaiting_shipper' && (!seen || shared > seen)) {
+              c.shipperViewedAt = new Date().toISOString()
+              addClaimEvent(c, user.name || c.shipperName, 'Shipper signed in and viewed the claim')
+              dirty = true
+            }
+          }
+          if (dirty) writeTable('claims', all)
+        }
         return send(res, 200, [...rows].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')))
       }
 
@@ -1902,7 +1984,9 @@ async function handleRequest(req, res) {
           repairShopId: '', repairShopName: '', repairDate: '', decision: '',
           inspectorName: '', inspectedAt: null,
           createdAt: new Date().toISOString(),
+          events: '[]', sharedAt: null, shipperViewedAt: null,
         }
+        addClaimEvent(record, user.name || 'Supplier', `Claim filed against ${record.shipperName}${record.vesselRef ? ` (${record.vesselRef})` : ''}`)
         all.push(record)
         writeTable('claims', all)
         return send(res, 201, record)
@@ -1924,10 +2008,54 @@ async function handleRequest(req, res) {
         const patch = hasRole('shipper') && !hasRole('admin')
           ? { shipperDecision: body.shipperDecision, shipperNotes: body.shipperNotes, shipperDecidedAt: body.shipperDecidedAt, status: body.status }
           : body
+        const before = { status: claim.status, shipperDecision: claim.shipperDecision }
         for (const [k, v] of Object.entries(patch)) {
-          if (v === undefined || k === 'id' || k === 'claimNumber' || k === 'createdAt') continue
+          if (v === undefined || k === 'id' || k === 'claimNumber' || k === 'createdAt' || k === 'events') continue
           claim[k] = k === 'severity' || k === 'estimateAmount' ? Number(v) : v
         }
+        // Timeline + notifications per transition
+        const actor = user.name || user.role
+        if (claim.status !== before.status) {
+          if (claim.status === 'awaiting_estimate') addClaimEvent(claim, claim.inspectorName || actor, `Damage inspected — severity D·${claim.severity}`)
+          if (claim.status === 'awaiting_shipper') {
+            addClaimEvent(claim, actor, `Repair estimate $${Number(claim.estimateAmount).toLocaleString()} submitted to ${claim.shipperName}`)
+            notifyClaimParty({ shipperId: claim.shipperId, id: claim.id },
+              `Repair estimate to review — ${claim.containerSku} (${claim.claimNumber})`,
+              `${claim.supplierName} submitted a $${Number(claim.estimateAmount).toLocaleString()} repair estimate for ${claim.containerSku}.${claim.estimateNotes ? `\nNotes: ${claim.estimateNotes}` : ''}`)
+          }
+          if (claim.status === 'awaiting_decision' && claim.shipperDecision !== before.shipperDecision) {
+            addClaimEvent(claim, actor, `Shipper ${claim.shipperDecision} the estimate${claim.shipperNotes ? ` — “${claim.shipperNotes}”` : ''}`)
+            notifyClaimParty({ supplierId: claim.supplierId, id: claim.id },
+              `Estimate ${claim.shipperDecision} — ${claim.containerSku} (${claim.claimNumber})`,
+              `${claim.shipperName} ${claim.shipperDecision} your $${Number(claim.estimateAmount).toLocaleString()} estimate for ${claim.containerSku}. Decide: repair (retail) or sell as damaged (wholesale).`)
+          }
+          if (claim.status === 'repair_scheduled') addClaimEvent(claim, actor, `Repair booked — ${claim.repairShopName}, ${claim.repairDate}`)
+          if (claim.status === 'sell_as_damaged') addClaimEvent(claim, actor, `Listed for sale as damaged D·${claim.severity}`)
+          if (claim.status === 'closed') addClaimEvent(claim, actor, 'Claim closed — unit stays retail')
+        }
+        all[idx] = claim
+        writeTable('claims', all)
+        return send(res, 200, claim)
+      }
+
+      // Share the estimate with the shipping line: email the packet or their
+      // login link. Lands on the timeline either way (and re-arms the
+      // viewed-stamp so their next sign-in is auditable).
+      if (seg.length === 3 && seg[2] === 'share' && method === 'POST') {
+        if (!hasRole('admin', 'supplier')) return denied(user ? 403 : 401, 'Supplier access required')
+        const body = await readBody(req)
+        const mode = body.mode === 'packet' ? 'packet' : 'link'
+        const shipperUser = readTable('users').find(x => x.shipperId === claim.shipperId)
+        const to = shipperUser?.email || readTable('shippers').find(x => x.id === claim.shipperId)?.email
+        const loginUrl = `${SITE_ORIGIN}/shipper?claim=${claim.claimNumber}`
+        queueMessage('email', to,
+          `${mode === 'packet' ? 'Claim packet' : 'Estimate to review'} — ${claim.containerSku} (${claim.claimNumber})`,
+          mode === 'packet'
+            ? `${claim.supplierName} shared the full claim packet for ${claim.containerSku}: damage evidence, severity D·${claim.severity}, and a $${Number(claim.estimateAmount).toLocaleString()} repair estimate.\n\nSign in to review and decide: ${loginUrl}`
+            : `${claim.supplierName} requests your review of a $${Number(claim.estimateAmount).toLocaleString()} repair estimate for ${claim.containerSku}.\n\nSign in to review and decide: ${loginUrl}`,
+          'claim', claim.id)
+        claim.sharedAt = new Date().toISOString()
+        addClaimEvent(claim, user.name || claim.supplierName, `Estimate shared with ${claim.shipperName} by email (${mode === 'packet' ? 'claim packet' : 'login link'})`)
         all[idx] = claim
         writeTable('claims', all)
         return send(res, 200, claim)

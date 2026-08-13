@@ -185,6 +185,16 @@ try {
   const dec = await api(`/claims/${claimId}`, { method: 'PATCH', token: shipper, body: { shipperDecision: 'rejected', shipperNotes: 'Pre-existing wear', shipperDecidedAt: new Date().toISOString(), status: 'awaiting_decision', estimateAmount: 1 } })
   check('shipper decision recorded (estimate untouchable)', dec.status === 200 && dec.body?.shipperDecision === 'rejected' && dec.body?.estimateAmount === 2400)
 
+  // Share with the shipper + audit trail + digest preference.
+  const shr = await api(`/claims/${claimId}/share`, { method: 'POST', token: supplier, body: { mode: 'packet' } })
+  check('estimate shared with shipper (packet email)', shr.status === 200 && !!shr.body?.sharedAt)
+  const evs = JSON.parse(shr.body.events || '[]')
+  check('audit timeline records the chain of custody', evs.length >= 4 && evs.some(e => e.text.includes('shared with')) && evs.some(e => e.text.includes('Damage inspected')))
+  const outboxShare = (await api('/outbox', { token: admin })).body
+  check('shipper share email queued with login link', outboxShare.some(m => m.to === 'shipper@meridianlines.com' && m.body.includes('/shipper?claim=')))
+  const pref = await api('/auth/me', { method: 'PATCH', token: shipper, body: { digestFreq: 'weekly' } })
+  check('digest preference saved', pref.status === 200 && pref.body?.digestFreq === 'weekly')
+
   // Supplier sells the unit as damaged: their own container, grade D.
   const sell = await api(`/containers/${dmgUnit.id}`, { method: 'PATCH', token: supplier, body: { grade: 'D', damageSeverity: 4, damagePhotos: [], condition: 'used', status: 'available' } })
   check('supplier lists own unit as damaged D·4', sell.status === 200 && sell.body?.grade === 'D' && sell.body?.damageSeverity === 4)

@@ -211,7 +211,12 @@ export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onN
           <div style={{ fontSize: '30px', fontWeight: 700, fontFamily: 'var(--mono)', letterSpacing: '-0.4px' }}>
             {txn === 'rent'
               ? (rentMonthly ? <>${rentMonthly}<span style={{ fontSize: '15px', color: 'var(--ink3)', fontWeight: 600 }}>/mo</span></> : 'Call for pricing')
-              : `$${buyPrice.toLocaleString()}`}
+              : <>
+                  ${buyPrice.toLocaleString()}
+                  {grade === 'D' && (container.preDamagePrice ?? 0) > buyPrice && (
+                    <span style={{ fontSize: '15px', color: 'var(--ink3)', fontWeight: 600, textDecoration: 'line-through', marginLeft: '8px' }}>${container.preDamagePrice!.toLocaleString()}</span>
+                  )}
+                </>}
           </div>
           <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '2px', marginBottom: '14px' }}>
             {txn === 'rent' ? 'Monthly rental rate · one-month refundable deposit' : 'One-time purchase price · delivery included'}

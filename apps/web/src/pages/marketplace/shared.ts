@@ -6,7 +6,7 @@
 
 import { SIZE_LABEL, type Container, type ContainerCondition, type ContainerSize } from '../../lib/api'
 
-export type Tab = 'buy' | 'rent' | 'custom' | 'bulk'
+export type Tab = 'buy' | 'rent' | 'custom' | 'bulk' | 'insights'
 export type SortKey = 'price-asc' | 'price-desc' | 'condition' | 'newest' | 'new-first'
 export type CartMode = 'buy' | 'rent'
 export interface CartItem { container: Container; mode: CartMode; rentTerm: number }

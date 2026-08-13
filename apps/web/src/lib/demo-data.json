@@ -3250,8 +3250,8 @@
    "condition": "used",
    "color": "Beige",
    "status": "available",
-   "buyPrice": 2525,
-   "rentMonthly": 95,
+   "buyPrice": 1525,
+   "rentMonthly": null,
    "photos": [
     "/photos/CDI-20-0002-01-mreab491.webp",
     "/photos/CDI-20-0002-02-mreabfpg.webp",
@@ -3269,7 +3269,7 @@
    "inspectorName": "",
    "inspectedAt": "2026-07-10T01:58:29.810Z",
    "deliveryIncluded": true,
-   "listingType": "both",
+   "listingType": "buy",
    "createdAt": "2026-07-06T12:00:00.000Z",
    "purchaseCost": 1400,
    "conditionScore": 5,
@@ -3284,7 +3284,8 @@
     "/photos/CDI-20-0002-03-mreac2cs.webp",
     "/photos/CDI-20-0002-04-mreacgx1.webp",
     "/photos/CDI-20-0002-06-mreadfgd.jpg"
-   ]
+   ],
+   "preDamagePrice": 2525
   },
   {
    "id": "ctr_seed_0067",
@@ -3296,8 +3297,8 @@
    "condition": "used",
    "color": "Beige",
    "status": "available",
-   "buyPrice": 2525,
-   "rentMonthly": 95,
+   "buyPrice": 2075,
+   "rentMonthly": null,
    "photos": [
     "/photos/CDI-20-0003-01-mreakeao.webp",
     "/photos/CDI-20-0003-02-mreakqe7.webp",
@@ -3315,7 +3316,7 @@
    "inspectorName": "",
    "inspectedAt": "2026-07-10T02:05:24.837Z",
    "deliveryIncluded": true,
-   "listingType": "both",
+   "listingType": "buy",
    "createdAt": "2026-07-06T12:00:00.000Z",
    "purchaseCost": 1400,
    "conditionScore": 5,
@@ -3329,7 +3330,8 @@
    "damagePhotos": [
     "/photos/CDI-20-0003-02-mreakqe7.webp",
     "/photos/CDI-20-0003-05-mrealvat.webp"
-   ]
+   ],
+   "preDamagePrice": 2525
   },
   {
    "id": "ctr_seed_0068",
@@ -5558,7 +5560,8 @@
    "supplierId": "sup_01",
    "phoneVerified": false,
    "active": true,
-   "createdAt": "2026-08-07T14:00:00.000Z"
+   "createdAt": "2026-08-07T14:00:00.000Z",
+   "digestFreq": "per_container"
   },
   {
    "id": "usr_shp01",
@@ -5571,7 +5574,8 @@
    "shipperId": "shp_01",
    "phoneVerified": false,
    "active": true,
-   "createdAt": "2026-08-07T14:00:00.000Z"
+   "createdAt": "2026-08-07T14:00:00.000Z",
+   "digestFreq": "daily"
   }
  ],
  "outbox": [],
@@ -5670,7 +5674,8 @@
    "decision": "",
    "inspectorName": "",
    "inspectedAt": null,
-   "createdAt": "2026-08-06T18:20:00.000Z"
+   "createdAt": "2026-08-06T18:20:00.000Z",
+   "events": "[{\"t\":\"2026-08-06T18:20:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Claim filed against Meridian Lines (MV KESTREL 224E)\"}]"
   },
   {
    "id": "clm_demo2",
@@ -5700,7 +5705,8 @@
    "decision": "",
    "inspectorName": "J. Alvarez",
    "inspectedAt": "2026-08-05T15:10:00.000Z",
-   "createdAt": "2026-08-04T12:00:00.000Z"
+   "createdAt": "2026-08-04T12:00:00.000Z",
+   "events": "[{\"t\":\"2026-08-04T12:00:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Claim filed against Meridian Lines (MV KESTREL 221E)\"},{\"t\":\"2026-08-05T15:10:00Z\",\"actor\":\"J. Alvarez\",\"text\":\"Damage inspected — severity D·3\"}]"
   },
   {
    "id": "clm_demo3",
@@ -5730,7 +5736,9 @@
    "decision": "",
    "inspectorName": "J. Alvarez",
    "inspectedAt": "2026-08-03T10:30:00.000Z",
-   "createdAt": "2026-08-02T09:00:00.000Z"
+   "createdAt": "2026-08-02T09:00:00.000Z",
+   "events": "[{\"t\":\"2026-08-02T09:00:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Claim filed against Meridian Lines (MV PELICAN 087W)\"},{\"t\":\"2026-08-03T10:30:00Z\",\"actor\":\"J. Alvarez\",\"text\":\"Damage inspected — severity D·4\"},{\"t\":\"2026-08-04T08:15:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Repair estimate $2,400 submitted to Meridian Lines\"},{\"t\":\"2026-08-04T08:16:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Estimate shared with Meridian Lines by email (login link)\"}]",
+   "sharedAt": "2026-08-04T08:16:00Z"
   },
   {
    "id": "clm_demo4",
@@ -5759,7 +5767,9 @@
    "decision": "",
    "inspectorName": "M. Torres",
    "inspectedAt": "2026-08-05T09:00:00.000Z",
-   "createdAt": "2026-08-01T08:00:00.000Z"
+   "createdAt": "2026-08-01T08:00:00.000Z",
+   "events": "[{\"t\":\"2026-08-01T08:00:00Z\",\"actor\":\"Marcus Webb\",\"text\":\"Claim filed against Austral Shipping (MV IBIS 314N)\"},{\"t\":\"2026-08-05T09:00:00Z\",\"actor\":\"M. Torres\",\"text\":\"Damage inspected — severity D·2\"},{\"t\":\"2026-08-05T14:00:00Z\",\"actor\":\"Marcus Webb\",\"text\":\"Repair estimate $1,150 submitted to Austral Shipping\"},{\"t\":\"2026-08-06T19:45:00Z\",\"actor\":\"Austral Shipping\",\"text\":\"Shipper signed in and viewed the claim\"},{\"t\":\"2026-08-06T20:00:00Z\",\"actor\":\"Austral Shipping\",\"text\":\"Shipper approved the estimate — “Approved at quoted amount”\"}]",
+   "shipperViewedAt": "2026-08-06T19:45:00Z"
   }
  ]
 }

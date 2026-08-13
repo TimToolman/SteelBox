@@ -95,6 +95,10 @@ export const GRADE_META: Record<ContainerGrade, { label: string; desc: string; c
 
 export const GRADE_ORDER: ContainerGrade[] = ['A', 'B', 'C', 'R', 'X', 'D']
 
+// Suggested as-is discount when a unit sells as damaged, by severity —
+// shown to the supplier as a pre-filled (editable) price.
+export const DAMAGE_DISCOUNT: Record<number, number> = { 1: 0.10, 2: 0.18, 3: 0.28, 4: 0.40, 5: 0.55 }
+
 // ── Custom modifications ──────────────────────────────────
 // Static marketing catalog of the modifications our fab shop
 // quotes most often. The transactable custom-build catalog stays

@@ -11,9 +11,10 @@
 
 import React, { useEffect, useState } from 'react'
 import { useAuth, useSnackbar } from '../../hooks'
-import { claims as claimsApi, photoUrl, DAMAGE_SHOT_LABELS, type DamageClaim } from '../../lib/api'
+import { claims as claimsApi, prefs as prefsApi, photoUrl, DAMAGE_SHOT_LABELS, type DamageClaim, type AuthUser } from '../../lib/api'
 import { damageLabel, SEVERITY_WORD } from '../../lib/grading'
 import { Snackbar } from '../../components/ui'
+import { ClaimTimeline, ClaimPacket } from '../supplier/claimkit'
 
 const INK = '#0D0E12', INK2 = '#44474F', INK3 = '#6B7280', DIV = '#E2E4E9', RED = '#B3261E', GREEN = '#1B7A5A'
 const card: React.CSSProperties = { background: '#fff', border: `1px solid ${DIV}`, borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,.06)' }
@@ -24,6 +25,10 @@ export default function ShipperReviewPage() {
   const [claimList, setClaimList] = useState<DamageClaim[]>([])
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
+  const [packet, setPacket] = useState<DamageClaim | null>(null)
+  const [digest, setDigest] = useState<AuthUser['digestFreq']>(user?.digestFreq || 'per_container')
+  // Deep link from a share email: /shipper?claim=CLM-0003 pins that claim first
+  const wanted = new URLSearchParams(window.location.search).get('claim')
 
   const refresh = () => claimsApi.list().then(setClaimList).catch(() => {})
   useEffect(() => { refresh() }, [])
@@ -45,7 +50,8 @@ export default function ShipperReviewPage() {
     } finally { setBusy(null) }
   }
 
-  const queue = claimList.filter(c => c.status === 'awaiting_shipper')
+  const queue = [...claimList.filter(c => c.status === 'awaiting_shipper')]
+    .sort((a, b) => (a.claimNumber === wanted ? -1 : b.claimNumber === wanted ? 1 : 0))
   const decided = claimList.filter(c => !!c.shipperDecision)
 
   return (
@@ -56,7 +62,16 @@ export default function ShipperReviewPage() {
           <div style={{ fontWeight: 700, fontSize: '15px', lineHeight: 1.2 }}>Shipper Claims Review</div>
           <div style={{ fontSize: '11px', color: INK3 }}>{user?.name}{user ? ` · ${user.email}` : ''}</div>
         </div>
-        <button onClick={logout} style={{ marginLeft: 'auto', padding: '9px 16px', borderRadius: '999px', border: `1.5px solid ${DIV}`, background: '#fff', color: INK2, fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>Sign out</button>
+        <label style={{ marginLeft: 'auto', fontSize: '11px', color: INK3, display: 'flex', alignItems: 'center', gap: '6px' }}>
+          Claim emails
+          <select value={digest} onChange={e => { const v = e.target.value as AuthUser['digestFreq']; setDigest(v); prefsApi.update({ digestFreq: v! }).then(() => toast(`Emails: ${v === 'per_container' ? 'one per container' : `${v} digest of your review queue`}`)).catch(() => {}) }}
+            style={{ padding: '7px 9px', border: `1.5px solid ${DIV}`, borderRadius: '10px', fontSize: '12px', outline: 'none', fontFamily: 'inherit' }}>
+            <option value="per_container">Per container</option>
+            <option value="daily">Daily digest</option>
+            <option value="weekly">Weekly digest</option>
+          </select>
+        </label>
+        <button onClick={logout} style={{ padding: '9px 16px', borderRadius: '999px', border: `1.5px solid ${DIV}`, background: '#fff', color: INK2, fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>Sign out</button>
       </header>
 
       <main style={{ maxWidth: '900px', margin: '0 auto', padding: '22px 16px 80px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -67,7 +82,7 @@ export default function ShipperReviewPage() {
 
         {queue.length === 0 && <div style={{ ...card, textAlign: 'center', color: INK3, fontSize: '13px' }}>Nothing waiting on you.</div>}
         {queue.map(c => (
-          <div key={c.id} style={card}>
+          <div key={c.id} style={{ ...card, ...(c.claimNumber === wanted ? { border: '2px solid #0E7490', boxShadow: '0 0 0 4px rgba(14,116,144,.12)' } : {}) }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
               <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '14px' }}>{c.containerSku}</span>
               <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: INK3 }}>{c.claimNumber}{c.vesselRef ? ` · ${c.vesselRef}` : ''}</span>
@@ -92,6 +107,7 @@ export default function ShipperReviewPage() {
             <div style={{ fontSize: '11px', color: INK3, marginTop: '6px' }}>Inspected {c.inspectedAt ? new Date(c.inspectedAt).toLocaleDateString() : '—'} by {c.inspectorName || '—'}</div>
 
             <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+              <button onClick={() => setPacket(c)} style={{ padding: '9px 16px', borderRadius: '999px', border: `1.5px solid ${DIV}`, background: '#fff', color: INK2, fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>📄 Claim packet (PDF)</button>
               <input value={notes[c.id] ?? ''} onChange={e => setNotes(p => ({ ...p, [c.id]: e.target.value }))} placeholder="Decision notes (optional)"
                 style={{ flex: 1, minWidth: '220px', padding: '9px 12px', border: `1.5px solid ${DIV}`, borderRadius: '10px', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }} />
               <button onClick={() => decide(c, 'approved')} disabled={busy === c.id}
@@ -99,6 +115,7 @@ export default function ShipperReviewPage() {
               <button onClick={() => decide(c, 'rejected')} disabled={busy === c.id}
                 style={{ padding: '9px 18px', borderRadius: '999px', border: 'none', background: RED, color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>Reject</button>
             </div>
+            <ClaimTimeline claim={c} />
           </div>
         ))}
 
@@ -117,6 +134,7 @@ export default function ShipperReviewPage() {
           </div>
         )}
       </main>
+      {packet && <ClaimPacket claim={packet} onClose={() => setPacket(null)} />}
       <Snackbar message={message} open={snackOpen} onClose={snackClose} />
     </div>
   )
