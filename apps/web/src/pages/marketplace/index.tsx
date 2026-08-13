@@ -13,7 +13,7 @@ import { containers, orders, messages as messagesApi, customBuilds as customBuil
 import { GRADE_META } from '../../lib/specs'
 import { SiteNav } from '../landing'
 import { resolveTenant } from '../../tenant'
-import { SIZE_OPTIONS, condOf, type Tab, type SortKey, type CartMode, type CartItem, type CheckoutDetails } from './shared'
+import { SIZE_OPTIONS, condOf, useFavorites, type Tab, type SortKey, type CartMode, type CartItem, type CheckoutDetails } from './shared'
 import { depotsServingZip, type DepotInRange } from '../../lib/geo'
 import { QuoteDialog } from './QuoteDialog'
 import { ContainerCard } from './ContainerCard'
@@ -103,6 +103,9 @@ export default function MarketplacePage() {
   const [quotePurpose, setQuotePurpose] = useState<'quote' | 'contact' | 'rental'>('quote')
   const [cart, setCart] = useState<CartItem[]>([])
   const [cartOpen, setCartOpen] = useState(false)
+  // Saved units (device-local) + the Favorites-only view toggle.
+  const { favs, toggleFav } = useFavorites()
+  const [favOnly, setFavOnly] = useState(false)
   const [msgOpen, setMsgOpen] = useState(false)
   // ?profile=1 deep link: the landing pages' profile icon lands here with
   // the sign-in / profile sheet already open.
@@ -216,6 +219,7 @@ export default function MarketplacePage() {
 
   const priceOf = (c: Container) => activeTab === 'rent' ? (c.rentMonthly ?? c.buyPrice) : c.buyPrice
   const filtered = tabListable.filter(c => {
+    if (favOnly && !favs.has(c.id)) return false
     if (condFilter !== 'all' && condOf(c) !== condFilter) return false
     if (geoDepotNames && !geoDepotNames.has(c.depotLocation)) return false
     if (!geoDepotNames && area && marketOf(c) !== area) return false
@@ -543,6 +547,12 @@ export default function MarketplacePage() {
           <div style={{ flex: 1, padding: '18px 18px 60px', minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '14px', fontWeight: 700 }}>{filtered.length} containers</span>
+              {/* Favorites view — hearts saved on this device */}
+              <button onClick={() => setFavOnly(o => !o)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '5px 12px', borderRadius: 'var(--pill)', border: `1.5px solid ${favOnly ? '#E0245E' : 'var(--div)'}`, background: favOnly ? '#FDE8EF' : 'var(--surf-w)', color: favOnly ? '#E0245E' : 'var(--ink2)', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill={favs.size ? '#E0245E' : 'none'} stroke="#E0245E" strokeWidth="2.2" strokeLinejoin="round"><path d="M12 20.6S3.5 15.4 3.5 9.9c0-2.9 2.2-4.9 4.6-4.9 1.6 0 3 .8 3.9 2.1.9-1.3 2.3-2.1 3.9-2.1 2.4 0 4.6 2 4.6 4.9 0 5.5-8.5 10.7-8.5 10.7z" /></svg>
+                Favorites{favs.size > 0 ? ` (${favs.size})` : ''}
+              </button>
               <span style={{ fontSize: '13px', color: 'var(--ink3)' }}>· Gulf Coast region</span>
               <span
                 title="Units marked with the AI badge had their condition grade scored by machine-learning imaging models from the 8-photo field inspection, then verified by our inspectors."
@@ -561,9 +571,9 @@ export default function MarketplacePage() {
               </div>
             ) : filtered.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--ink3)' }}>
-                <div style={{ fontSize: '32px', marginBottom: '12px' }}>📦</div>
-                <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '4px' }}>No containers match your filters</div>
-                <div style={{ fontSize: '13px' }}>Try adjusting grade or price filters, or call us directly.</div>
+                <div style={{ fontSize: '32px', marginBottom: '12px' }}>{favOnly ? '🤍' : '📦'}</div>
+                <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '4px' }}>{favOnly ? 'No favorites yet' : 'No containers match your filters'}</div>
+                <div style={{ fontSize: '13px' }}>{favOnly ? 'Tap the heart on any container to save it here.' : 'Try adjusting grade or price filters, or call us directly.'}</div>
               </div>
             ) : condFilter === 'all' ? (
               // No condition picked yet — group the results into New and Used sections.
@@ -578,7 +588,7 @@ export default function MarketplacePage() {
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
                       {group.map(c => (
-                        <ContainerCard key={c.id} container={c} onSelect={setSelectedContainer} mode={activeTab === 'rent' ? 'rent' : 'buy'} inCart={inCart(c.id)} onAddToCart={addToCart} seller={sellerById.get(c.sellerId)} />
+                        <ContainerCard key={c.id} container={c} onSelect={setSelectedContainer} mode={activeTab === 'rent' ? 'rent' : 'buy'} inCart={inCart(c.id)} onAddToCart={addToCart} seller={sellerById.get(c.sellerId)} fav={favs.has(c.id)} onToggleFav={u => toggleFav(u.id)} />
                       ))}
                     </div>
                   </div>
@@ -587,7 +597,7 @@ export default function MarketplacePage() {
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
                 {filtered.map(c => (
-                  <ContainerCard key={c.id} container={c} onSelect={setSelectedContainer} mode={activeTab === 'rent' ? 'rent' : 'buy'} inCart={inCart(c.id)} onAddToCart={addToCart} seller={sellerById.get(c.sellerId)} />
+                  <ContainerCard key={c.id} container={c} onSelect={setSelectedContainer} mode={activeTab === 'rent' ? 'rent' : 'buy'} inCart={inCart(c.id)} onAddToCart={addToCart} seller={sellerById.get(c.sellerId)} fav={favs.has(c.id)} onToggleFav={u => toggleFav(u.id)} />
                 ))}
               </div>
             )}
@@ -605,7 +615,7 @@ export default function MarketplacePage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '14px' }}>
             {builds.length === 0 && <div style={{ color: 'var(--ink3)', fontSize: '13px', padding: '30px 0' }}>No custom builds published yet — check back soon.</div>}
             {builds.map(cb => (
-              <div key={cb.id} style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', overflow: 'hidden', transition: 'transform 0.2s, box-shadow 0.2s' }}
+              <div key={cb.id} style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: '0 5px 18px rgba(26,28,46,.10), 0 1px 3px rgba(26,28,46,.06)', overflow: 'hidden', transition: 'transform 0.2s, box-shadow 0.2s' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-3px)'; (e.currentTarget as HTMLElement).style.boxShadow = 'var(--sh2)' }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = ''; (e.currentTarget as HTMLElement).style.boxShadow = 'var(--sh1)' }}
               >
