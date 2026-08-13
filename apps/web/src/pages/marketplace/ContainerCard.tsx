@@ -17,10 +17,12 @@ interface ContainerCardProps {
   mode?: 'buy' | 'rent'
   inCart?: boolean
   onAddToCart?: (c: Container, mode: 'buy' | 'rent') => void
+  fav?: boolean
+  onToggleFav?: (c: Container) => void
   seller?: Seller   // multi-tenant: the seller who owns/fulfills this unit
 }
 
-export function ContainerCard({ container, onSelect, mode = 'buy', inCart = false, onAddToCart, seller }: ContainerCardProps) {
+export function ContainerCard({ container, onSelect, mode = 'buy', inCart = false, onAddToCart, seller, fav = false, onToggleFav }: ContainerCardProps) {
   const { sku, grade, status, size, buyPrice, rentMonthly, photos } = container
   const gradeMeta = GRADE_META[grade]
   const allow = allowedModes(container) // the unit's own listing capability
@@ -39,15 +41,15 @@ export function ContainerCard({ container, onSelect, mode = 'buy', inCart = fals
         background: 'var(--surf-w)',
         borderRadius: 'var(--r16)',
         border: '1px solid var(--div)',
-        boxShadow: 'var(--sh1)',
+        boxShadow: '0 5px 18px rgba(26,28,46,.10), 0 1px 3px rgba(26,28,46,.06)',
         overflow: 'hidden',
         cursor: 'pointer',
         transition: 'transform 0.2s, box-shadow 0.2s',
         display: 'flex',
         flexDirection: 'column',
       }}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-3px)'; (e.currentTarget as HTMLElement).style.boxShadow = 'var(--sh2)' }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = ''; (e.currentTarget as HTMLElement).style.boxShadow = 'var(--sh1)' }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-3px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 16px 36px rgba(26,28,46,.18)' }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = ''; (e.currentTarget as HTMLElement).style.boxShadow = '0 5px 18px rgba(26,28,46,.10), 0 1px 3px rgba(26,28,46,.06)' }}
     >
       {/* Photo area */}
       <div style={{ position: 'relative', background: 'linear-gradient(135deg,#CBD5E8,#A8BFDF)', paddingBottom: '52%', height: 0, overflow: 'hidden' }}>
@@ -63,8 +65,19 @@ export function ContainerCard({ container, onSelect, mode = 'buy', inCart = fals
             <ContainerSVGIcon size={size} />
           </div>
         )}
-        {/* Grade badge — with the 1–5 sub-score once a unit has been field-graded */}
-        <span style={{ position: 'absolute', top: '8px', right: '8px', background: gradeMeta.color, color: '#fff', borderRadius: 'var(--r4)', padding: '3px 8px', fontSize: '10px', fontWeight: 700 }}>{grade === 'D' ? damageLabel(container.damageSeverity) : gradeLabel(grade, container.conditionScore)}</span>
+        {/* Grade badge — top-left; the favorite heart owns the top-right corner */}
+        <span style={{ position: 'absolute', top: '8px', left: '8px', background: gradeMeta.color, color: '#fff', borderRadius: 'var(--r4)', padding: '3px 8px', fontSize: '10px', fontWeight: 700 }}>{grade === 'D' ? damageLabel(container.damageSeverity) : gradeLabel(grade, container.conditionScore)}</span>
+        {/* Favorite — device-local save, toggles without opening the card */}
+        <button
+          aria-label={fav ? 'Remove from favorites' : 'Save to favorites'}
+          title={fav ? 'Remove from favorites' : 'Save to favorites'}
+          onClick={e => { e.stopPropagation(); onToggleFav?.(container) }}
+          style={{ position: 'absolute', top: '8px', right: '8px', width: '36px', height: '36px', borderRadius: '50%', border: 'none', background: '#fff', boxShadow: '0 2px 10px rgba(0,0,0,.22)', display: 'grid', placeItems: 'center', cursor: 'pointer', zIndex: 7, padding: 0 }}
+        >
+          <svg width="19" height="19" viewBox="0 0 24 24" fill={fav ? '#E0245E' : 'none'} stroke={fav ? '#E0245E' : 'var(--ink)'} strokeWidth="2" strokeLinejoin="round">
+            <path d="M12 20.6S3.5 15.4 3.5 9.9c0-2.9 2.2-4.9 4.6-4.9 1.6 0 3 .8 3.9 2.1.9-1.3 2.3-2.1 3.9-2.1 2.4 0 4.6 2 4.6 4.9 0 5.5-8.5 10.7-8.5 10.7z" />
+          </svg>
+        </button>
         {/* Sell-as-damaged units carry an explicit ribbon so buyers can't miss it */}
         {grade === 'D' && (
           <span style={{ position: 'absolute', bottom: '8px', right: '8px', background: '#B3261E', color: '#fff', borderRadius: 'var(--pill)', padding: '3px 9px', fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px' }}>DAMAGED · AS-IS</span>
@@ -79,7 +92,7 @@ export function ContainerCard({ container, onSelect, mode = 'buy', inCart = fals
         )}
         {/* Draft badge — admin-only preview of unlisted units */}
         {isDraft && (
-          <span style={{ position: 'absolute', top: '8px', left: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'var(--amber, #B45309)', color: '#fff', borderRadius: 'var(--r4)', padding: '3px 8px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+          <span style={{ position: 'absolute', top: '36px', left: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'var(--amber, #B45309)', color: '#fff', borderRadius: 'var(--r4)', padding: '3px 8px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
             <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#fff' }} />Draft
           </span>
         )}

@@ -4,6 +4,7 @@
 // directory, so filters, cards, cart, and checkout can't disagree.
 // ============================================================
 
+import { useState } from 'react'
 import { SIZE_LABEL, type Container, type ContainerCondition, type ContainerSize } from '../../lib/api'
 
 export type Tab = 'buy' | 'rent' | 'custom' | 'bulk' | 'insights'
@@ -35,3 +36,23 @@ export const SIZE_OPTIONS = Object.entries(SIZE_LABELS) as [ContainerSize, strin
 // Every unit is either factory-new or pre-owned; rows missing the field
 // (pre-migration data) are treated as used.
 export const condOf = (c: Container): ContainerCondition => c.condition === 'new' ? 'new' : 'used'
+
+// ── Favorites — the shopper's saved units ───────────────────
+// Device-local (localStorage): works for guests, survives reloads, and
+// needs no account. The heart on each card and the Favorites filter chip
+// both read from here.
+const FAV_KEY = 'sbx_favorites'
+
+export function useFavorites() {
+  const [favs, setFavs] = useState<Set<string>>(() => {
+    try { return new Set<string>(JSON.parse(localStorage.getItem(FAV_KEY) || '[]')) } catch { return new Set<string>() }
+  })
+  const toggleFav = (id: string) => setFavs(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    try { localStorage.setItem(FAV_KEY, JSON.stringify([...next])) } catch { /* private mode */ }
+    return next
+  })
+  return { favs, toggleFav }
+}
