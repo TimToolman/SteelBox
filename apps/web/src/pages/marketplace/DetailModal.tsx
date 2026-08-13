@@ -5,9 +5,9 @@
 import React, { useState, useEffect } from 'react'
 import { Modal } from '../../components/ui'
 import { useIsMobile } from '../../hooks'
-import { isZipCovered, estimateDelivery, type Container, type Seller } from '../../lib/api'
+import { isZipCovered, estimateDelivery, photoUrl, type Container, type Seller } from '../../lib/api'
 import { GRADE_META } from '../../lib/specs'
-import { gradeLabel } from '../../lib/grading'
+import { gradeLabel, damageLabel, SEVERITY_WORD } from '../../lib/grading'
 import { allowedModes, condOf, SIZE_LABELS, type CartMode } from './shared'
 import { PhotoGallery } from './PhotoGallery'
 import { SellerLogo } from './SellerMark'
@@ -96,9 +96,20 @@ export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onN
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px' }}>{condOf(container) === 'new' ? 'New' : 'Used'} · Grade {gradeLabel(grade, container.conditionScore)} — {gradeMeta.label}{container.color ? ` · ${container.color}` : ''}</div>
+              <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px' }}>{condOf(container) === 'new' ? 'New' : 'Used'} · Grade {grade === 'D' ? damageLabel(container.damageSeverity) : gradeLabel(grade, container.conditionScore)} — {gradeMeta.label}{container.color ? ` · ${container.color}` : ''}</div>
+              {/* Damaged units: severity pips read the other way — more pips, worse damage */}
+              {grade === 'D' && (container.damageSeverity ?? 0) > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                  <span style={{ display: 'inline-flex', gap: '3px' }}>
+                    {[1, 2, 3, 4, 5].map(i => (
+                      <span key={i} style={{ width: '8px', height: '8px', borderRadius: '50%', background: i <= (container.damageSeverity || 0) ? '#B3261E' : 'var(--div2)' }} />
+                    ))}
+                  </span>
+                  <span style={{ fontSize: '10px', color: '#B3261E', fontWeight: 700 }}>Damage {container.damageSeverity}/5 — {SEVERITY_WORD[container.damageSeverity || 3]}</span>
+                </div>
+              )}
               {/* 1–5 sub-score pips — quality within the grade, from the field inspection */}
-              {(container.conditionScore ?? 0) > 0 && (
+              {grade !== 'D' && (container.conditionScore ?? 0) > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
                   <span style={{ display: 'inline-flex', gap: '3px' }}>
                     {[1, 2, 3, 4, 5].map(i => (
@@ -124,6 +135,22 @@ export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onN
               </div>
             ))}
           </div>
+
+          {/* Sell-as-damaged: the claim's evidence photos, so buyers see
+              exactly what they're getting before the as-is purchase. */}
+          {grade === 'D' && (container.damagePhotos || []).filter(Boolean).length > 0 && (
+            <div style={{ background: '#FDECEA', border: '1px solid #F5C6C0', borderRadius: 'var(--r12)', padding: '12px 13px', marginBottom: '16px' }}>
+              <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.8px', color: '#B3261E', fontWeight: 700, marginBottom: '8px' }}>Damage photos — sold as-is</div>
+              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
+                {(container.damagePhotos || []).filter(Boolean).map((u, i) => (
+                  <a key={i} href={photoUrl(u)} target="_blank" rel="noreferrer" style={{ flexShrink: 0 }}>
+                    <img src={photoUrl(u)} alt={`Damage photo ${i + 1}`} style={{ width: '96px', height: '72px', objectFit: 'cover', borderRadius: 'var(--r8)', display: 'block' }} />
+                  </a>
+                ))}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--ink2)', marginTop: '8px', lineHeight: 1.5 }}>Documented by the field damage inspection. Tap a photo to open it full size.</div>
+            </div>
+          )}
 
           {/* Multi-tenant: who sells, services, and delivers this unit.
               The marketplace is Nationwide SteelBox; the sale itself — pricing,

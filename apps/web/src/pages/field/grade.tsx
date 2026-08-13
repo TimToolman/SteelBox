@@ -10,11 +10,12 @@
 // ============================================================
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { containers as containersApi, photoUrl, SHOT_LABELS, type Container } from '../../lib/api'
+import { containers as containersApi, claims as claimsApi, photoUrl, fileToDataUrl, SHOT_LABELS, DAMAGE_SHOT_LABELS, CLAIM_STAGES, type Container, type DamageClaim } from '../../lib/api'
 import { GRADE_META } from '../../lib/specs'
 import {
-  ADJUSTER_QUESTIONS, analyzeContainerPhotos, gradeContainer, gradeLabel,
-  type GradeResult, type PhotoFeatures,
+  ADJUSTER_QUESTIONS, analyzeContainerPhotos, analyzePhotoList, gradeContainer, assessDamage,
+  gradeLabel, damageLabel, SEVERITY_WORD,
+  type GradeResult, type DamageResult, type PhotoFeatures,
 } from '../../lib/grading'
 
 const INK = '#1A1C2E', INK2 = '#44475A', DIV = '#E1E2EC', BLUE = '#0057B8'
@@ -48,6 +49,10 @@ interface GradeScreenProps {
 }
 
 export function GradeScreen({ containers, inspectorName, toast, onApplied }: GradeScreenProps) {
+  // Two separate inspection buckets: retail grading (the unit's saleable
+  // condition) and damage claims (sea-freight damage evidence for the
+  // shipper/insurance pipeline). Photos and results never mix.
+  const [bucket, setBucket] = useState<'retail' | 'damage'>('retail')
   const [query, setQuery] = useState('')
   const [unit, setUnit] = useState<Container | null>(null)
   // Wizard phases: analyzing photos → questions → result
@@ -96,6 +101,29 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
     }
   }
 
+  const bucketTabs = (
+    <div style={{ display: 'flex', gap: '4px', margin: '0 12px 10px', background: '#EEF2FF', border: `1px solid ${DIV}`, borderRadius: '999px', padding: '3px' }}>
+      {([['retail', 'Retail grading'], ['damage', 'Damage claims']] as const).map(([k, label]) => (
+        <button key={k} onClick={() => setBucket(k)}
+          style={{ flex: 1, padding: '8px 0', borderRadius: '999px', border: 'none', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: bucket === k ? '#fff' : 'transparent', color: bucket === k ? (k === 'damage' ? '#B3261E' : BLUE) : INK2, boxShadow: bucket === k ? '0 1px 4px rgba(26,28,46,.1)' : 'none' }}>
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+
+  if (bucket === 'damage' && !unit) {
+    return (
+      <div style={{ paddingBottom: '90px' }}>
+        <div style={{ padding: '16px 12px 10px' }}>
+          <div style={{ fontSize: '19px', fontWeight: 700, color: INK }}>AI Condition Grading</div>
+        </div>
+        {bucketTabs}
+        <DamageInspection inspectorName={inspectorName} toast={toast} containers={containers} />
+      </div>
+    )
+  }
+
   // ── Unit list ──
   if (!unit) {
     return (
@@ -107,6 +135,7 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
             documentation, asks you five questions, and proposes a grade with a 1–5 quality sub-score.
           </div>
         </div>
+        {bucketTabs}
         <div style={{ margin: '0 12px 10px' }}>
           <input
             value={query} onChange={e => setQuery(e.target.value)} placeholder="Search SKU or depot…"
@@ -387,6 +416,228 @@ export function GradeReviewScreen({ sku, result, applying, onApprove, onBack }: 
           ← Back / review questions
         </button>
       </div>
+    </div>
+  )
+}
+
+// ── Damage-claim inspections (separate bucket from retail) ──
+// Works the claims queue: capture the damage evidence photos (their own
+// slots — never the retail gallery), answer the same five questions, and
+// the model determines severity D·1 (minor) to D·5 (severe). Applying
+// moves the claim from "Awaiting inspection" to "Awaiting estimate".
+
+const RED = '#B3261E'
+
+function DamageInspection({ inspectorName, toast, containers }: { inspectorName: string; toast: (m: string) => void; containers: Container[] }) {
+  const [claims, setClaims] = useState<DamageClaim[]>([])
+  const [claim, setClaim] = useState<DamageClaim | null>(null)
+  const [answers, setAnswers] = useState<Record<string, number>>({})
+  const [result, setResult] = useState<DamageResult | null>(null)
+  const [busySlot, setBusySlot] = useState<number | null>(null)
+  const [applying, setApplying] = useState(false)
+
+  const refresh = () => claimsApi.list().then(setClaims).catch(() => {})
+  useEffect(() => { refresh() }, [])
+
+  const stageLabel = (st: DamageClaim['status']) =>
+    CLAIM_STAGES.find(x => x.key === st)?.label
+    ?? (st === 'repair_scheduled' ? 'Repair scheduled' : st === 'sell_as_damaged' ? 'Listed as damaged' : 'Closed')
+
+  const pickFile = (): Promise<File | null> => new Promise(resolve => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*,.heic,.heif'
+    input.setAttribute('capture', 'environment')
+    input.onchange = () => resolve(input.files?.[0] ?? null)
+    window.addEventListener('focus', () => setTimeout(() => resolve(input.files?.[0] ?? null), 700), { once: true })
+    input.click()
+  })
+
+  const capture = async (slot: number) => {
+    if (!claim || busySlot != null) return
+    const file = await pickFile()
+    if (!file) return
+    setBusySlot(slot)
+    try {
+      // Evidence stays EXACTLY as shot — no auto-crop or background removal.
+      const dataUrl = await fileToDataUrl(file)
+      const updated = await claimsApi.uploadPhoto(claim.id, { slot, label: DAMAGE_SHOT_LABELS[slot], dataUrl })
+      setClaim(updated); setResult(null)
+      toast(`${DAMAGE_SHOT_LABELS[slot]} ✓`)
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Upload failed')
+    } finally { setBusySlot(null) }
+  }
+
+  const removeShot = async (slot: number) => {
+    if (!claim) return
+    try {
+      const updated = await claimsApi.deletePhoto(claim.id, slot)
+      setClaim(updated); setResult(null)
+    } catch (e) { toast(e instanceof Error ? e.message : 'Could not remove the photo') }
+  }
+
+  const photosOn = (claim?.photos || []).filter(Boolean).length
+  const answered = Object.keys(answers).length
+  const canRun = photosOn >= 2 && answered === ADJUSTER_QUESTIONS.length
+
+  const run = async () => {
+    if (!claim || !canRun) return
+    const feats = await analyzePhotoList(claim.photos || [])
+    setResult(assessDamage(feats, answers))
+  }
+
+  const apply = async () => {
+    if (!claim || !result || applying) return
+    setApplying(true)
+    try {
+      await claimsApi.update(claim.id, {
+        severity: result.severity,
+        status: 'awaiting_estimate',
+        inspectorName,
+        inspectedAt: new Date().toISOString(),
+      })
+      toast(`${claim.containerSku} damage assessed ${damageLabel(result.severity)} — claim moved to Awaiting estimate`)
+      setClaim(null); setResult(null); setAnswers({})
+      refresh()
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not save the assessment')
+    } finally { setApplying(false) }
+  }
+
+  // ── Claim queue ──
+  if (!claim) {
+    const queue = claims.filter(c => c.status === 'awaiting_inspection')
+    const rest = claims.filter(c => c.status !== 'awaiting_inspection')
+    const thumbFor = (c: DamageClaim) => {
+      const unit = containers.find(x => x.id === c.containerId)
+      return c.photos?.filter(Boolean)[0] || unit?.photos?.filter(Boolean)[0]
+    }
+    return (
+      <div>
+        <div style={{ margin: '0 12px 10px', fontSize: '12px', color: INK2, lineHeight: 1.5 }}>
+          Sea-freight damage claims waiting on a field inspection. Capture the damage
+          evidence, answer the five questions, and the model sets severity D·1–D·5.
+        </div>
+        {queue.length === 0 && (
+          <div style={{ ...card, textAlign: 'center', color: INK2, fontSize: '13px' }}>No claims awaiting inspection.</div>
+        )}
+        {queue.map(c => (
+          <button key={c.id} onClick={() => { setClaim(c); setAnswers({}); setResult(null) }}
+            style={{ ...card, width: 'calc(100% - 24px)', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+            <div style={{ width: '64px', height: '48px', borderRadius: '10px', background: 'linear-gradient(135deg,#E8C5C5,#D49797)', overflow: 'hidden', flexShrink: 0, display: 'grid', placeItems: 'center' }}>
+              {thumbFor(c) && <img src={photoUrl(thumbFor(c))} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: 700, color: INK }}>{c.containerSku} <span style={{ color: INK2, fontWeight: 400 }}>· {c.claimNumber}</span></div>
+              <div style={{ fontSize: '11px', color: INK2, marginTop: '2px' }}>{c.supplierName} vs {c.shipperName}{c.vesselRef ? ` · ${c.vesselRef}` : ''}</div>
+            </div>
+            <span style={{ flexShrink: 0, background: '#FDECEA', color: RED, borderRadius: '999px', padding: '4px 10px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.4px' }}>INSPECT</span>
+          </button>
+        ))}
+        {rest.length > 0 && <div style={{ margin: '14px 12px 6px', fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px' }}>In the pipeline</div>}
+        {rest.map(c => (
+          <div key={c.id} style={{ ...card, display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: 'monospace', fontSize: '12px', fontWeight: 700, color: INK }}>{c.containerSku} <span style={{ color: INK2, fontWeight: 400 }}>· {c.claimNumber}</span></div>
+              <div style={{ fontSize: '11px', color: INK2, marginTop: '2px' }}>{stageLabel(c.status)}</div>
+            </div>
+            {c.severity > 0 && <span style={{ background: RED, color: '#fff', borderRadius: '6px', padding: '3px 8px', fontSize: '11px', fontWeight: 700, flexShrink: 0 }}>{damageLabel(c.severity)}</span>}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  // ── Inspection wizard ──
+  return (
+    <div>
+      <div style={{ padding: '0 12px 10px', display: 'flex', alignItems: 'baseline', gap: '10px' }}>
+        <button onClick={() => setClaim(null)} style={{ fontSize: '13px', fontWeight: 600, color: BLUE, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>← Claims</button>
+        <div style={{ fontFamily: 'monospace', fontSize: '15px', fontWeight: 700, color: INK }}>{claim.containerSku}</div>
+        <div style={{ fontSize: '11px', color: INK2 }}>{claim.claimNumber}</div>
+      </div>
+
+      {/* Damage evidence photos — dedicated slots */}
+      <div style={card}>
+        <div style={{ fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '10px' }}>
+          1 · Damage evidence · {photosOn}/{DAMAGE_SHOT_LABELS.length} (min 2)
+        </div>
+        <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+          {DAMAGE_SHOT_LABELS.map((label, i) => {
+            const u = claim.photos?.[i]
+            return (
+              <div key={i} style={{ flexShrink: 0, width: '86px' }}>
+                <div style={{ position: 'relative' }}>
+                  {u
+                    ? <img src={photoUrl(u)} alt={label} style={{ width: '86px', height: '64px', objectFit: 'cover', borderRadius: '8px', display: 'block', opacity: busySlot === i ? 0.4 : 1 }} />
+                    : <div style={{ width: '86px', height: '64px', borderRadius: '8px', border: `1.5px dashed #C4C6D0`, display: 'grid', placeItems: 'center', color: INK2, fontSize: '18px' }}>+</div>}
+                  {u && busySlot == null && (
+                    <button onClick={() => removeShot(i)} aria-label={`Delete ${label}`}
+                      style={{ position: 'absolute', top: '3px', right: '3px', width: '20px', height: '20px', borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,.55)', color: '#fff', fontSize: '11px', fontWeight: 700, cursor: 'pointer', display: 'grid', placeItems: 'center', lineHeight: 0 }}>✕</button>
+                  )}
+                </div>
+                <div style={{ fontSize: '9px', color: INK2, margin: '3px 0 2px', lineHeight: 1.3 }}>{label}</div>
+                <button onClick={() => capture(i)} disabled={busySlot != null}
+                  style={{ width: '100%', padding: '4px 0', borderRadius: '7px', border: '1px solid #C4C6D0', background: '#fff', color: RED, fontSize: '10px', fontWeight: 700, cursor: 'pointer' }}>
+                  {busySlot === i ? '…' : u ? 'Retake' : 'Capture'}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+        <div style={{ fontSize: '11px', color: INK2, marginTop: '8px' }}>Evidence uploads exactly as shot — no cropping or edits, for the arbitration file.</div>
+      </div>
+
+      {/* The five questions */}
+      <div style={card}>
+        <div style={{ fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '4px' }}>
+          2 · Walk-around — {answered}/{ADJUSTER_QUESTIONS.length} answered
+        </div>
+        {ADJUSTER_QUESTIONS.map((q, qi) => (
+          <div key={q.key} style={{ padding: '8px 0', borderBottom: qi < ADJUSTER_QUESTIONS.length - 1 ? `1px solid ${DIV}` : 'none' }}>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: INK, marginBottom: '6px' }}>{qi + 1}. {q.title}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              {q.options.map((o, oi) => {
+                const on = answers[q.key] === oi
+                return (
+                  <button key={oi} onClick={() => { setAnswers(p => ({ ...p, [q.key]: oi })); setResult(null) }}
+                    style={{ textAlign: 'left', padding: '8px 11px', borderRadius: '9px', fontSize: '12px', fontWeight: on ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit', border: `1.5px solid ${on ? RED : DIV}`, background: on ? '#FDECEA' : '#fff', color: on ? RED : INK2 }}>
+                    {o.label}{o.capGrade ? ' ⚠' : ''}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Severity verdict + apply */}
+      {!result ? (
+        <div style={{ margin: '0 12px' }}>
+          <button onClick={run} disabled={!canRun}
+            style={{ width: '100%', padding: '15px', borderRadius: '999px', border: 'none', fontSize: '14px', fontWeight: 700, cursor: canRun ? 'pointer' : 'not-allowed', background: canRun ? RED : '#EEF2FF', color: canRun ? '#fff' : INK2 }}>
+            {photosOn < 2 ? `Capture ${2 - photosOn} more photo${photosOn === 1 ? '' : 's'}` : answered < ADJUSTER_QUESTIONS.length ? `Answer ${ADJUSTER_QUESTIONS.length - answered} more question${ADJUSTER_QUESTIONS.length - answered === 1 ? '' : 's'}` : 'Determine damage severity'}
+          </button>
+        </div>
+      ) : (
+        <div style={card}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px' }}>
+            <div style={{ width: '64px', height: '64px', borderRadius: '14px', background: RED, display: 'grid', placeItems: 'center', color: '#fff', flexShrink: 0 }}>
+              <span style={{ fontSize: '22px', fontWeight: 700 }}>{damageLabel(result.severity)}</span>
+            </div>
+            <div>
+              <div style={{ fontSize: '15px', fontWeight: 700, color: INK }}>Damage severity {damageLabel(result.severity)} — {SEVERITY_WORD[result.severity]}</div>
+              <div style={{ fontSize: '11px', color: INK2, marginTop: '3px' }}>Condition {result.score}/100 · photos {Math.round(result.photoScore)} + walk-around {result.answerScore}</div>
+              {result.structural && <div style={{ fontSize: '11px', color: RED, fontWeight: 600, marginTop: '3px' }}>⚠ Structural finding — severity floored at D·3</div>}
+            </div>
+          </div>
+          <button onClick={apply} disabled={applying}
+            style={{ width: '100%', padding: '15px', borderRadius: '999px', border: 'none', fontSize: '14px', fontWeight: 700, cursor: 'pointer', background: '#E65100', color: '#fff', boxShadow: '0 3px 10px rgba(230,81,0,.3)' }}>
+            {applying ? 'Saving…' : `Save ${damageLabel(result.severity)} — send claim to estimate`}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

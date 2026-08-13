@@ -90,9 +90,10 @@ export const GRADE_META: Record<ContainerGrade, { label: string; desc: string; c
   C: { label: 'Wind & Watertight', desc: 'Older unit with visible rust. Structurally solid.', color: '#D97706' },
   R: { label: 'Refurbished', desc: 'Repainted, resealed, and reconditioned.', color: '#6D28D9' },
   X: { label: 'Custom Build', desc: 'Modified to specification.', color: '#374151' },
+  D: { label: 'Damaged', desc: 'Shipping-damaged unit sold as-is at a discount. Severity runs D·1 (minor) to D·5 (severe) — see the damage photos on the listing.', color: '#B3261E' },
 }
 
-export const GRADE_ORDER: ContainerGrade[] = ['A', 'B', 'C', 'R', 'X']
+export const GRADE_ORDER: ContainerGrade[] = ['A', 'B', 'C', 'R', 'X', 'D']
 
 // ── Custom modifications ──────────────────────────────────
 // Static marketing catalog of the modifications our fab shop

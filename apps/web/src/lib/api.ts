@@ -51,7 +51,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 // ── Auth ──────────────────────────────────────────────────
 
-export type Role = 'customer' | 'driver' | 'adjuster' | 'admin'
+export type Role = 'customer' | 'driver' | 'adjuster' | 'supplier' | 'shipper' | 'admin'
 
 export interface AuthUser {
   id: string
@@ -67,6 +67,8 @@ export interface AuthUser {
   twoFaVerified?: boolean       // true if checkout 2FA completed recently (per session)
   mustChangePassword?: boolean  // true when signed in with the seeded dev password
   sellerId?: string             // set on seller-scoped staff accounts
+  supplierId?: string           // links a supplier login to suppliers.csv
+  shipperId?: string            // links a shipping-line login to shippers.csv
 }
 
 // Login either completes immediately (token+user) or — for admins — asks for
@@ -222,7 +224,7 @@ export type ContainerStatus =
 export const CUSTOM_STAGES: ContainerStatus[] = [
   'estimate_requested', 'estimate_in_progress', 'estimate_sent', 'estimate_approved', 'custom_in_progress',
 ]
-export type ContainerGrade = 'A' | 'B' | 'C' | 'R' | 'X'
+export type ContainerGrade = 'A' | 'B' | 'C' | 'R' | 'X' | 'D'
 // How a container may be transacted on the marketplace.
 export type ListingType = 'buy' | 'rent' | 'both'
 
@@ -253,6 +255,9 @@ export interface Container {
   customEta: string          // custom builds: promised completion date (YYYY-MM-DD)
   customBuildName: string    // custom builds: which catalog product is being fabricated
   aiGraded?: boolean         // grade assigned by the AI/ML imaging pipeline (set by the field app)
+  supplierId?: string        // owning supplier (companies resellers buy stock from)
+  damagePhotos?: string[]    // claim evidence shots shown on sell-as-damaged listings
+  damageSeverity?: number    // D·1 (minor) – D·5 (severe); set by the damage inspection
   // Multi-tenant: derived server-side from the unit's depot ownership.
   sellerId: string
   sellerName: string
@@ -818,4 +823,104 @@ export async function estimateDelivery(zip: string): Promise<string> {
   } catch {
     return '3–5 business days'
   }
+}
+
+// ── Suppliers, shippers, repair shops & damage claims ──────
+// Suppliers own containers (resellers buy from them and sell to customers).
+// Sea-freight damage is claimed against the shipping line: the field app
+// documents the damage, the supplier attaches a repair estimate, the shipper
+// approves or rejects it (their insurance carrier reviews off-platform), and
+// the supplier then routes the unit to repair (retail) or sells it as
+// damaged (wholesale, grade D).
+
+export interface Supplier {
+  id: string; name: string; contactName: string; email: string; phone: string
+  active: boolean; createdAt: string
+}
+
+export interface Shipper {
+  id: string; name: string; line: string; email: string; phone: string
+  active: boolean; createdAt: string
+}
+
+export interface RepairShop {
+  id: string; name: string; city: string; state: string; phone: string
+  specialty: string; approved: boolean
+}
+
+// The supplier-facing tracker follows these stages in order; the last two
+// are terminal outcomes of the supplier's retail-or-wholesale decision.
+export type ClaimStatus =
+  | 'awaiting_inspection'   // field adjuster documents the damage
+  | 'awaiting_estimate'     // supplier attaches the repair estimate
+  | 'awaiting_shipper'      // shipping line reviews the estimate
+  | 'awaiting_decision'     // supplier decides: repair (retail) or sell as damaged
+  | 'repair_scheduled'      // booked with an approved repair shop
+  | 'sell_as_damaged'       // listed on the marketplace as grade D
+  | 'closed'
+
+export const CLAIM_STAGES: { key: ClaimStatus; label: string }[] = [
+  { key: 'awaiting_inspection', label: 'Awaiting inspection' },
+  { key: 'awaiting_estimate', label: 'Awaiting estimate' },
+  { key: 'awaiting_shipper', label: 'Awaiting shipper approval' },
+  { key: 'awaiting_decision', label: 'Awaiting supplier decision — retail or wholesale' },
+]
+
+// Damage evidence gets its own photo slots — never mixed into the unit's
+// retail 8-shot gallery.
+export const DAMAGE_SHOT_LABELS = [
+  'Wide shot of unit', 'Damage close-up 1', 'Damage close-up 2',
+  'Damage close-up 3', 'Doors & seals', 'Interior at damage',
+] as const
+
+export interface DamageClaim {
+  id: string
+  claimNumber: string
+  containerId: string
+  containerSku: string
+  supplierId: string
+  supplierName: string
+  shipperId: string
+  shipperName: string
+  vesselRef: string            // voyage/BOL reference for the arbitration file
+  status: ClaimStatus
+  severity: number             // D·1 (minor) – D·5 (severe), set at inspection
+  photos: string[]             // damage evidence, DAMAGE_SHOT_LABELS slots
+  notes: string
+  estimateAmount: number       // supplier's repair estimate (USD)
+  estimateNotes: string
+  shipperDecision: '' | 'approved' | 'rejected'
+  shipperNotes: string
+  shipperDecidedAt: string | null
+  repairShopId: string
+  repairShopName: string
+  repairDate: string
+  decision: '' | 'retail' | 'wholesale'
+  inspectorName: string
+  inspectedAt: string | null
+  createdAt: string
+}
+
+export const suppliersApi = {
+  list: () => request<Supplier[]>('/suppliers'),
+}
+
+export const shippersApi = {
+  list: () => request<Shipper[]>('/shippers'),
+}
+
+export const repairShops = {
+  list: () => request<RepairShop[]>('/repairshops'),
+}
+
+export const claims = {
+  list: () => request<DamageClaim[]>('/claims'),
+  create: (data: Partial<DamageClaim>) =>
+    request<DamageClaim>('/claims', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<DamageClaim>) =>
+    request<DamageClaim>(`/claims/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  uploadPhoto: (id: string, data: { slot: number; label?: string; dataUrl: string }) =>
+    request<DamageClaim>(`/claims/${id}/photos`, { method: 'POST', body: JSON.stringify(data) }),
+  deletePhoto: (id: string, slot: number) =>
+    request<DamageClaim>(`/claims/${id}/photos/${slot}`, { method: 'DELETE' }),
 }

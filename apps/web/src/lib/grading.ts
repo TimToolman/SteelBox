@@ -253,3 +253,46 @@ export function gradeContainer(features: PhotoFeatures[], answers: Record<string
 export function gradeLabel(grade: string, sub?: number | null): string {
   return sub && sub > 0 ? `${grade}·${sub}` : grade
 }
+
+// ── Damage severity (grade-D / claims pipeline) ────────────
+// The damage inspection reuses the same five questions and photo features,
+// but reads the result the other way around: how BAD is it, on a D·1
+// (minor, cosmetic) to D·5 (severe, structural) scale. A structural answer
+// floors the severity at D·3 no matter how clean the photos look.
+
+export interface DamageResult {
+  severity: number            // 1–5
+  score: number               // underlying 0–100 condition score
+  photoScore: number
+  answerScore: number
+  structural: boolean         // a structural failure answer was given
+  factors: GradeFactor[]
+}
+
+export function assessDamage(features: PhotoFeatures[], answers: Record<string, number>): DamageResult {
+  const r = gradeContainer(features, answers)
+  let severity = r.score >= 80 ? 1 : r.score >= 62 ? 2 : r.score >= 44 ? 3 : r.score >= 26 ? 4 : 5
+  if (r.capped) severity = Math.max(severity, 3)
+  return { severity, score: r.score, photoScore: r.photoScore, answerScore: r.answerScore, structural: r.capped, factors: r.factors }
+}
+
+export const SEVERITY_WORD: Record<number, string> = {
+  1: 'Minor — cosmetic', 2: 'Light — serviceable', 3: 'Moderate — repairable',
+  4: 'Heavy — major repairs', 5: 'Severe — structural',
+}
+
+export const damageLabel = (sev?: number | null) => sev && sev > 0 ? `D·${sev}` : 'D'
+
+// Analyze an arbitrary photo list (damage-claim evidence slots).
+export async function analyzePhotoList(
+  urls: (string | undefined | null)[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<PhotoFeatures[]> {
+  const shots = urls.map((u, slot) => ({ u, slot })).filter(x => !!x.u)
+  const out: PhotoFeatures[] = []
+  for (let i = 0; i < shots.length; i++) {
+    out.push(await analyzePhoto(shots[i].slot, shots[i].u!))
+    onProgress?.(i + 1, shots.length)
+  }
+  return out
+}

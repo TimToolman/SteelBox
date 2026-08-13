@@ -77,7 +77,7 @@ export default function MarketplacePage() {
     return new Set(wanted.length ? wanted : ALL_SIZES)
   })
   const [gradeFilters, setGradeFilters] = useState<Set<ContainerGrade>>(() => {
-    const all: ContainerGrade[] = ['A', 'B', 'C', 'R', 'X']
+    const all: ContainerGrade[] = ['A', 'B', 'C', 'R', 'X', 'D']
     const wanted = (qp('grade') ?? '').split(',').filter(g => (all as string[]).includes(g)) as ContainerGrade[]
     return new Set(wanted.length ? wanted : all)
   })
@@ -331,6 +331,17 @@ export default function MarketplacePage() {
         onSelect={t => { setActiveTab(t); setSelectedContainer(null) }}
         right={
           <>
+            {/* Portal shortcuts — visible ONLY to the signed-in persona */}
+            {user?.role === 'supplier' && (
+              <a href={`${import.meta.env.BASE_URL}supplier`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 'var(--pill)', background: '#7C3AED', color: '#fff', fontSize: '12px', fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                Supplier Portal
+              </a>
+            )}
+            {user?.role === 'shipper' && (
+              <a href={`${import.meta.env.BASE_URL}shipper`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 'var(--pill)', background: '#0E7490', color: '#fff', fontSize: '12px', fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                Claims Review
+              </a>
+            )}
             <button onClick={() => setCartOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: isMobile ? '7px 12px' : '7px 16px', borderRadius: 'var(--pill)', background: 'var(--cta)', color: '#fff', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
               <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M1 2h2.5l2 9h9l2-7H5" /><circle cx="8" cy="17.5" r="1.5" fill="#fff" stroke="none" /><circle cx="13" cy="17.5" r="1.5" fill="#fff" stroke="none" /></svg>
               {!isMobile && 'Cart '}<span style={{ background: 'rgba(255,255,255,.25)', padding: '0 6px', borderRadius: '99px', fontSize: '10px', marginLeft: '2px' }}>{cart.length}</span>
@@ -368,7 +379,7 @@ export default function MarketplacePage() {
             : { width: 'var(--sb-w)', flexShrink: 0, borderRight: '1px solid var(--div)', padding: '14px 10px', position: 'sticky', top: 'var(--nav-h)', height: 'calc(100vh - var(--nav-h))', overflowY: 'auto', background: 'var(--surf-w)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.4px' }}>Filters</span>
-              <button onClick={() => { setCondFilter('all'); setSizeFilters(new Set(ALL_SIZES)); setGradeFilters(new Set(['A','B','C','R','X'])); setColorSel(null); setArea(null); setAreaZip(''); setGeoHits(null); setGeoMiss(false) }} style={{ background: 'none', border: 'none', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>Reset</button>
+              <button onClick={() => { setCondFilter('all'); setSizeFilters(new Set(ALL_SIZES)); setGradeFilters(new Set(['A','B','C','R','X','D'])); setColorSel(null); setArea(null); setAreaZip(''); setGeoHits(null); setGeoMiss(false) }} style={{ background: 'none', border: 'none', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>Reset</button>
             </div>
 
             {/* Condition gate — pick New or Used first; sub-filters follow */}
@@ -473,7 +484,7 @@ export default function MarketplacePage() {
                     <hr style={{ border: 'none', borderTop: '1px solid var(--div)', margin: '8px 0' }} />
                     <div style={{ marginBottom: '10px' }}>
                       <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Condition Grade</span>
-                      {(['A','B','C','R','X'] as ContainerGrade[]).map(g => (
+                      {(['A','B','C','R','X','D'] as ContainerGrade[]).map(g => (
                         <div key={g} onClick={() => toggleGrade(g)} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid var(--div)', cursor: 'pointer' }}>
                           <div style={{ width: '17px', height: '17px', borderRadius: 'var(--r4)', background: gradeFilters.has(g) ? 'var(--primary)' : 'var(--surf-w)', border: `1.5px solid ${gradeFilters.has(g) ? 'var(--primary)' : 'var(--div)'}`, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
                             {gradeFilters.has(g) && <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><polyline points="2,6 5,9 10,3" /></svg>}

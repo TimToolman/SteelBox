@@ -94,11 +94,11 @@ const SCHEMAS = {
     // customEta/customBuildName only apply to custom-build orders
     // (status custom_in_progress): the promised completion date + which
     // catalog build the unit is being fabricated as.
-    headers: ['id','sku','guid','stockNumber','size','grade','condition','color','status','buyPrice','rentMonthly','photos','photoCount','has360','depotLocation','bayNumber','inspectorName','inspectedAt','deliveryIncluded','listingType','createdAt','purchaseCost','conditionScore','customEta','customBuildName','aiGraded'],
+    headers: ['id','sku','guid','stockNumber','size','grade','condition','color','status','buyPrice','rentMonthly','photos','photoCount','has360','depotLocation','bayNumber','inspectorName','inspectedAt','deliveryIncluded','listingType','createdAt','purchaseCost','conditionScore','customEta','customBuildName','aiGraded','supplierId','damagePhotos','damageSeverity'],
     types: {
       buyPrice: 'number', rentMonthly: 'numberOrNull', photoCount: 'number', purchaseCost: 'number', conditionScore: 'number',
       has360: 'boolean', deliveryIncluded: 'boolean', aiGraded: 'boolean',
-      photos: 'array', inspectedAt: 'stringOrNull',
+      photos: 'array', inspectedAt: 'stringOrNull', damagePhotos: 'array', damageSeverity: 'number',
     },
   },
   orders: {
@@ -154,6 +154,28 @@ const SCHEMAS = {
     // notifyEmail is always true (email is mandatory); notifySms is the customer's opt-in.
     types: { active: 'boolean', notifySms: 'boolean', notifyEmail: 'boolean' },
   },
+  suppliers: {
+    file: 'suppliers.csv',
+    headers: ['id','name','contactName','email','phone','active','createdAt'],
+    types: { active: 'boolean' },
+  },
+  shippers: {
+    file: 'shippers.csv',
+    headers: ['id','name','line','email','phone','active','createdAt'],
+    types: { active: 'boolean' },
+  },
+  repairshops: {
+    file: 'repairshops.csv',
+    headers: ['id','name','city','state','phone','specialty','approved'],
+    types: { approved: 'boolean' },
+  },
+  // Sea-freight damage claims: supplier → field inspection → estimate →
+  // shipper approval → repair (retail) or sell-as-damaged (wholesale).
+  claims: {
+    file: 'claims.csv',
+    headers: ['id','claimNumber','containerId','containerSku','supplierId','supplierName','shipperId','shipperName','vesselRef','status','severity','photos','notes','estimateAmount','estimateNotes','shipperDecision','shipperNotes','shipperDecidedAt','repairShopId','repairShopName','repairDate','decision','inspectorName','inspectedAt','createdAt'],
+    types: { severity: 'number', photos: 'array', estimateAmount: 'number', shipperDecidedAt: 'stringOrNull', inspectedAt: 'stringOrNull' },
+  },
   // Messages between drivers, admin dispatch, and customers. Each row is one direction;
   // toDriverId is the driver party in the conversation (whether sending or receiving).
   messages: {
@@ -165,7 +187,7 @@ const SCHEMAS = {
   // driverId links driver accounts to drivers.csv, customerId links buyers to customers.csv.
   users: {
     file: 'users.csv',
-    headers: ['id','email','passwordHash','role','name','phone','driverId','customerId','phoneVerified','active','createdAt','sellerId'],
+    headers: ['id','email','passwordHash','role','name','phone','driverId','customerId','phoneVerified','active','createdAt','sellerId','supplierId','shipperId'],
     types: { phoneVerified: 'boolean', active: 'boolean' },
   },
   // Outbound email + SMS log. In dev nothing actually leaves the machine —
@@ -443,6 +465,9 @@ function ensureSeedUsers() {
     console.log(`Seeded ${fields.role} account: ${email} / test1234`)
   }
   ensure('tgmoore@gmail.com', { role: 'admin', name: 'Tim Moore' })
+  // Damage-claim personas: the container owner and the shipping line.
+  ensure('supplier@oceanbox.co', { role: 'supplier', name: 'Dana Reyes', supplierId: 'sup_01' })
+  ensure('shipper@meridianlines.com', { role: 'shipper', name: 'Kofi Mensah', shipperId: 'shp_01' })
   for (const d of readTable('drivers')) {
     if (d.active === false) continue
     const first = (d.name || 'driver').trim().split(/\s+/)[0].toLowerCase()
@@ -539,6 +564,33 @@ function ensureSeedCustomBuilds() {
   ]
   writeTable('custombuilds', seed.map((b, i) => ({ id: uid('cb'), ...b, photo: '', sortOrder: i + 1, active: true })))
   console.log('Seeded custom builds catalog (5 products)')
+}
+
+// Seed the damage-claim reference tables once: two suppliers, two shipping
+// lines, and the approved repair shop directory.
+function ensureSeedClaimTables() {
+  if (readTable('suppliers').length === 0) {
+    writeTable('suppliers', [
+      { id: 'sup_01', name: 'OceanBox Supply Co', contactName: 'Dana Reyes', email: 'supplier@oceanbox.co', phone: '(504) 555-0230', active: true, createdAt: new Date().toISOString() },
+      { id: 'sup_02', name: 'Gulf Container Traders', contactName: 'Marcus Webb', email: 'ops@gulfcontainer.co', phone: '(713) 555-0241', active: true, createdAt: new Date().toISOString() },
+    ])
+    console.log('Seeded suppliers (2)')
+  }
+  if (readTable('shippers').length === 0) {
+    writeTable('shippers', [
+      { id: 'shp_01', name: 'Meridian Lines', line: 'Trans-Pacific', email: 'shipper@meridianlines.com', phone: '(310) 555-0252', active: true, createdAt: new Date().toISOString() },
+      { id: 'shp_02', name: 'Austral Shipping', line: 'Gulf-Atlantic', email: 'claims@australshipping.com', phone: '(305) 555-0263', active: true, createdAt: new Date().toISOString() },
+    ])
+    console.log('Seeded shippers (2)')
+  }
+  if (readTable('repairshops').length === 0) {
+    writeTable('repairshops', [
+      { id: 'shop_01', name: 'Bayou Container Repair', city: 'New Orleans', state: 'LA', phone: '(504) 555-0274', specialty: 'Structural & welding', approved: true },
+      { id: 'shop_02', name: 'Port City Box Works', city: 'Houston', state: 'TX', phone: '(713) 555-0285', specialty: 'Doors, seals & floors', approved: true },
+      { id: 'shop_03', name: 'Coastal Refinishing', city: 'Mobile', state: 'AL', phone: '(251) 555-0296', specialty: 'Blast & repaint', approved: true },
+    ])
+    console.log('Seeded repair shops (3)')
+  }
 }
 
 // ── Two-factor codes (SMS) ────────────────────────────────
@@ -1049,7 +1101,10 @@ async function handleRequest(req, res) {
       }
 
       if (seg.length === 2 && method === 'PATCH') {
-        if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Admin or driver access required')
+        // Suppliers may edit their OWN units (sell-as-damaged, damage photos);
+        // staff and the field crew edit anything.
+        const ownSupplierUnit = hasRole('supplier') && idx !== -1 && containers[idx].supplierId === user.supplierId
+        if (!hasRole('admin', 'driver') && !ownSupplierUnit) return denied(user ? 403 : 401, 'Admin or driver access required')
         if (idx === -1) return send(res, 404, { message: 'Container not found' })
         const body = await readBody(req)
         containers[idx] = withPhotoPromotion({ ...containers[idx], ...body, id: containers[idx].id })
@@ -1793,6 +1848,113 @@ async function handleRequest(req, res) {
       }
     }
 
+    // ── Damage-claim reference data ──
+    if (seg[0] === 'suppliers' && seg.length === 1 && method === 'GET') {
+      if (!hasRole('admin', 'driver', 'supplier', 'shipper')) return denied(user ? 403 : 401, 'Staff access required')
+      return send(res, 200, readTable('suppliers'))
+    }
+    if (seg[0] === 'shippers' && seg.length === 1 && method === 'GET') {
+      if (!hasRole('admin', 'driver', 'supplier', 'shipper')) return denied(user ? 403 : 401, 'Staff access required')
+      return send(res, 200, readTable('shippers'))
+    }
+    if (seg[0] === 'repairshops' && seg.length === 1 && method === 'GET') {
+      if (!hasRole('admin', 'driver', 'supplier', 'shipper')) return denied(user ? 403 : 401, 'Staff access required')
+      return send(res, 200, readTable('repairshops'))
+    }
+
+    // ── Damage claims (sea-freight arbitration pipeline) ──
+    if (seg[0] === 'claims') {
+      const all = readTable('claims')
+      // Visibility: staff and the field crew see everything; a supplier sees
+      // their own claims; a shipping line sees claims filed against it.
+      const visible = () => {
+        if (hasRole('admin', 'driver')) return all
+        if (hasRole('supplier')) return all.filter(c => c.supplierId === user.supplierId)
+        if (hasRole('shipper')) return all.filter(c => c.shipperId === user.shipperId)
+        return null
+      }
+
+      if (seg.length === 1 && method === 'GET') {
+        const rows = visible()
+        if (!rows) return denied(user ? 403 : 401, 'Staff access required')
+        return send(res, 200, [...rows].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')))
+      }
+
+      if (seg.length === 1 && method === 'POST') {
+        if (!hasRole('admin', 'supplier')) return denied(user ? 403 : 401, 'Supplier access required')
+        const body = await readBody(req)
+        const cont = readTable('containers').find(c => c.id === body.containerId || c.sku === body.containerId)
+        if (!cont) return send(res, 400, { message: 'containerId is required' })
+        const supplierId = hasRole('supplier') ? user.supplierId : (body.supplierId || cont.supplierId || '')
+        const sup = readTable('suppliers').find(x => x.id === supplierId)
+        const shp = readTable('shippers').find(x => x.id === body.shipperId) || readTable('shippers')[0]
+        const record = {
+          id: uid('clm'),
+          claimNumber: `CLM-${String(all.length + 1).padStart(4, '0')}`,
+          containerId: cont.id, containerSku: cont.sku,
+          supplierId, supplierName: sup?.name || '',
+          shipperId: shp?.id || '', shipperName: shp?.name || '',
+          vesselRef: String(body.vesselRef || ''),
+          status: 'awaiting_inspection',
+          severity: 0, photos: [], notes: String(body.notes || ''),
+          estimateAmount: 0, estimateNotes: '',
+          shipperDecision: '', shipperNotes: '', shipperDecidedAt: null,
+          repairShopId: '', repairShopName: '', repairDate: '', decision: '',
+          inspectorName: '', inspectedAt: null,
+          createdAt: new Date().toISOString(),
+        }
+        all.push(record)
+        writeTable('claims', all)
+        return send(res, 201, record)
+      }
+
+      const idx = all.findIndex(c => c.id === seg[1])
+      if (idx === -1) return send(res, 404, { message: 'Claim not found' })
+      const claim = all[idx]
+      const mine = hasRole('admin', 'driver')
+        || (hasRole('supplier') && claim.supplierId === user.supplierId)
+        || (hasRole('shipper') && claim.shipperId === user.shipperId)
+      if (!mine) return denied(user ? 403 : 401, 'No access to this claim')
+
+      if (seg.length === 2 && method === 'GET') return send(res, 200, claim)
+
+      if (seg.length === 2 && method === 'PATCH') {
+        const body = await readBody(req)
+        // Shippers may only record their decision; everyone else edits freely.
+        const patch = hasRole('shipper') && !hasRole('admin')
+          ? { shipperDecision: body.shipperDecision, shipperNotes: body.shipperNotes, shipperDecidedAt: body.shipperDecidedAt, status: body.status }
+          : body
+        for (const [k, v] of Object.entries(patch)) {
+          if (v === undefined || k === 'id' || k === 'claimNumber' || k === 'createdAt') continue
+          claim[k] = k === 'severity' || k === 'estimateAmount' ? Number(v) : v
+        }
+        all[idx] = claim
+        writeTable('claims', all)
+        return send(res, 200, claim)
+      }
+
+      // Damage evidence photos — own slots, never the retail gallery.
+      if (seg.length === 3 && seg[2] === 'photos' && method === 'POST') {
+        const body = await readBody(req)
+        const saved = savePhoto(claim.claimNumber, Number(body.slot) || 0, body.dataUrl)
+        if (saved.error) return send(res, 400, { message: saved.error })
+        const photos = [...(claim.photos || [])]
+        photos[Number(body.slot) || 0] = saved.url
+        claim.photos = photos
+        all[idx] = claim
+        writeTable('claims', all)
+        return send(res, 200, claim)
+      }
+      if (seg.length === 4 && seg[2] === 'photos' && method === 'DELETE') {
+        const photos = [...(claim.photos || [])]
+        photos[Number(seg[3])] = ''
+        claim.photos = photos
+        all[idx] = claim
+        writeTable('claims', all)
+        return send(res, 200, claim)
+      }
+    }
+
     if (seg[0] === 'depots') {
       const depots = readTable('depots')
 
@@ -2119,6 +2281,7 @@ const server = createServer((req, res) => {
 })
 
 ensureSeedUsers()
+ensureSeedClaimTables()
 ensureSeedSellers()
 ensureSeedCustomBuilds()
 

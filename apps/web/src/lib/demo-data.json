@@ -37,7 +37,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_0052",
@@ -76,7 +77,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_0038",
@@ -115,7 +117,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_0029",
@@ -154,7 +157,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_0061",
@@ -193,7 +197,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_0044",
@@ -232,7 +237,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_0067",
@@ -271,7 +277,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_0068",
@@ -310,7 +317,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_0070",
@@ -349,7 +357,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_0071",
@@ -388,7 +397,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_0072",
@@ -427,7 +437,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_0073",
@@ -466,7 +477,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_0074",
@@ -505,7 +517,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_mr5jg37k9d443bd2f2",
@@ -544,7 +557,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_mr5jg38se1983e6789",
@@ -583,7 +597,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_mr5jg3a01e6b7361d1",
@@ -622,7 +637,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0001",
@@ -661,7 +677,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0002",
@@ -700,7 +717,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0003",
@@ -739,7 +757,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0004",
@@ -778,7 +797,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0005",
@@ -817,7 +837,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0006",
@@ -856,7 +877,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0007",
@@ -895,7 +917,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0008",
@@ -934,7 +957,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0009",
@@ -973,7 +997,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0010",
@@ -1012,7 +1037,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0011",
@@ -1051,7 +1077,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0012",
@@ -1090,7 +1117,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0013",
@@ -1129,7 +1157,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0014",
@@ -1168,7 +1197,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0015",
@@ -1207,7 +1237,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0016",
@@ -1246,7 +1277,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0017",
@@ -1285,7 +1317,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0018",
@@ -1324,7 +1357,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0019",
@@ -1363,7 +1397,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0020",
@@ -1402,7 +1437,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0021",
@@ -1441,7 +1477,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0022",
@@ -1480,7 +1517,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0023",
@@ -1519,7 +1557,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0024",
@@ -1558,7 +1597,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0025",
@@ -1597,7 +1637,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0026",
@@ -1636,7 +1677,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0027",
@@ -1675,7 +1717,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0028",
@@ -1714,7 +1757,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0029",
@@ -1753,7 +1797,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0030",
@@ -1792,7 +1837,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0031",
@@ -1831,7 +1877,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0032",
@@ -1870,7 +1917,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0033",
@@ -1909,7 +1957,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0034",
@@ -1948,7 +1997,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0035",
@@ -1987,7 +2037,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0036",
@@ -2026,7 +2077,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0037",
@@ -2065,7 +2117,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_02"
   },
   {
    "id": "ctr_seed_0038",
@@ -2104,7 +2157,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0039",
@@ -2143,7 +2197,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0040",
@@ -2182,7 +2237,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0041",
@@ -2221,7 +2277,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0042",
@@ -2260,7 +2317,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0043",
@@ -2299,7 +2357,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0044",
@@ -2338,7 +2397,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0045",
@@ -2377,7 +2437,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0046",
@@ -2416,7 +2477,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0047",
@@ -2455,7 +2517,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0048",
@@ -2494,7 +2557,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0049",
@@ -2533,7 +2597,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0050",
@@ -2572,7 +2637,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0051",
@@ -2611,7 +2677,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0052",
@@ -2650,7 +2717,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0053",
@@ -2689,7 +2757,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0054",
@@ -2728,7 +2797,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0055",
@@ -2767,7 +2837,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0056",
@@ -2806,7 +2877,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0057",
@@ -2845,7 +2917,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0058",
@@ -2884,7 +2957,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0059",
@@ -2923,7 +2997,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0060",
@@ -2962,7 +3037,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0061",
@@ -3001,7 +3077,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0062",
@@ -3040,7 +3117,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0063",
@@ -3079,7 +3157,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0064",
@@ -3118,7 +3197,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_mvp",
-   "sellerName": "MVP Container"
+   "sellerName": "MVP Container",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0065",
@@ -3157,7 +3237,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0066",
@@ -3165,10 +3246,10 @@
    "guid": "9b7e5d10-0066-4c2a-8f00-000000000066",
    "stockNumber": "STK-CDI-0002",
    "size": "20ft-dd",
-   "grade": "A",
-   "condition": "new",
+   "grade": "D",
+   "condition": "used",
    "color": "Beige",
-   "status": "sold",
+   "status": "available",
    "buyPrice": 2525,
    "rentMonthly": 95,
    "photos": [
@@ -3196,7 +3277,14 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01",
+   "damageSeverity": 4,
+   "damagePhotos": [
+    "/photos/CDI-20-0002-03-mreac2cs.webp",
+    "/photos/CDI-20-0002-04-mreacgx1.webp",
+    "/photos/CDI-20-0002-06-mreadfgd.jpg"
+   ]
   },
   {
    "id": "ctr_seed_0067",
@@ -3204,10 +3292,10 @@
    "guid": "9b7e5d10-0067-4c2a-8f00-000000000067",
    "stockNumber": "STK-CDI-0003",
    "size": "20ft-dd",
-   "grade": "A",
-   "condition": "new",
+   "grade": "D",
+   "condition": "used",
    "color": "Beige",
-   "status": "sold",
+   "status": "available",
    "buyPrice": 2525,
    "rentMonthly": 95,
    "photos": [
@@ -3233,9 +3321,15 @@
    "conditionScore": 5,
    "customEta": "",
    "customBuildName": "",
-   "aiGraded": false,
+   "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01",
+   "damageSeverity": 2,
+   "damagePhotos": [
+    "/photos/CDI-20-0003-02-mreakqe7.webp",
+    "/photos/CDI-20-0003-05-mrealvat.webp"
+   ]
   },
   {
    "id": "ctr_seed_0068",
@@ -3274,7 +3368,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0069",
@@ -3313,7 +3408,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0070",
@@ -3352,7 +3448,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0071",
@@ -3391,7 +3488,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0072",
@@ -3430,7 +3528,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0073",
@@ -3469,7 +3568,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0074",
@@ -3508,7 +3608,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0075",
@@ -3547,7 +3648,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0076",
@@ -3586,7 +3688,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0077",
@@ -3625,7 +3728,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0078",
@@ -3664,7 +3768,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0079",
@@ -3703,7 +3808,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0080",
@@ -3742,7 +3848,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0081",
@@ -3781,7 +3888,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0082",
@@ -3820,7 +3928,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0083",
@@ -3859,7 +3968,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0084",
@@ -3898,7 +4008,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0085",
@@ -3937,7 +4048,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0086",
@@ -3976,7 +4088,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0087",
@@ -4015,7 +4128,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0088",
@@ -4054,7 +4168,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0089",
@@ -4093,7 +4208,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0090",
@@ -4132,7 +4248,8 @@
    "customBuildName": "",
    "aiGraded": false,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   },
   {
    "id": "ctr_seed_0091",
@@ -4171,7 +4288,8 @@
    "customBuildName": "",
    "aiGraded": true,
    "sellerId": "sel_demo",
-   "sellerName": "Demo Container Corp"
+   "sellerName": "Demo Container Corp",
+   "supplierId": "sup_01"
   }
  ],
  "depots": [
@@ -5428,7 +5546,220 @@
    "active": true,
    "createdAt": "2026-08-06T03:41:05.194Z",
    "sellerId": ""
+  },
+  {
+   "id": "usr_sup01",
+   "email": "supplier@oceanbox.co",
+   "role": "supplier",
+   "name": "Dana Reyes",
+   "phone": "",
+   "driverId": "",
+   "customerId": "",
+   "supplierId": "sup_01",
+   "phoneVerified": false,
+   "active": true,
+   "createdAt": "2026-08-07T14:00:00.000Z"
+  },
+  {
+   "id": "usr_shp01",
+   "email": "shipper@meridianlines.com",
+   "role": "shipper",
+   "name": "Kofi Mensah",
+   "phone": "",
+   "driverId": "",
+   "customerId": "",
+   "shipperId": "shp_01",
+   "phoneVerified": false,
+   "active": true,
+   "createdAt": "2026-08-07T14:00:00.000Z"
   }
  ],
- "outbox": []
+ "outbox": [],
+ "suppliers": [
+  {
+   "id": "sup_01",
+   "name": "OceanBox Supply Co",
+   "contactName": "Dana Reyes",
+   "email": "supplier@oceanbox.co",
+   "phone": "(504) 555-0230",
+   "active": true,
+   "createdAt": "2026-08-07T14:00:00.000Z"
+  },
+  {
+   "id": "sup_02",
+   "name": "Gulf Container Traders",
+   "contactName": "Marcus Webb",
+   "email": "ops@gulfcontainer.co",
+   "phone": "(713) 555-0241",
+   "active": true,
+   "createdAt": "2026-08-07T14:00:00.000Z"
+  }
+ ],
+ "shippers": [
+  {
+   "id": "shp_01",
+   "name": "Meridian Lines",
+   "line": "Trans-Pacific",
+   "email": "shipper@meridianlines.com",
+   "phone": "(310) 555-0252",
+   "active": true,
+   "createdAt": "2026-08-07T14:00:00.000Z"
+  },
+  {
+   "id": "shp_02",
+   "name": "Austral Shipping",
+   "line": "Gulf-Atlantic",
+   "email": "claims@australshipping.com",
+   "phone": "(305) 555-0263",
+   "active": true,
+   "createdAt": "2026-08-07T14:00:00.000Z"
+  }
+ ],
+ "repairshops": [
+  {
+   "id": "shop_01",
+   "name": "Bayou Container Repair",
+   "city": "New Orleans",
+   "state": "LA",
+   "phone": "(504) 555-0274",
+   "specialty": "Structural & welding",
+   "approved": true
+  },
+  {
+   "id": "shop_02",
+   "name": "Port City Box Works",
+   "city": "Houston",
+   "state": "TX",
+   "phone": "(713) 555-0285",
+   "specialty": "Doors, seals & floors",
+   "approved": true
+  },
+  {
+   "id": "shop_03",
+   "name": "Coastal Refinishing",
+   "city": "Mobile",
+   "state": "AL",
+   "phone": "(251) 555-0296",
+   "specialty": "Blast & repaint",
+   "approved": true
+  }
+ ],
+ "claims": [
+  {
+   "id": "clm_demo1",
+   "claimNumber": "CLM-0001",
+   "containerId": "ctr_seed_0065",
+   "containerSku": "CDI-20-0001",
+   "supplierId": "sup_01",
+   "supplierName": "OceanBox Supply Co",
+   "shipperId": "shp_01",
+   "shipperName": "Meridian Lines",
+   "vesselRef": "MV KESTREL 224E",
+   "status": "awaiting_inspection",
+   "severity": 0,
+   "photos": [],
+   "notes": "Stack shift in heavy weather — port-side panels",
+   "estimateAmount": 0,
+   "estimateNotes": "",
+   "shipperDecision": "",
+   "shipperNotes": "",
+   "shipperDecidedAt": null,
+   "repairShopId": "",
+   "repairShopName": "",
+   "repairDate": "",
+   "decision": "",
+   "inspectorName": "",
+   "inspectedAt": null,
+   "createdAt": "2026-08-06T18:20:00.000Z"
+  },
+  {
+   "id": "clm_demo2",
+   "claimNumber": "CLM-0002",
+   "containerId": "ctr_seed_0066",
+   "containerSku": "CDI-20-0002",
+   "supplierId": "sup_01",
+   "supplierName": "OceanBox Supply Co",
+   "shipperId": "shp_01",
+   "shipperName": "Meridian Lines",
+   "vesselRef": "MV KESTREL 221E",
+   "status": "awaiting_estimate",
+   "severity": 3,
+   "photos": [
+    "/photos/CDI-20-0002-03-mreac2cs.webp",
+    "/photos/CDI-20-0002-04-mreacgx1.webp"
+   ],
+   "notes": "Door frame rack, gasket torn",
+   "estimateAmount": 0,
+   "estimateNotes": "",
+   "shipperDecision": "",
+   "shipperNotes": "",
+   "shipperDecidedAt": null,
+   "repairShopId": "",
+   "repairShopName": "",
+   "repairDate": "",
+   "decision": "",
+   "inspectorName": "J. Alvarez",
+   "inspectedAt": "2026-08-05T15:10:00.000Z",
+   "createdAt": "2026-08-04T12:00:00.000Z"
+  },
+  {
+   "id": "clm_demo3",
+   "claimNumber": "CLM-0003",
+   "containerId": "ctr_seed_0067",
+   "containerSku": "CDI-20-0003",
+   "supplierId": "sup_01",
+   "supplierName": "OceanBox Supply Co",
+   "shipperId": "shp_01",
+   "shipperName": "Meridian Lines",
+   "vesselRef": "MV PELICAN 087W",
+   "status": "awaiting_shipper",
+   "severity": 4,
+   "photos": [
+    "/photos/CDI-20-0003-02-mreakqe7.webp",
+    "/photos/CDI-20-0003-05-mrealvat.webp"
+   ],
+   "notes": "Corner casting crushed at transship",
+   "estimateAmount": 2400,
+   "estimateNotes": "Rail + corner casting, Bayou Container Repair quote",
+   "shipperDecision": "",
+   "shipperNotes": "",
+   "shipperDecidedAt": null,
+   "repairShopId": "",
+   "repairShopName": "",
+   "repairDate": "",
+   "decision": "",
+   "inspectorName": "J. Alvarez",
+   "inspectedAt": "2026-08-03T10:30:00.000Z",
+   "createdAt": "2026-08-02T09:00:00.000Z"
+  },
+  {
+   "id": "clm_demo4",
+   "claimNumber": "CLM-0004",
+   "containerId": "ctr_seed_0001",
+   "containerSku": "FC-20-0001",
+   "supplierId": "sup_02",
+   "supplierName": "Gulf Container Traders",
+   "shipperId": "shp_02",
+   "shipperName": "Austral Shipping",
+   "vesselRef": "MV IBIS 314N",
+   "status": "awaiting_decision",
+   "severity": 2,
+   "photos": [
+    "/photos/CDI-20-0002-07-mreadsvk.webp"
+   ],
+   "notes": "Roof dents from spreader",
+   "estimateAmount": 1150,
+   "estimateNotes": "Panel beat + reseal",
+   "shipperDecision": "approved",
+   "shipperNotes": "Approved at quoted amount",
+   "shipperDecidedAt": "2026-08-06T20:00:00.000Z",
+   "repairShopId": "",
+   "repairShopName": "",
+   "repairDate": "",
+   "decision": "",
+   "inspectorName": "M. Torres",
+   "inspectedAt": "2026-08-05T09:00:00.000Z",
+   "createdAt": "2026-08-01T08:00:00.000Z"
+  }
+ ]
 }

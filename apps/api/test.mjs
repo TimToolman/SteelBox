@@ -154,6 +154,46 @@ try {
   const custView = (await api('/messages', { token: customer })).body
   check('customer sees both sides of the thread', custView.some(m => m.subject === 'Where is my box?') && custView.some(m => m.subject === 'Re: Where is my box?'))
 
+  // ── Damage-claim pipeline: supplier → inspection → estimate → shipper → sell as damaged ──
+  console.log('Damage claims')
+  const supLogin = await api('/auth/login', { method: 'POST', body: { email: 'supplier@oceanbox.co', password: 'test1234' } })
+  check('supplier signs in', supLogin.status === 200 && !!supLogin.body?.token)
+  const supplier = supLogin.body.token
+  const shpLogin = await api('/auth/login', { method: 'POST', body: { email: 'shipper@meridianlines.com', password: 'test1234' } })
+  check('shipper signs in', shpLogin.status === 200 && !!shpLogin.body?.token)
+  const shipper = shpLogin.body.token
+
+  // Give the supplier a unit, then file a claim against the seeded shipper.
+  const dmgUnit = [...containers].reverse().find(c => c.status === 'available' && c.id !== unit.id) || containers[0]
+  await api(`/containers/${dmgUnit.id}`, { method: 'PATCH', token: admin, body: { supplierId: 'sup_01' } })
+  const shippers = (await api('/shippers', { token: supplier })).body
+  const claim = await api('/claims', { method: 'POST', token: supplier, body: { containerId: dmgUnit.id, shipperId: shippers[0].id, vesselRef: 'MV-TEST-042', notes: 'Fork damage at transship' } })
+  check('supplier files a claim (awaiting inspection)', claim.status === 201 && claim.body?.status === 'awaiting_inspection' && claim.body?.claimNumber?.startsWith('CLM-'))
+  const claimId = claim.body.id
+
+  // Field inspection: severity + move to estimate (driver-level access).
+  const insp = await api(`/claims/${claimId}`, { method: 'PATCH', token: admin, body: { severity: 4, status: 'awaiting_estimate', inspectorName: 'Field Adjuster', inspectedAt: new Date().toISOString() } })
+  check('inspection sets severity D·4', insp.status === 200 && insp.body?.severity === 4 && insp.body?.status === 'awaiting_estimate')
+
+  // Supplier submits the estimate to the shipper.
+  const estR = await api(`/claims/${claimId}`, { method: 'PATCH', token: supplier, body: { estimateAmount: 2400, estimateNotes: 'Rail + door frame', status: 'awaiting_shipper' } })
+  check('estimate submitted to shipper', estR.status === 200 && estR.body?.estimateAmount === 2400)
+
+  // Shipper sees it and rejects; supplier-only fields stay untouched.
+  const shpView = (await api('/claims', { token: shipper })).body
+  check('shipper sees the claim in their queue', shpView.some(c => c.id === claimId && c.status === 'awaiting_shipper'))
+  const dec = await api(`/claims/${claimId}`, { method: 'PATCH', token: shipper, body: { shipperDecision: 'rejected', shipperNotes: 'Pre-existing wear', shipperDecidedAt: new Date().toISOString(), status: 'awaiting_decision', estimateAmount: 1 } })
+  check('shipper decision recorded (estimate untouchable)', dec.status === 200 && dec.body?.shipperDecision === 'rejected' && dec.body?.estimateAmount === 2400)
+
+  // Supplier sells the unit as damaged: their own container, grade D.
+  const sell = await api(`/containers/${dmgUnit.id}`, { method: 'PATCH', token: supplier, body: { grade: 'D', damageSeverity: 4, damagePhotos: [], condition: 'used', status: 'available' } })
+  check('supplier lists own unit as damaged D·4', sell.status === 200 && sell.body?.grade === 'D' && sell.body?.damageSeverity === 4)
+  const wrap = await api(`/claims/${claimId}`, { method: 'PATCH', token: supplier, body: { status: 'sell_as_damaged', decision: 'wholesale' } })
+  check('claim closes as sell-as-damaged', wrap.status === 200 && wrap.body?.decision === 'wholesale')
+  const other = containers.find(c => c.supplierId !== 'sup_01' && c.id !== dmgUnit.id)
+  const denied2 = await api(`/containers/${other.id}`, { method: 'PATCH', token: supplier, body: { grade: 'D' } })
+  check("supplier cannot touch another owner's unit", denied2.status === 403 || denied2.status === 401)
+
   // ── Reject path frees the container ──
   console.log('Reject path')
   const unit2 = containers.find(c => c.status === 'available' && c.id !== unit.id)
