@@ -1,0 +1,123 @@
+// ============================================================
+// Shipper Claims Review — the shipping line's side of arbitration
+// Route: /shipper (roles: shipper, admin)
+//
+// The line reviews each claim's damage evidence and the supplier's
+// repair estimate, then approves or rejects it. Their insurance
+// carrier does its own review off-platform — this records the
+// line's decision so the supplier's tracker can move to the
+// retail-or-wholesale step.
+// ============================================================
+
+import React, { useEffect, useState } from 'react'
+import { useAuth, useSnackbar } from '../../hooks'
+import { claims as claimsApi, photoUrl, DAMAGE_SHOT_LABELS, type DamageClaim } from '../../lib/api'
+import { damageLabel, SEVERITY_WORD } from '../../lib/grading'
+import { Snackbar } from '../../components/ui'
+
+const INK = '#0D0E12', INK2 = '#44474F', INK3 = '#6B7280', DIV = '#E2E4E9', RED = '#B3261E', GREEN = '#1B7A5A'
+const card: React.CSSProperties = { background: '#fff', border: `1px solid ${DIV}`, borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,.06)' }
+
+export default function ShipperReviewPage() {
+  const { user, logout } = useAuth()
+  const { toast, message, open: snackOpen, close: snackClose } = useSnackbar()
+  const [claimList, setClaimList] = useState<DamageClaim[]>([])
+  const [notes, setNotes] = useState<Record<string, string>>({})
+  const [busy, setBusy] = useState<string | null>(null)
+
+  const refresh = () => claimsApi.list().then(setClaimList).catch(() => {})
+  useEffect(() => { refresh() }, [])
+
+  const decide = async (c: DamageClaim, decision: 'approved' | 'rejected') => {
+    if (busy) return
+    setBusy(c.id)
+    try {
+      await claimsApi.update(c.id, {
+        shipperDecision: decision,
+        shipperNotes: notes[c.id] || '',
+        shipperDecidedAt: new Date().toISOString(),
+        status: 'awaiting_decision',
+      })
+      toast(`${c.claimNumber} ${decision} — the supplier decides retail vs wholesale next`)
+      refresh()
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not record the decision')
+    } finally { setBusy(null) }
+  }
+
+  const queue = claimList.filter(c => c.status === 'awaiting_shipper')
+  const decided = claimList.filter(c => !!c.shipperDecision)
+
+  return (
+    <div style={{ fontFamily: 'var(--sans)', background: 'var(--pg)', minHeight: '100vh', color: INK }}>
+      <header style={{ background: '#fff', borderBottom: `1px solid ${DIV}`, padding: '0 20px', height: '60px', display: 'flex', alignItems: 'center', gap: '12px', position: 'sticky', top: 0, zIndex: 50 }}>
+        <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#0E7490', display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 700, fontSize: '15px' }}>⚓</div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: '15px', lineHeight: 1.2 }}>Shipper Claims Review</div>
+          <div style={{ fontSize: '11px', color: INK3 }}>{user?.name}{user ? ` · ${user.email}` : ''}</div>
+        </div>
+        <button onClick={logout} style={{ marginLeft: 'auto', padding: '9px 16px', borderRadius: '999px', border: `1.5px solid ${DIV}`, background: '#fff', color: INK2, fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>Sign out</button>
+      </header>
+
+      <main style={{ maxWidth: '900px', margin: '0 auto', padding: '22px 16px 80px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div>
+          <h2 style={{ fontSize: '18px', fontWeight: 700 }}>Estimates awaiting your decision <span style={{ fontSize: '12px', color: INK3, fontWeight: 400 }}>· {queue.length}</span></h2>
+          <p style={{ fontSize: '12px', color: INK3, marginTop: '3px' }}>Approve or reject each repair estimate. Your insurance carrier's own review happens off-platform.</p>
+        </div>
+
+        {queue.length === 0 && <div style={{ ...card, textAlign: 'center', color: INK3, fontSize: '13px' }}>Nothing waiting on you.</div>}
+        {queue.map(c => (
+          <div key={c.id} style={card}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '14px' }}>{c.containerSku}</span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: INK3 }}>{c.claimNumber}{c.vesselRef ? ` · ${c.vesselRef}` : ''}</span>
+              <span style={{ fontSize: '11px', color: INK3 }}>filed by {c.supplierName}</span>
+              {c.severity > 0 && <span title={SEVERITY_WORD[c.severity]} style={{ background: RED, color: '#fff', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: 700 }}>{damageLabel(c.severity)} · {SEVERITY_WORD[c.severity]}</span>}
+              <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: '18px', fontWeight: 700 }}>${(c.estimateAmount || 0).toLocaleString()}</span>
+            </div>
+            {c.estimateNotes && <div style={{ fontSize: '12px', color: INK2, marginTop: '6px' }}>Estimate: {c.estimateNotes}</div>}
+            {c.notes && <div style={{ fontSize: '12px', color: INK3, marginTop: '2px' }}>Claim notes: {c.notes}</div>}
+
+            {/* Evidence gallery — captured unedited by the field inspection */}
+            {(c.photos || []).filter(Boolean).length > 0 && (
+              <div style={{ display: 'flex', gap: '6px', marginTop: '10px', overflowX: 'auto' }}>
+                {(c.photos || []).map((u, i) => u ? (
+                  <div key={i} style={{ flexShrink: 0 }}>
+                    <img src={photoUrl(u)} alt={DAMAGE_SHOT_LABELS[i] ?? `Photo ${i + 1}`} style={{ width: '108px', height: '80px', objectFit: 'cover', borderRadius: '8px', display: 'block' }} />
+                    <div style={{ fontSize: '9px', color: INK3, marginTop: '2px' }}>{DAMAGE_SHOT_LABELS[i] ?? ''}</div>
+                  </div>
+                ) : null)}
+              </div>
+            )}
+            <div style={{ fontSize: '11px', color: INK3, marginTop: '6px' }}>Inspected {c.inspectedAt ? new Date(c.inspectedAt).toLocaleDateString() : '—'} by {c.inspectorName || '—'}</div>
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+              <input value={notes[c.id] ?? ''} onChange={e => setNotes(p => ({ ...p, [c.id]: e.target.value }))} placeholder="Decision notes (optional)"
+                style={{ flex: 1, minWidth: '220px', padding: '9px 12px', border: `1.5px solid ${DIV}`, borderRadius: '10px', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }} />
+              <button onClick={() => decide(c, 'approved')} disabled={busy === c.id}
+                style={{ padding: '9px 18px', borderRadius: '999px', border: 'none', background: GREEN, color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>Approve estimate</button>
+              <button onClick={() => decide(c, 'rejected')} disabled={busy === c.id}
+                style={{ padding: '9px 18px', borderRadius: '999px', border: 'none', background: RED, color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>Reject</button>
+            </div>
+          </div>
+        ))}
+
+        {decided.length > 0 && (
+          <div style={{ ...card }}>
+            <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '8px' }}>Decision history</div>
+            {decided.map(c => (
+              <div key={c.id} style={{ display: 'flex', gap: '10px', alignItems: 'baseline', padding: '6px 0', borderBottom: `1px solid ${DIV}`, fontSize: '12px' }}>
+                <span style={{ fontFamily: 'var(--mono)', fontWeight: 700 }}>{c.containerSku}</span>
+                <span style={{ color: INK3 }}>{c.claimNumber}</span>
+                <span style={{ fontFamily: 'var(--mono)' }}>${(c.estimateAmount || 0).toLocaleString()}</span>
+                <span style={{ fontWeight: 700, color: c.shipperDecision === 'approved' ? GREEN : RED }}>{c.shipperDecision.toUpperCase()}</span>
+                <span style={{ color: INK3, marginLeft: 'auto' }}>{c.shipperDecidedAt ? new Date(c.shipperDecidedAt).toLocaleDateString() : ''}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+      <Snackbar message={message} open={snackOpen} onClose={snackClose} />
+    </div>
+  )
+}

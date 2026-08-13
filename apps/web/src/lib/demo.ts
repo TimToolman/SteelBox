@@ -37,6 +37,10 @@ const db: Record<string, Row[]> = Object.fromEntries([
   ['messages', snapshot.messages],
   ['users', snapshot.users],
   ['outbox', snapshot.outbox],
+  ['suppliers', snapshot.suppliers],
+  ['shippers', snapshot.shippers],
+  ['repairshops', snapshot.repairshops],
+  ['claims', snapshot.claims],
 ].map(([k, v]) => [k as string, JSON.parse(JSON.stringify(v ?? []))]))
 
 const uid = (p: string) => `${p}_demo_${Math.random().toString(36).slice(2, 10)}`
@@ -169,6 +173,37 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
   if (method === 'POST' && route === '/auth/change-password') return ok({ changed: true })
   if (method === 'POST' && route === '/auth/2fa/send') return ok({ sent: true, devCode: '123456' })
   if (method === 'POST' && route === '/auth/2fa/verify') return ok({ verified: true })
+
+  // ── Damage claims: creation defaults + evidence photo slots ──
+  if (method === 'POST' && route === '/claims') {
+    const cont = db.containers.find(c => c.id === body.containerId || c.sku === body.containerId)
+    if (!cont) throw new Error('containerId is required')
+    const sup = db.suppliers.find(x => x.id === body.supplierId) ?? db.suppliers[0]
+    const shp = db.shippers.find(x => x.id === body.shipperId) ?? db.shippers[0]
+    const row = {
+      id: uid('clm'), claimNumber: `CLM-${String(db.claims.length + 1).padStart(4, '0')}`,
+      containerId: cont.id, containerSku: cont.sku,
+      supplierId: sup?.id || '', supplierName: (sup?.name as string) || '',
+      shipperId: shp?.id || '', shipperName: (shp?.name as string) || '',
+      vesselRef: String(body.vesselRef || ''), status: 'awaiting_inspection',
+      severity: 0, photos: [], notes: String(body.notes || ''),
+      estimateAmount: 0, estimateNotes: '', shipperDecision: '', shipperNotes: '',
+      shipperDecidedAt: null, repairShopId: '', repairShopName: '', repairDate: '',
+      decision: '', inspectorName: '', inspectedAt: null, createdAt: new Date().toISOString(),
+    } as Row
+    db.claims.push(row)
+    return ok(row)
+  }
+  const claimPhoto = route.match(/^\/claims\/([^/]+)\/photos(\/\d+)?$/)
+  if (claimPhoto && (method === 'POST' || method === 'DELETE')) {
+    const c = db.claims.find(x => x.id === claimPhoto[1])
+    if (!c) throw new Error('Claim not found')
+    const photos = [...((c.photos as string[] | undefined) ?? [])]
+    if (method === 'POST') photos[Number((body as { slot?: number }).slot ?? 0)] = String((body as { dataUrl?: string }).dataUrl || '')
+    else photos[Number(claimPhoto[2]!.slice(1))] = ''
+    c.photos = photos
+    return ok(c)
+  }
 
   // ── Generic collection CRUD — covers the admin & field portals ──
   const [, col, rid, extra] = route.split('/')

@@ -5,7 +5,7 @@
 import React from 'react'
 import { photoUrl, type Container, type ContainerSize, type Seller } from '../../lib/api'
 import { GRADE_META } from '../../lib/specs'
-import { gradeLabel } from '../../lib/grading'
+import { gradeLabel, damageLabel } from '../../lib/grading'
 import { allowedModes, condOf, SIZE_LABELS } from './shared'
 import { SellerMark } from './SellerMark'
 
@@ -64,7 +64,11 @@ export function ContainerCard({ container, onSelect, mode = 'buy', inCart = fals
           </div>
         )}
         {/* Grade badge — with the 1–5 sub-score once a unit has been field-graded */}
-        <span style={{ position: 'absolute', top: '8px', right: '8px', background: gradeMeta.color, color: '#fff', borderRadius: 'var(--r4)', padding: '3px 8px', fontSize: '10px', fontWeight: 700 }}>{gradeLabel(grade, container.conditionScore)}</span>
+        <span style={{ position: 'absolute', top: '8px', right: '8px', background: gradeMeta.color, color: '#fff', borderRadius: 'var(--r4)', padding: '3px 8px', fontSize: '10px', fontWeight: 700 }}>{grade === 'D' ? damageLabel(container.damageSeverity) : gradeLabel(grade, container.conditionScore)}</span>
+        {/* Sell-as-damaged units carry an explicit ribbon so buyers can't miss it */}
+        {grade === 'D' && (
+          <span style={{ position: 'absolute', bottom: '8px', right: '8px', background: '#B3261E', color: '#fff', borderRadius: 'var(--pill)', padding: '3px 9px', fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px' }}>DAMAGED · AS-IS</span>
+        )}
         {/* AI-graded chip — only on units whose grade came from the AI/ML
             imaging pipeline (flag set by the field app at documentation time) */}
         {container.aiGraded && (

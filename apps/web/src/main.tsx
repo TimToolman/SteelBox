@@ -5,6 +5,8 @@ import './styles/tokens.css'
 import LandingPage from './pages/landing/index'
 import MarketplacePage from './pages/marketplace'
 import AdminPage from './pages/admin/index'
+import SupplierPortalPage from './pages/supplier/index'
+import ShipperReviewPage from './pages/shipper/index'
 import FieldAppPage from './pages/field/index'
 import { AuthProvider, RequireRole } from './lib/auth'
 import { resolveTenant } from './tenant'
@@ -35,6 +37,18 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Route path="/admin" element={
             <RequireRole roles={['admin']} title="Admin Portal">
               <AdminPage />
+            </RequireRole>
+          } />
+          {/* Supplier portal — container owners; damage-claim pipeline */}
+          <Route path="/supplier" element={
+            <RequireRole roles={['supplier', 'admin']} title="Supplier Portal">
+              <SupplierPortalPage />
+            </RequireRole>
+          } />
+          {/* Shipping line — reviews damage-claim estimates */}
+          <Route path="/shipper" element={
+            <RequireRole roles={['shipper', 'admin']} title="Shipper Claims Review">
+              <ShipperReviewPage />
             </RequireRole>
           } />
           <Route path="/field" element={
