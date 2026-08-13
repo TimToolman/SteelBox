@@ -174,6 +174,14 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
   if (method === 'POST' && route === '/auth/2fa/send') return ok({ sent: true, devCode: '123456' })
   if (method === 'POST' && route === '/auth/2fa/verify') return ok({ verified: true })
 
+  // Claim audit-timeline helper (mirrors the server's chain-of-custody log)
+  const claimEvent = (c: Row, actor: string, text: string) => {
+    let ev: unknown[] = []
+    try { ev = JSON.parse(String(c.events || '[]')) } catch { /* rebuild */ }
+    ev.push({ t: new Date().toISOString(), actor, text })
+    c.events = JSON.stringify(ev)
+  }
+
   // ── Damage claims: creation defaults + evidence photo slots ──
   if (method === 'POST' && route === '/claims') {
     const cont = db.containers.find(c => c.id === body.containerId || c.sku === body.containerId)
@@ -190,7 +198,9 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
       estimateAmount: 0, estimateNotes: '', shipperDecision: '', shipperNotes: '',
       shipperDecidedAt: null, repairShopId: '', repairShopName: '', repairDate: '',
       decision: '', inspectorName: '', inspectedAt: null, createdAt: new Date().toISOString(),
+      events: '[]', sharedAt: null, shipperViewedAt: null,
     } as Row
+    claimEvent(row, storedUser()?.name || 'Supplier', `Claim filed against ${row.shipperName}${row.vesselRef ? ` (${row.vesselRef})` : ''}`)
     db.claims.push(row)
     return ok(row)
   }
@@ -202,6 +212,48 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
     if (method === 'POST') photos[Number((body as { slot?: number }).slot ?? 0)] = String((body as { dataUrl?: string }).dataUrl || '')
     else photos[Number(claimPhoto[2]!.slice(1))] = ''
     c.photos = photos
+    return ok(c)
+  }
+
+  // Share the estimate with the shipping line (pretend email + audit event)
+  const shareRoute = route.match(/^\/claims\/([^/]+)\/share$/)
+  if (shareRoute && method === 'POST') {
+    const c = db.claims.find(x => x.id === shareRoute[1])
+    if (!c) throw new Error('Claim not found')
+    const mode = (body as { mode?: string }).mode === 'packet' ? 'claim packet' : 'login link'
+    c.sharedAt = new Date().toISOString()
+    claimEvent(c, storedUser()?.name || 'Supplier', `Estimate shared with ${c.shipperName} by email (${mode})`)
+    return ok(c)
+  }
+
+  // Digest preference — stored on the session's demo user
+  if (method === 'PATCH' && route === '/auth/me') {
+    const u = storedUser()
+    if (!u) throw new Error('Not signed in')
+    const next = { ...u, digestFreq: (body as { digestFreq?: AuthUser['digestFreq'] }).digestFreq || u.digestFreq }
+    localStorage.setItem(DEMO_USER_KEY, JSON.stringify(next))
+    return ok(next)
+  }
+
+  // Claims PATCH — merge + append the same timeline events as the server
+  const claimPatch = route.match(/^\/claims\/([^/]+)$/)
+  if (claimPatch && method === 'PATCH') {
+    const c = db.claims.find(x => x.id === claimPatch[1])
+    if (!c) throw new Error('Claim not found')
+    const before = String(c.status)
+    for (const [k, v] of Object.entries(body)) {
+      if (v === undefined || ['id', 'claimNumber', 'createdAt', 'events'].includes(k)) continue
+      c[k] = (k === 'severity' || k === 'estimateAmount') ? Number(v) : v
+    }
+    const actor = storedUser()?.name || 'User'
+    if (String(c.status) !== before) {
+      if (c.status === 'awaiting_estimate') claimEvent(c, String(c.inspectorName || actor), `Damage inspected — severity D·${c.severity}`)
+      if (c.status === 'awaiting_shipper') claimEvent(c, actor, `Repair estimate $${Number(c.estimateAmount).toLocaleString()} submitted to ${c.shipperName}`)
+      if (c.status === 'awaiting_decision') claimEvent(c, actor, `Shipper ${c.shipperDecision} the estimate${c.shipperNotes ? ` — “${c.shipperNotes}”` : ''}`)
+      if (c.status === 'repair_scheduled') claimEvent(c, actor, `Repair booked — ${c.repairShopName}, ${c.repairDate}`)
+      if (c.status === 'sell_as_damaged') claimEvent(c, actor, `Listed for sale as damaged D·${c.severity}`)
+      if (c.status === 'closed') claimEvent(c, actor, 'Claim closed — unit stays retail')
+    }
     return ok(c)
   }
 

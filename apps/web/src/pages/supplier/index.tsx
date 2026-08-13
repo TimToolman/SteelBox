@@ -15,10 +15,11 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../hooks'
 import {
   containers as containersApi, claims as claimsApi, suppliersApi, shippersApi, repairShops as repairShopsApi,
-  photoUrl, SIZE_LABEL, CLAIM_STAGES,
-  type Container, type DamageClaim, type Supplier, type Shipper, type RepairShop, type ClaimStatus,
+  prefs as prefsApi, photoUrl, SIZE_LABEL, CLAIM_STAGES,
+  type Container, type DamageClaim, type Supplier, type Shipper, type RepairShop, type ClaimStatus, type AuthUser,
 } from '../../lib/api'
-import { GRADE_META } from '../../lib/specs'
+import { GRADE_META, DAMAGE_DISCOUNT } from '../../lib/specs'
+import { ClaimTimeline, ClaimPacket } from './claimkit'
 import { gradeLabel, damageLabel, SEVERITY_WORD } from '../../lib/grading'
 import { Snackbar } from '../../components/ui'
 import { useSnackbar } from '../../hooks'
@@ -63,9 +64,12 @@ export default function SupplierPortalPage() {
   // New-claim form
   const [newOpen, setNewOpen] = useState(false)
   const [newForm, setNewForm] = useState({ containerId: '', shipperId: '', vesselRef: '', notes: '' })
-  // Per-claim working inputs (estimate / repair scheduling)
+  // Per-claim working inputs (estimate / repair scheduling / as-is pricing)
   const [est, setEst] = useState<Record<string, { amount: string; notes: string }>>({})
   const [rep, setRep] = useState<Record<string, { shopId: string; date: string }>>({})
+  const [askPrice, setAskPrice] = useState<Record<string, string>>({})
+  const [packet, setPacket] = useState<DamageClaim | null>(null)
+  const [digest, setDigest] = useState<AuthUser['digestFreq']>(user?.digestFreq || 'per_container')
 
   const supplierId = user?.supplierId || ''
   const me = suppliers.find(s => s.id === supplierId)
@@ -120,16 +124,41 @@ export default function SupplierPortalPage() {
   // Sell as damaged: grades the unit D with the inspection's severity and
   // publishes the claim's damage photos on the listing. Allowed at any point
   // after inspection — including after the shipper approved repairs.
+  // Suggested as-is price: severity-scaled discount off the current list
+  // price. The supplier can override before listing.
+  const suggestedPrice = (c: DamageClaim) => {
+    const unit = fleet.find(u => u.id === c.containerId)
+    if (!unit) return null
+    const disc = DAMAGE_DISCOUNT[c.severity || 3] ?? 0.28
+    return { was: unit.buyPrice, now: Math.round(unit.buyPrice * (1 - disc) / 25) * 25, disc }
+  }
+
   const sellAsDamaged = async (c: DamageClaim) => {
+    const sug = suggestedPrice(c)
+    const price = Number(askPrice[c.id]) || sug?.now || 0
     try {
       await containersApi.update(c.containerId, {
         grade: 'D', damageSeverity: c.severity || 3, damagePhotos: c.photos || [],
-        condition: 'used', status: 'available',
+        condition: 'used', status: 'available', listingType: 'buy',
+        ...(price > 0 ? { buyPrice: price, preDamagePrice: sug?.was ?? 0 } : {}),
       } as Partial<Container>)
       await claimsApi.update(c.id, { status: 'sell_as_damaged', decision: 'wholesale' })
-      toast(`${c.containerSku} listed as damaged ${damageLabel(c.severity || 3)} — live on the marketplace`)
+      toast(`${c.containerSku} listed as damaged ${damageLabel(c.severity || 3)}${price ? ` at $${price.toLocaleString()}` : ''} — live on the marketplace`)
       refresh()
     } catch (err) { toast(err instanceof Error ? err.message : 'Could not list the unit') }
+  }
+
+  const share = async (c: DamageClaim, mode: 'packet' | 'link') => {
+    try {
+      await claimsApi.share(c.id, mode)
+      toast(mode === 'packet' ? `Claim packet emailed to ${c.shipperName}` : `Login link emailed to ${c.shipperName} — their sign-in will land on the audit trail`)
+      refresh()
+    } catch (err) { toast(err instanceof Error ? err.message : 'Could not share') }
+  }
+
+  const copyShipperLink = (c: DamageClaim) => {
+    const url = `${window.location.origin}${import.meta.env.BASE_URL}shipper?claim=${c.claimNumber}`
+    navigator.clipboard?.writeText(url).then(() => toast('Shipper login link copied')).catch(() => toast(url))
   }
 
   const markRepaired = async (c: DamageClaim) => {
@@ -152,7 +181,16 @@ export default function SupplierPortalPage() {
           <div style={{ fontWeight: 700, fontSize: '15px', lineHeight: 1.2 }}>Supplier Portal</div>
           <div style={{ fontSize: '11px', color: INK3 }}>{me?.name || user?.name || 'Supplier'}{user ? ` · ${user.email}` : ''}</div>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <label style={{ fontSize: '11px', color: INK3, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            Claim emails
+            <select value={digest} onChange={e => { const v = e.target.value as AuthUser['digestFreq']; setDigest(v); prefsApi.update({ digestFreq: v! }).then(() => toast(`Emails: ${v === 'per_container' ? 'one per container' : `${v} digest of your review queue`}`)).catch(() => {}) }}
+              style={{ ...inp, padding: '6px 8px', fontSize: '12px' }}>
+              <option value="per_container">Per container</option>
+              <option value="daily">Daily digest</option>
+              <option value="weekly">Weekly digest</option>
+            </select>
+          </label>
           <a href={`${import.meta.env.BASE_URL}shop`} style={{ ...ghost, textDecoration: 'none' }}>Marketplace</a>
           <button onClick={logout} style={ghost}>Sign out</button>
         </div>
@@ -226,7 +264,16 @@ export default function SupplierPortalPage() {
                     </>
                   )}
                   {c.status === 'awaiting_shipper' && (
-                    <span style={{ fontSize: '12px', color: INK3 }}>Estimate with {c.shipperName} — their insurance carrier reviews off-platform.</span>
+                    <>
+                      <span style={{ fontSize: '12px', color: INK3, width: '100%' }}>
+                        Estimate with {c.shipperName} — their insurance carrier reviews off-platform.
+                        {c.shipperViewedAt ? ` Viewed ${new Date(c.shipperViewedAt).toLocaleDateString()} ✓` : ' Not yet viewed.'}
+                      </span>
+                      <button onClick={() => setPacket(c)} style={ghost}>📄 Claim packet (PDF)</button>
+                      <button onClick={() => share(c, 'packet')} style={btn(BLUE)}>✉️ Email packet</button>
+                      <button onClick={() => share(c, 'link')} style={btn('#0E7490')}>✉️ Email login link</button>
+                      <button onClick={() => copyShipperLink(c)} style={ghost}>🔗 Copy login link</button>
+                    </>
                   )}
                   {c.status === 'awaiting_decision' && (
                     <>
@@ -241,6 +288,16 @@ export default function SupplierPortalPage() {
                           <button onClick={() => scheduleRepair(c)} style={btn(GREEN)}>Schedule repair — retail</button>
                         </>
                       )}
+                      {(() => {
+                        const sug = suggestedPrice(c)
+                        return sug ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: INK2 }}>
+                            As-is price
+                            <input value={askPrice[c.id] ?? String(sug.now)} onChange={e => setAskPrice(p => ({ ...p, [c.id]: e.target.value }))} type="number" style={{ ...inp, width: '110px', padding: '7px 9px' }} />
+                            <span style={{ color: INK3 }}>suggested ${sug.now.toLocaleString()} (−{Math.round(sug.disc * 100)}% off ${sug.was.toLocaleString()})</span>
+                          </span>
+                        ) : null
+                      })()}
                       <button onClick={() => sellAsDamaged(c)} style={btn(RED)}>Sell as damaged — wholesale {damageLabel(c.severity || 3)}</button>
                     </>
                   )}
@@ -256,6 +313,7 @@ export default function SupplierPortalPage() {
                     <span style={{ fontSize: '12px', fontWeight: 700, color: RED }}>Listed on the marketplace as damaged {damageLabel(c.severity || 3)} — buyers see the damage photos.</span>
                   )}
                 </div>
+                <ClaimTimeline claim={c} />
               </div>
             ))}
           </div>
@@ -289,6 +347,7 @@ export default function SupplierPortalPage() {
           </div>
         </section>
       </main>
+      {packet && <ClaimPacket claim={packet} onClose={() => setPacket(null)} />}
       <Snackbar message={message} open={snackOpen} onClose={snackClose} />
     </div>
   )

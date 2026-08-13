@@ -133,8 +133,13 @@ export function ContainerCard({ container, onSelect, mode = 'buy', inCart = fals
             </div>
           ) : (
             <div>
-              <div style={{ fontSize: '21px', fontWeight: 700, fontFamily: 'var(--mono)', letterSpacing: '-0.3px' }}>${buyPrice.toLocaleString()}</div>
-              <div style={{ fontSize: '10px', color: 'var(--ink3)', marginTop: '1px' }}>{allow.rent && rentMonthly ? `or $${rentMonthly}/mo rental` : 'One-time purchase'}</div>
+              <div style={{ fontSize: '21px', fontWeight: 700, fontFamily: 'var(--mono)', letterSpacing: '-0.3px' }}>
+                ${buyPrice.toLocaleString()}
+                {grade === 'D' && (container.preDamagePrice ?? 0) > buyPrice && (
+                  <span style={{ fontSize: '12px', color: 'var(--ink3)', fontWeight: 600, textDecoration: 'line-through', marginLeft: '6px' }}>${container.preDamagePrice!.toLocaleString()}</span>
+                )}
+              </div>
+              <div style={{ fontSize: '10px', color: grade === 'D' ? '#B3261E' : 'var(--ink3)', marginTop: '1px', fontWeight: grade === 'D' ? 700 : 400 }}>{grade === 'D' ? 'Damaged — sold as-is' : allow.rent && rentMonthly ? `or $${rentMonthly}/mo rental` : 'One-time purchase'}</div>
             </div>
           )}
           {/* Add to Cart — greyed once in cart or while a sale is in progress */}

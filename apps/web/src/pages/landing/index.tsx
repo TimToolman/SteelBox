@@ -30,7 +30,7 @@ function JsonLd({ data }: { data: object }) {
 
 // ── Nav ───────────────────────────────────────────────────
 
-export type ShopTab = 'buy' | 'rent' | 'custom' | 'bulk'
+export type ShopTab = 'buy' | 'rent' | 'custom' | 'bulk' | 'insights'
 
 // 'custom' (Custom Builds) is deliberately unlisted — the shop tab code
 // is kept, but it's not linked anywhere until the fab-shop launch.
@@ -38,6 +38,7 @@ const NAV_CATEGORIES: { tab: ShopTab; label: string }[] = [
   { tab: 'buy', label: 'Buy' },
   { tab: 'rent', label: 'Rent' },
   { tab: 'bulk', label: 'Bulk / B2B' },
+  { tab: 'insights', label: 'Insights' },
 ]
 
 // The one site-wide header. The landing/city pages render it bare; the

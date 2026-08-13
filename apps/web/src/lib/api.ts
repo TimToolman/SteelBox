@@ -69,6 +69,8 @@ export interface AuthUser {
   sellerId?: string             // set on seller-scoped staff accounts
   supplierId?: string           // links a supplier login to suppliers.csv
   shipperId?: string            // links a shipping-line login to shippers.csv
+  digestFreq?: 'per_container' | 'daily' | 'weekly'  // claim-email preference
+  lastLoginAt?: string          // login audit (arbitration evidence)
 }
 
 // Login either completes immediately (token+user) or — for admins — asks for
@@ -258,6 +260,7 @@ export interface Container {
   supplierId?: string        // owning supplier (companies resellers buy stock from)
   damagePhotos?: string[]    // claim evidence shots shown on sell-as-damaged listings
   damageSeverity?: number    // D·1 (minor) – D·5 (severe); set by the damage inspection
+  preDamagePrice?: number    // list price before the damage discount (strike-through)
   // Multi-tenant: derived server-side from the unit's depot ownership.
   sellerId: string
   sellerName: string
@@ -899,6 +902,14 @@ export interface DamageClaim {
   inspectorName: string
   inspectedAt: string | null
   createdAt: string
+  events?: string              // JSON audit timeline: [{t, actor, text}]
+  sharedAt?: string | null     // last time the estimate was shared with the shipper
+  shipperViewedAt?: string | null // login-audit stamp: shipper opened the claim
+}
+
+export interface ClaimEvent { t: string; actor: string; text: string }
+export function claimEvents(c: DamageClaim): ClaimEvent[] {
+  try { return JSON.parse(c.events || '[]') } catch { return [] }
 }
 
 export const suppliersApi = {
@@ -923,4 +934,14 @@ export const claims = {
     request<DamageClaim>(`/claims/${id}/photos`, { method: 'POST', body: JSON.stringify(data) }),
   deletePhoto: (id: string, slot: number) =>
     request<DamageClaim>(`/claims/${id}/photos/${slot}`, { method: 'DELETE' }),
+  // Email the shipper the claim packet or their login link; both land on the
+  // audit timeline and re-arm the shipper-viewed stamp.
+  share: (id: string, mode: 'packet' | 'link') =>
+    request<DamageClaim>(`/claims/${id}/share`, { method: 'POST', body: JSON.stringify({ mode }) }),
+}
+
+// Per-user notification preference for claim activity.
+export const prefs = {
+  update: (data: { digestFreq: 'per_container' | 'daily' | 'weekly' }) =>
+    request<AuthUser>('/auth/me', { method: 'PATCH', body: JSON.stringify(data) }),
 }
