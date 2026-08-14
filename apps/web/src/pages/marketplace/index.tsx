@@ -18,6 +18,7 @@ import { sellerForZip, relayQuote, type RelayQuote } from '../../lib/territory'
 import { SiteNav } from '../landing'
 import { resolveTenant } from '../../tenant'
 import { SIZE_OPTIONS, condOf, useFavorites, type Tab, type SortKey, type CartMode, type CartItem, type CheckoutDetails } from './shared'
+import { Chip, ChipRow } from '../../components/filters'
 import { depotsServingZip, type DepotInRange } from '../../lib/geo'
 import { QuoteDialog } from './QuoteDialog'
 import { ContainerCard } from './ContainerCard'
@@ -77,14 +78,16 @@ export default function MarketplacePage() {
     const c = qp('cond')
     return c === 'new' || c === 'used' ? c : 'all'
   })
+  // Select-pill semantics (matches the supplier/shipper rails): an EMPTY
+  // selection means "everything" — chips only narrow.
   const [sizeFilters, setSizeFilters] = useState<Set<ContainerSize>>(() => {
     const wanted = (qp('size') ?? '').split(',').filter(s => (ALL_SIZES as string[]).includes(s)) as ContainerSize[]
-    return new Set(wanted.length ? wanted : ALL_SIZES)
+    return new Set(wanted)
   })
   const [gradeFilters, setGradeFilters] = useState<Set<ContainerGrade>>(() => {
     const all: ContainerGrade[] = ['A', 'B', 'C', 'R', 'X', 'D']
     const wanted = (qp('grade') ?? '').split(',').filter(g => (all as string[]).includes(g)) as ContainerGrade[]
-    return new Set(wanted.length ? wanted : all)
+    return new Set(wanted)
   })
   // null = no color restriction (all colors checked)
   const [colorSel, setColorSel] = useState<Set<string> | null>(null)
@@ -268,9 +271,9 @@ export default function MarketplacePage() {
     if (condFilter !== 'all' && condOf(c) !== condFilter) return false
     if (geoDepotNames && !geoDepotNames.has(c.depotLocation)) return false
     if (!geoDepotNames && area && marketOf(c) !== area) return false
-    if (!sizeFilters.has(c.size)) return false
-    if (condFilter === 'used' && !gradeFilters.has(c.grade)) return false
-    if (condFilter === 'new' && colorSel && !colorSel.has(c.color || 'Unspecified')) return false
+    if (sizeFilters.size > 0 && !sizeFilters.has(c.size)) return false
+    if (condFilter === 'used' && gradeFilters.size > 0 && !gradeFilters.has(c.grade)) return false
+    if (condFilter === 'new' && colorSel && colorSel.size > 0 && !colorSel.has(c.color || 'Unspecified')) return false
     if (minPrice && priceOf(c) < Number(minPrice)) return false
     if (maxPrice && priceOf(c) > Number(maxPrice)) return false
     return true
@@ -286,10 +289,11 @@ export default function MarketplacePage() {
   const countByCond = (k: ContainerCondition) => tabListable.filter(c => condOf(c) === k).length
 
   const toggleColor = (col: string) => {
+    // Pill semantics: null/empty = every color; chips only narrow.
     setColorSel(prev => {
-      const next = new Set(prev ?? colorOptions)
+      const next = new Set(prev ?? [])
       next.has(col) ? next.delete(col) : next.add(col)
-      return next
+      return next.size ? next : null
     })
   }
 
@@ -466,7 +470,7 @@ export default function MarketplacePage() {
             : { width: 'var(--sb-w)', flexShrink: 0, borderRight: '1px solid var(--div)', padding: '14px 10px', position: 'sticky', top: 'var(--nav-h)', height: 'calc(100vh - var(--nav-h))', overflowY: 'auto', background: 'var(--surf-w)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.4px' }}>Filters</span>
-              <button onClick={() => { setCondFilter('all'); setSizeFilters(new Set(ALL_SIZES)); setGradeFilters(new Set(['A','B','C','R','X','D'])); setColorSel(null); setArea(null); setAreaZip(''); setGeoHits(null); setGeoMiss(false) }} style={{ background: 'none', border: 'none', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>Reset</button>
+              <button onClick={() => { setCondFilter('all'); setSizeFilters(new Set()); setGradeFilters(new Set()); setColorSel(null); setArea(null); setAreaZip(''); setGeoHits(null); setGeoMiss(false) }} style={{ background: 'none', border: 'none', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>Reset</button>
             </div>
 
             {/* Condition gate — pick New or Used first; sub-filters follow */}
@@ -551,18 +555,16 @@ export default function MarketplacePage() {
               <>
                 <hr style={{ border: 'none', borderTop: '1px solid var(--div)', margin: '8px 0' }} />
 
-                {/* Size filters */}
+                {/* Size filters — select pills; none selected = every size */}
                 <div style={{ marginBottom: '10px' }}>
-                  <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Size</span>
-                  {SIZE_OPTIONS.filter(([val]) => countBySize(val) > 0).map(([val, label]) => (
-                    <div key={val} onClick={() => toggleSize(val)} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid var(--div)', cursor: 'pointer' }}>
-                      <div style={{ width: '17px', height: '17px', borderRadius: 'var(--r4)', background: sizeFilters.has(val) ? 'var(--primary)' : 'var(--surf-w)', border: `1.5px solid ${sizeFilters.has(val) ? 'var(--primary)' : 'var(--div)'}`, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-                        {sizeFilters.has(val) && <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><polyline points="2,6 5,9 10,3" /></svg>}
-                      </div>
-                      <span style={{ fontSize: '12px', color: 'var(--ink2)', flex: 1 }}>{label}</span>
-                      <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', fontWeight: 700, color: 'var(--ink3)' }}>{countBySize(val)}</span>
-                    </div>
-                  ))}
+                  <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '6px' }}>Size</span>
+                  <ChipRow>
+                    {SIZE_OPTIONS.filter(([val]) => countBySize(val) > 0).map(([val, label]) => (
+                      <Chip key={val} on={sizeFilters.has(val)} onClick={() => toggleSize(val)}>
+                        {label} <span style={{ fontWeight: 400, opacity: 0.7 }}>{countBySize(val)}</span>
+                      </Chip>
+                    ))}
+                  </ChipRow>
                 </div>
 
                 {/* Used stock varies by inspected grade; new stock is all one-trip */}
@@ -570,18 +572,15 @@ export default function MarketplacePage() {
                   <>
                     <hr style={{ border: 'none', borderTop: '1px solid var(--div)', margin: '8px 0' }} />
                     <div style={{ marginBottom: '10px' }}>
-                      <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Condition Grade</span>
-                      {(['A','B','C','R','X','D'] as ContainerGrade[]).map(g => (
-                        <div key={g} onClick={() => toggleGrade(g)} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid var(--div)', cursor: 'pointer' }}>
-                          <div style={{ width: '17px', height: '17px', borderRadius: 'var(--r4)', background: gradeFilters.has(g) ? 'var(--primary)' : 'var(--surf-w)', border: `1.5px solid ${gradeFilters.has(g) ? 'var(--primary)' : 'var(--div)'}`, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-                            {gradeFilters.has(g) && <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><polyline points="2,6 5,9 10,3" /></svg>}
-                          </div>
-                          <span style={{ fontSize: '12px', color: 'var(--ink2)', flex: 1 }}>
-                            <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: '3px', fontSize: '9px', fontWeight: 700, background: GRADE_META[g].color, color: '#fff', marginRight: '5px' }}>{g}</span>
+                      <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '6px' }}>Condition Grade</span>
+                      <ChipRow>
+                        {(['A','B','C','R','X','D'] as ContainerGrade[]).map(g => (
+                          <Chip key={g} on={gradeFilters.has(g)} onClick={() => toggleGrade(g)}>
+                            <span style={{ display: 'inline-block', width: '14px', height: '14px', lineHeight: '14px', textAlign: 'center', borderRadius: '3px', fontSize: '9px', background: GRADE_META[g].color, color: '#fff', marginRight: '5px', verticalAlign: '-2px' }}>{g}</span>
                             {GRADE_META[g].label}
-                          </span>
-                        </div>
-                      ))}
+                          </Chip>
+                        ))}
+                      </ChipRow>
                       <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '6px', lineHeight: 1.45 }}>
                         Grades are assigned by our AI/ML imaging models from each unit's 8-photo field inspection.
                       </div>
@@ -594,19 +593,14 @@ export default function MarketplacePage() {
                   <>
                     <hr style={{ border: 'none', borderTop: '1px solid var(--div)', margin: '8px 0' }} />
                     <div style={{ marginBottom: '10px' }}>
-                      <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Color</span>
-                      {colorOptions.map(col => {
-                        const on = !colorSel || colorSel.has(col)
-                        return (
-                          <div key={col} onClick={() => toggleColor(col)} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid var(--div)', cursor: 'pointer' }}>
-                            <div style={{ width: '17px', height: '17px', borderRadius: 'var(--r4)', background: on ? 'var(--primary)' : 'var(--surf-w)', border: `1.5px solid ${on ? 'var(--primary)' : 'var(--div)'}`, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-                              {on && <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><polyline points="2,6 5,9 10,3" /></svg>}
-                            </div>
-                            <span style={{ fontSize: '12px', color: 'var(--ink2)', flex: 1 }}>{col}</span>
-                            <span style={{ fontFamily: 'var(--mono)', fontSize: '10px', fontWeight: 700, color: 'var(--ink3)' }}>{tabListable.filter(c => condOf(c) === 'new' && (c.color || 'Unspecified') === col).length}</span>
-                          </div>
-                        )
-                      })}
+                      <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '6px' }}>Color</span>
+                      <ChipRow>
+                        {colorOptions.map(col => (
+                          <Chip key={col} on={!!colorSel?.has(col)} onClick={() => toggleColor(col)}>
+                            {col} <span style={{ fontWeight: 400, opacity: 0.7 }}>{tabListable.filter(c => condOf(c) === 'new' && (c.color || 'Unspecified') === col).length}</span>
+                          </Chip>
+                        ))}
+                      </ChipRow>
                     </div>
                   </>
                 )}
