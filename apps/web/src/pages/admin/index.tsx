@@ -1672,7 +1672,7 @@ function NavItem({ icon, label, badge, active, onClick }: { icon: React.ReactNod
 }
 
 export default function AdminPage() {
-  useFavicon('favicon-admin.svg', 'MVP Container Admin Portal')
+  useFavicon('favicon-admin.svg', 'Nationwide SteelBox — Admin')
   const { user: adminUser, logout } = useAuth()
   const [view, setView] = useState<AdminView>('dashboard')
   const isMobile = useIsMobile()
