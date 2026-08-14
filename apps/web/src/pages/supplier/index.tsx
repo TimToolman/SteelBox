@@ -53,7 +53,9 @@ function StageTracker({ status }: { status: ClaimStatus }) {
   )
 }
 
-export default function SupplierPortalPage() {
+// embedded: rendered as a tab inside the marketplace (single sign-in) — the
+// standalone chrome (header, page background) is skipped, content only.
+export default function SupplierPortalPage({ embedded = false }: { embedded?: boolean }) {
   const { user, logout } = useAuth()
   const { toast, message, open: snackOpen, close: snackClose } = useSnackbar()
   const [fleet, setFleet] = useState<Container[]>([])
@@ -173,8 +175,9 @@ export default function SupplierPortalPage() {
   const closed = myClaims.filter(c => c.status === 'closed')
 
   return (
-    <div style={{ fontFamily: 'var(--sans)', background: 'var(--pg)', minHeight: '100vh', color: INK }}>
-      {/* Header */}
+    <div style={{ fontFamily: 'var(--sans)', background: embedded ? 'transparent' : 'var(--pg)', minHeight: embedded ? undefined : '100vh', color: INK }}>
+      {/* Header — standalone route only; the marketplace tab brings its own nav */}
+      {!embedded && (
       <header style={{ background: '#fff', borderBottom: `1px solid ${DIV}`, padding: '0 20px', height: '60px', display: 'flex', alignItems: 'center', gap: '12px', position: 'sticky', top: 0, zIndex: 50 }}>
         <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#7C3AED', display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 700, fontSize: '15px' }}>S</div>
         <div>
@@ -195,6 +198,7 @@ export default function SupplierPortalPage() {
           <button onClick={logout} style={ghost}>Sign out</button>
         </div>
       </header>
+      )}
 
       <main style={{ maxWidth: '1080px', margin: '0 auto', padding: '22px 16px 80px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
         {/* Claims pipeline */}

@@ -163,10 +163,17 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
 
   // ── Auth — roles come from the snapshot users table ──
   if (method === 'POST' && route === '/auth/login') {
-    return ok(signIn(accountFor(String(body.email || ''))))
+    const acct = accountFor(String(body.email || ''))
+    // The 'marketplace' grant is the master switch — removing it in admin
+    // blocks the account from signing in at all (mirrors the API server).
+    const grants = (acct as { roles?: string[] }).roles
+    if (Array.isArray(grants) && grants.length > 0 && !grants.includes('marketplace')) {
+      throw new Error('Sign-in for this account has been disabled — contact your administrator.')
+    }
+    return ok(signIn(acct))
   }
   if (method === 'POST' && route === '/auth/register') {
-    const rec = { id: uid('usr'), email: String(body.email || '').toLowerCase(), role: 'customer', name: String(body.name || 'Demo Customer'), phone: String(body.phone || ''), driverId: '', customerId: '', phoneVerified: false, active: true, createdAt: new Date().toISOString() }
+    const rec = { id: uid('usr'), email: String(body.email || '').toLowerCase(), role: 'customer', name: String(body.name || 'Demo Customer'), phone: String(body.phone || ''), driverId: '', customerId: '', phoneVerified: false, active: true, createdAt: new Date().toISOString(), roles: ['marketplace'] }
     db.users.push(rec as Row)
     return ok(signIn(rec as unknown as Partial<AuthUser>))
   }

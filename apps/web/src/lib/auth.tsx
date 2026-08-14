@@ -7,7 +7,7 @@
 // ============================================================
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import { auth as authApi, type AuthUser, type Role } from './api'
+import { auth as authApi, hasGrant, type AuthUser, type Role } from './api'
 
 // Password-correct admin logins pause here until the emailed code is entered.
 export interface PendingLogin {
@@ -346,7 +346,9 @@ export function RequireRole({ roles, title, children }: {
     return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', fontFamily: 'system-ui, sans-serif', color: '#6B7280', fontSize: '14px' }}>Loading…</div>
   }
 
-  if (user && roles.includes(user.role)) {
+  // Primary role OR a portal grant (users.roles) opens the gate — a customer
+  // granted the supplier portal can open /supplier directly.
+  if (user && roles.some(r => hasGrant(user, r))) {
     // Accounts on the seeded/shared password are prompted to set a real one.
     if (user.mustChangePassword && !pwGateSkipped) return <ChangePasswordGate onSkip={() => setPwGateSkipped(true)} />
     return <>{children}</>

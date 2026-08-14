@@ -9,7 +9,7 @@ import { GradeBadge, StatusBadge, Button, Modal, Snackbar, BuildClipart, Progres
 import { ShowPasswordButton } from '../../lib/auth'
 import { useContainers, useOrders, useDrivers, useLive, useSnackbar, useAuth, useFavicon, useIsMobile } from '../../hooks'
 import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, sellers as sellersApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, customBuilds as customBuildsApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, cutoutContainer, SHOT_LABELS, RENDER_SLOT, RENDER_LABEL, EXTRA_SLOT_START, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Seller, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role, type CustomBuild, type Message, CUSTOM_STAGES, SIZE_LABEL } from '../../lib/api'
-import { meetPoints as meetPointsApi, shippersApi, type MeetPoint, type Shipper } from '../../lib/api'
+import { meetPoints as meetPointsApi, shippersApi, suppliersApi, type MeetPoint, type Shipper, type Supplier } from '../../lib/api'
 import { parseZones, zoneOverlaps } from '../../lib/territory'
 import { CoverageMap } from './CoverageMap'
 
@@ -752,43 +752,55 @@ function PhotosModal({ container, onClose, onChanged }: {
 
 // ── User Add/Edit Modal (RBAC accounts) ────────────────────
 
-function UserModal({ target, drivers, sellers, sellerId, onClose, onSaved }: {
+function UserModal({ target, drivers, sellers, suppliers, shipperLines, sellerId, onClose, onSaved }: {
   target: AuthUser | 'new' | null
   drivers: Driver[]
   sellers: Seller[]  // for assigning an admin to a reseller (HQ view)
+  suppliers: Supplier[]      // supplier-portal grant → which fleet
+  shipperLines: Shipper[]    // shipper-portal grant → which carrier
   sellerId?: string   // tenant scope: new accounts are created inside this seller
   onClose: () => void
   onSaved: (msg: string) => void
 }) {
   const isNew = target === 'new'
-  const [form, setForm] = useState({ name: '', email: '', role: 'customer' as Role, phone: '', driverId: '', password: '', sellerId: '' })
+  const [form, setForm] = useState({ name: '', email: '', role: 'customer' as Role, phone: '', driverId: '', password: '', sellerId: '', roles: ['marketplace'] as string[], supplierId: '', shipperId: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [showPw, setShowPw] = useState(false)
 
   useEffect(() => {
     if (!target) return
-    if (target === 'new') setForm({ name: '', email: '', role: 'customer', phone: '', driverId: '', password: '', sellerId: sellerId || '' })
-    else setForm({ name: target.name, email: target.email, role: target.role, phone: target.phone || '', driverId: target.driverId || '', password: '', sellerId: target.sellerId || '' })
+    if (target === 'new') setForm({ name: '', email: '', role: 'customer', phone: '', driverId: '', password: '', sellerId: sellerId || '', roles: ['marketplace'], supplierId: '', shipperId: '' })
+    else setForm({ name: target.name, email: target.email, role: target.role, phone: target.phone || '', driverId: target.driverId || '', password: '', sellerId: target.sellerId || '', roles: target.roles?.length ? [...target.roles] : ['marketplace'], supplierId: target.supplierId || '', shipperId: target.shipperId || '' })
     setError('')
   }, [target, sellerId])
 
   if (!target) return null
 
   const adminSellerId = sellerId || form.sellerId // scope lock wins over the picker
+  const hasG = (g: string) => form.roles.includes(g)
+  const toggleG = (g: string) => setForm(p => ({ ...p, roles: p.roles.includes(g) ? p.roles.filter(x => x !== g) : [...p.roles, g] }))
 
   const save = async () => {
     if (saving) return
+    if (hasG('supplier') && !form.supplierId) { setError('Pick which supplier company this account manages'); return }
+    if (hasG('shipper') && !form.shipperId) { setError('Pick which shipping line this account reviews for'); return }
     setSaving(true)
     setError('')
+    const grantFields = {
+      roles: form.roles,
+      supplierId: hasG('supplier') ? form.supplierId : '',
+      shipperId: hasG('shipper') ? form.shipperId : '',
+    }
     try {
       if (isNew) {
-        await usersApi.create({ name: form.name, email: form.email, role: form.role, phone: form.phone, driverId: form.role === 'driver' ? form.driverId : '', password: form.password, ...(form.role === 'admin' && adminSellerId ? { sellerId: adminSellerId } : {}) } as Parameters<typeof usersApi.create>[0])
+        await usersApi.create({ name: form.name, email: form.email, role: form.role, phone: form.phone, driverId: form.role === 'driver' ? form.driverId : '', password: form.password, ...grantFields, ...(form.role === 'admin' && adminSellerId ? { sellerId: adminSellerId } : {}) } as Parameters<typeof usersApi.create>[0])
         onSaved(`Account created for ${form.email} (${form.role})`)
       } else {
         await usersApi.update((target as AuthUser).id, {
           name: form.name, role: form.role, phone: form.phone,
           driverId: form.role === 'driver' ? form.driverId : '',
+          ...grantFields,
           ...(!sellerId ? { sellerId: form.role === 'admin' ? form.sellerId : '' } : {}),
           ...(form.password ? { password: form.password } : {}),
         } as Parameters<typeof usersApi.update>[1])
@@ -819,7 +831,10 @@ function UserModal({ target, drivers, sellers, sellerId, onClose, onSaved }: {
       <select style={inp} value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value as Role }))}>
         <option value="admin">Admin — full portal access</option>
         <option value="driver">Driver — field app</option>
+        <option value="adjuster">Adjuster — field app, AI grading</option>
         <option value="customer">Customer — marketplace</option>
+        <option value="supplier">Supplier — dedicated supplier account</option>
+        <option value="shipper">Shipper — dedicated shipping-line account</option>
       </select>
       {form.role === 'admin' && (
         <div>
@@ -849,6 +864,39 @@ function UserModal({ target, drivers, sellers, sellerId, onClose, onSaved }: {
           </select>
         </div>
       )}
+
+      {/* ── Portal access — multi-select grants behind the one login ── */}
+      <label style={lbl}>Portal access (multi-select)</label>
+      <div style={{ border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', padding: '11px 13px', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '9px' }}>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '9px', fontSize: '13px', cursor: 'pointer' }}>
+          <input type="checkbox" checked={hasG('marketplace')} onChange={() => toggleG('marketplace')} style={{ marginTop: '2px' }} />
+          <span>
+            <b>Marketplace</b> — the base sign-in every account starts with.
+            {!hasG('marketplace') && <span style={{ display: 'block', color: '#B3261E', fontWeight: 700, fontSize: '11px', marginTop: '2px' }}>⚠ Removing this blocks the account from signing in at all.</span>}
+          </span>
+        </label>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '9px', fontSize: '13px', cursor: 'pointer' }}>
+          <input type="checkbox" checked={hasG('supplier')} onChange={() => toggleG('supplier')} style={{ marginTop: '2px' }} />
+          <span><b>Supplier portal</b> — My Containers (pricing) + damage claims, as tabs in the marketplace.</span>
+        </label>
+        {hasG('supplier') && (
+          <select style={{ ...inp, marginBottom: 0 }} value={form.supplierId} onChange={e => setForm(p => ({ ...p, supplierId: e.target.value }))}>
+            <option value="">— Which supplier company? —</option>
+            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        )}
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '9px', fontSize: '13px', cursor: 'pointer' }}>
+          <input type="checkbox" checked={hasG('shipper')} onChange={() => toggleG('shipper')} style={{ marginTop: '2px' }} />
+          <span><b>Shipper portal</b> — claims review queue for their shipping line, as a marketplace tab.</span>
+        </label>
+        {hasG('shipper') && (
+          <select style={{ ...inp, marginBottom: 0 }} value={form.shipperId} onChange={e => setForm(p => ({ ...p, shipperId: e.target.value }))}>
+            <option value="">— Which shipping line? —</option>
+            {shipperLines.filter(s => s.active !== false).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        )}
+      </div>
+
       <label style={lbl}>Mobile phone</label>
       <input style={inp} type="tel" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="(504) 555-0000" />
       <label style={lbl}>{isNew ? 'Password' : 'Reset password (leave blank to keep)'}</label>
@@ -1682,6 +1730,9 @@ export default function AdminPage() {
   const [editShipper, setEditShipper] = useState<Shipper | 'new' | null>(null)
   const refetchShippers = useCallback(() => shippersApi.list().then(setShipperLines).catch(() => {}), [])
   useEffect(() => { refetchShippers() }, [refetchShippers])
+  // Supplier companies — for linking a supplier-portal grant to its fleet.
+  const [supplierCos, setSupplierCos] = useState<Supplier[]>([])
+  useEffect(() => { suppliersApi.list().then(setSupplierCos).catch(() => {}) }, [])
   const sellerName = (id?: string) => sellerList.find(x => x.id === id)?.name || (id ? id : '—')
   const refetchDepots = useCallback(() => depotsApi.list().then(setDepotList), [])
   useEffect(() => { refetchDepots().catch(() => {}) }, [refetchDepots])
@@ -3703,7 +3754,15 @@ export default function AdminPage() {
                               <div style={{ fontWeight: 700 }}>{u.name || '—'}</div>
                               <div style={{ fontSize: '11px', color: 'var(--ink3)', fontFamily: 'var(--mono)' }}>{u.email}</div>
                             </Td>
-                            <Td><span style={{ display: 'inline-block', padding: '2px 9px', borderRadius: 'var(--r4)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', ...roleMeta, background: roleMeta.bg }}>{u.role}</span></Td>
+                            <Td>
+                              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                <span style={{ display: 'inline-block', padding: '2px 9px', borderRadius: 'var(--r4)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', ...roleMeta, background: roleMeta.bg }}>{u.role}</span>
+                                {/* Portal grants beyond the primary role */}
+                                {(u.roles || []).includes('supplier') && u.role !== 'supplier' && <span title="Supplier portal grant" style={{ padding: '2px 7px', borderRadius: 'var(--r4)', fontSize: '10px', fontWeight: 700, background: '#EDE9FE', color: '#6D28D9' }}>+SUPPLIER</span>}
+                                {(u.roles || []).includes('shipper') && u.role !== 'shipper' && <span title="Shipper portal grant" style={{ padding: '2px 7px', borderRadius: 'var(--r4)', fontSize: '10px', fontWeight: 700, background: '#E0F2FE', color: '#0E7490' }}>+SHIPPER</span>}
+                                {u.roles && !u.roles.includes('marketplace') && <span title="Marketplace access removed — this account cannot sign in" style={{ padding: '2px 7px', borderRadius: 'var(--r4)', fontSize: '10px', fontWeight: 700, background: '#FDECEA', color: '#B3261E' }}>⛔ NO SIGN-IN</span>}
+                              </div>
+                            </Td>
                             <Td>
                               {u.role === 'admin' && !u.sellerId
                                 ? <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--primary)', whiteSpace: 'nowrap' }}>🌐 SteelBox Co. HQ</span>
@@ -3791,6 +3850,8 @@ export default function AdminPage() {
         target={editUser}
         drivers={activeDrivers}
         sellers={sellerList}
+        suppliers={supplierCos}
+        shipperLines={shipperLines}
         sellerId={scope === 'global' ? undefined : scope}
         onClose={() => setEditUser(null)}
         onSaved={(msg) => { toast(msg); refetchUsers().catch(() => {}) }}

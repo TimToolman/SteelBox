@@ -279,6 +279,35 @@ try {
   const shpForbidden = await api('/shippers', { method: 'POST', token: mvpAdmin, body: { name: 'Rogue Line' } })
   check('reseller admin cannot edit the directory', shpForbidden.status === 403)
 
+  // ── Multi-role portal grants behind the single marketplace login ──
+  console.log('Portal grants')
+  const buyerUsers = (await api('/users', { token: admin })).body
+  const buyerAcct = buyerUsers.find(u2 => u2.email === 'buyer@test.dev')
+  check('accounts default to the marketplace grant', Array.isArray(buyerAcct?.roles) && buyerAcct.roles.includes('marketplace'))
+  // Grant the buyer the supplier portal, linked to sup_01
+  const grantRes = await api(`/users/${buyerAcct.id}`, { method: 'PATCH', token: admin, body: { roles: ['marketplace', 'supplier'], supplierId: 'sup_01' } })
+  check('supplier grant saved on a customer account', grantRes.status === 200 && grantRes.body?.roles.includes('supplier') && grantRes.body?.supplierId === 'sup_01')
+  const buyerLogin = await api('/auth/login', { method: 'POST', body: { email: 'buyer@test.dev', password: 'buyerpass2' } })
+  check('granted account logs in with roles attached', buyerLogin.status === 200 && buyerLogin.body?.user?.roles?.includes('supplier'))
+  const buyer2 = buyerLogin.body.token
+  const supClaims = await api('/claims', { token: buyer2 })
+  check('supplier grant opens the claims list (own only)', supClaims.status === 200 && supClaims.body.every(c => c.supplierId === 'sup_01'))
+  const supUnit = (await api('/containers')).body.find(c => c.supplierId === 'sup_01' && c.status === 'available')
+  if (supUnit) {
+    const priceRes = await api(`/containers/${supUnit.id}`, { method: 'PATCH', token: buyer2, body: { buyPrice: supUnit.buyPrice + 25 } })
+    check('supplier grant can reprice their own unit', priceRes.status === 200 && priceRes.body?.buyPrice === supUnit.buyPrice + 25)
+  } else {
+    check('supplier grant can reprice their own unit', true, 'no sup_01 unit seeded — skipped')
+  }
+  check('grants cannot smuggle admin', !(await api(`/users/${buyerAcct.id}`, { method: 'PATCH', token: admin, body: { roles: ['marketplace', 'admin'] } })).body.roles.includes('admin'))
+  // Removing the marketplace grant blocks sign-in entirely
+  await api(`/users/${buyerAcct.id}`, { method: 'PATCH', token: admin, body: { roles: ['supplier'] } })
+  const blocked = await api('/auth/login', { method: 'POST', body: { email: 'buyer@test.dev', password: 'buyerpass2' } })
+  check('removing the marketplace grant blocks sign-in', blocked.status === 403)
+  const selfLock = await api('/auth/me', { token: admin })
+  const lockTry = await api(`/users/${selfLock.body.id}`, { method: 'PATCH', token: admin, body: { roles: ['supplier'] } })
+  check('admin cannot remove their own marketplace access', lockTry.status === 400)
+
   // ── Reject path frees the container ──
   console.log('Reject path')
   const unit2 = containers.find(c => c.status === 'available' && c.id !== unit.id)

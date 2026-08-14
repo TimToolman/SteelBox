@@ -9,7 +9,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Modal, Snackbar, BuildClipart } from '../../components/ui'
 import { useContainers, useSnackbar, useAuth, useIsMobile, useLive } from '../../hooks'
 import { LoginForm } from '../../lib/auth'
-import { containers, orders, messages as messagesApi, customBuilds as customBuildsApi, depots as depotsApi, sellers as sellersApi, meetPoints as meetPointsApi, photoUrl, type MeetPoint, type Container, type ContainerGrade, type ContainerSize, type ContainerCondition, type CustomBuild, type Depot, type Seller } from '../../lib/api'
+import { containers, orders, messages as messagesApi, customBuilds as customBuildsApi, depots as depotsApi, sellers as sellersApi, meetPoints as meetPointsApi, photoUrl, hasGrant, type MeetPoint, type Container, type ContainerGrade, type ContainerSize, type ContainerCondition, type CustomBuild, type Depot, type Seller } from '../../lib/api'
+import { SupplierFleet } from './SupplierFleet'
+import SupplierPortalPage from '../supplier'
+import ShipperReviewPage from '../shipper'
 import { GRADE_META } from '../../lib/specs'
 import { sellerForZip, relayQuote, type RelayQuote } from '../../lib/territory'
 import { SiteNav } from '../landing'
@@ -123,6 +126,18 @@ export default function MarketplacePage() {
 
   const { data: allContainers, loading, refetch: refetchContainers } = useContainers()
   const { user, logout } = useAuth()
+  // ── Portals behind the single marketplace login ───────────
+  // Role grants (users.roles) decide which portal tabs this account gets:
+  // supplier → My Containers + Damage Claims, shipper → Claims Review.
+  // 'shop' is the regular marketplace; its state is kept (display:none)
+  // while another portal is open so filters/cart survive the switch.
+  const [portal, setPortal] = useState<'shop' | 'fleet' | 'supplier' | 'shipper'>('shop')
+  // Signing out (or losing the grant) drops any open portal back to the shop.
+  useEffect(() => {
+    if (portal === 'shop') return
+    const needed = portal === 'shipper' ? 'shipper' : 'supplier'
+    if (!hasGrant(user, needed)) setPortal('shop')
+  }, [user, portal])
   const customerEmail = user?.email.toLowerCase() ?? ''
 
   // Custom Builds catalog (admin-managed) + the order-a-build dialog.
@@ -366,17 +381,6 @@ export default function MarketplacePage() {
         onSelect={t => { setActiveTab(t); setSelectedContainer(null) }}
         right={
           <>
-            {/* Portal shortcuts — visible ONLY to the signed-in persona */}
-            {user?.role === 'supplier' && (
-              <a href={`${import.meta.env.BASE_URL}supplier`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 'var(--pill)', background: '#7C3AED', color: '#fff', fontSize: '12px', fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>
-                Supplier Portal
-              </a>
-            )}
-            {user?.role === 'shipper' && (
-              <a href={`${import.meta.env.BASE_URL}shipper`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: 'var(--pill)', background: '#0E7490', color: '#fff', fontSize: '12px', fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>
-                Claims Review
-              </a>
-            )}
             <button onClick={() => setCartOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: isMobile ? '7px 12px' : '7px 16px', borderRadius: 'var(--pill)', background: 'var(--cta)', color: '#fff', border: 'none', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
               <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M1 2h2.5l2 9h9l2-7H5" /><circle cx="8" cy="17.5" r="1.5" fill="#fff" stroke="none" /><circle cx="13" cy="17.5" r="1.5" fill="#fff" stroke="none" /></svg>
               {!isMobile && 'Cart '}<span style={{ background: 'rgba(255,255,255,.25)', padding: '0 6px', borderRadius: '99px', fontSize: '10px', marginLeft: '2px' }}>{cart.length}</span>
@@ -394,6 +398,38 @@ export default function MarketplacePage() {
           </>
         }
       />
+
+      {/* ── Portal strip — one sign-in, every granted portal as a tab ── */}
+      {(hasGrant(user, 'supplier') || hasGrant(user, 'shipper')) && (
+        <div style={{ background: 'var(--surf-w)', borderBottom: '1px solid var(--div)', padding: '0 16px', display: 'flex', gap: '4px', overflowX: 'auto', position: 'sticky', top: 0, zIndex: 40 }}>
+          {([
+            { key: 'shop' as const, label: '🛒 Marketplace', show: true },
+            { key: 'fleet' as const, label: '📦 My Containers', show: hasGrant(user, 'supplier') },
+            { key: 'supplier' as const, label: '🛠 Damage Claims', show: hasGrant(user, 'supplier') },
+            { key: 'shipper' as const, label: '⚓ Claims Review', show: hasGrant(user, 'shipper') },
+          ]).filter(t => t.show).map(t => (
+            <button key={t.key} onClick={() => setPortal(t.key)} style={{
+              padding: '12px 16px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700, fontFamily: 'inherit',
+              background: 'transparent', whiteSpace: 'nowrap',
+              color: portal === t.key ? 'var(--primary)' : 'var(--ink3)',
+              borderBottom: portal === t.key ? '2.5px solid var(--primary)' : '2.5px solid transparent',
+            }}>{t.label}</button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Supplier / shipper portals — embedded, same session ── */}
+      {portal === 'fleet' && user && (
+        <main style={{ maxWidth: '1080px', margin: '0 auto', padding: '22px 16px 80px' }}>
+          <SupplierFleet user={user} onToast={toast} />
+        </main>
+      )}
+      {portal === 'supplier' && <SupplierPortalPage embedded />}
+      {portal === 'shipper' && <ShipperReviewPage embedded />}
+
+      {/* ── The shop itself — kept mounted (hidden) while a portal is open,
+             so filters, scroll and cart state survive tab switches ── */}
+      <div style={{ display: portal === 'shop' ? undefined : 'none' }}>
 
       {/* ── Browse panel ── */}
       {(activeTab === 'buy' || activeTab === 'rent') && (
@@ -702,6 +738,8 @@ export default function MarketplacePage() {
           </div>
         ))}
       </div>
+
+      </div>{/* end shop-content wrapper */}
 
       {/* ── Container detail modal ── */}
       <DetailModal
