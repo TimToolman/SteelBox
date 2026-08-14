@@ -113,6 +113,11 @@ export function CustomerProfileModal({ open, initialTab, onClose, onMessageDrive
       })
       setCustomer(updated)
       setForm(customerToForm(updated))
+      // The profile ZIP is the shopper's default delivery ZIP — the
+      // marketplace filter and reseller branding pick it up.
+      if (updated.zip && updated.zip.replace(/\D/g, '').length === 5) {
+        try { localStorage.setItem('sbx_zip', updated.zip.replace(/\D/g, '').slice(0, 5)) } catch { /* private mode */ }
+      }
       toast('Profile saved')
       onSaved() // back to the main profile menu
     } catch (e) {
@@ -252,7 +257,7 @@ export function CustomerProfileModal({ open, initialTab, onClose, onMessageDrive
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '0 10px' }}>
                 <Input label="City" value={form.city} onChange={e => set('city', e.target.value)} />
                 <Input label="State" value={form.state} onChange={e => set('state', e.target.value)} placeholder="LA" />
-                <Input label="ZIP" value={form.zip} onChange={e => set('zip', e.target.value)} placeholder="70112" />
+                <Input label="ZIP (default delivery)" value={form.zip} onChange={e => set('zip', e.target.value)} placeholder="70112" />
               </div>
               <Button variant="primary" fullWidth onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</Button>
             </div>

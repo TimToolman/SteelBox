@@ -94,7 +94,16 @@ export default function MarketplacePage() {
   // (yard ZIP + the radius the global admin granted it); only inventory
   // from depots whose circle covers the customer is shown. The dropdown
   // picks a delivery market directly. null/[] = show every area.
-  const [areaZip, setAreaZip] = useState(() => (qp('zip') ?? '').replace(/\D/g, '').slice(0, 5))
+  // The shopper's delivery ZIP survives across pages and visits: URL param
+  // first (hero deep-links), then the remembered ZIP (hero check, a past
+  // checkout, or the profile's default delivery ZIP).
+  const [areaZip, setAreaZip] = useState(() => {
+    const remembered = (() => { try { return localStorage.getItem('sbx_zip') || '' } catch { return '' } })()
+    return ((qp('zip') ?? remembered) || '').replace(/\D/g, '').slice(0, 5)
+  })
+  // First-visit nudge: no ZIP from anywhere → ask once per browser session.
+  const [zipAskOpen, setZipAskOpen] = useState(false)
+  const [zipAskInput, setZipAskInput] = useState('')
   const [geoHits, setGeoHits] = useState<DepotInRange[] | null>(null)   // depots covering the ZIP
   const [geoMiss, setGeoMiss] = useState(false)                          // 5-digit ZIP, nobody covers it
   const [area, setArea] = useState<string | null>(null)                  // market picked from the dropdown
@@ -250,11 +259,26 @@ export default function MarketplacePage() {
       setGeoHits(hits && hits.length > 0 ? hits : null)
       setGeoMiss(!hits || hits.length === 0)
       setArea(null)
+      // Remember it — the next visit (and the landing page) starts here.
+      try { localStorage.setItem('sbx_zip', areaZip) } catch { /* private mode */ }
     } else {
       setGeoHits(null)
       setGeoMiss(false)
     }
   }, [areaZip, depotList])
+
+  // Ask for the ZIP up front when the shopper arrived without one — once per
+  // browser session, dismissible with "Skip for now".
+  useEffect(() => {
+    let prompted = false
+    try { prompted = sessionStorage.getItem('sbx_zip_prompted') === '1' } catch { /* private mode */ }
+    if (!areaZip && !prompted) setZipAskOpen(true)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const closeZipAsk = (zip?: string) => {
+    setZipAskOpen(false)
+    try { sessionStorage.setItem('sbx_zip_prompted', '1') } catch { /* private mode */ }
+    if (zip && zip.length === 5) setAreaZip(zip)
+  }
   // Markets that actually have browsable stock, for the fallback picker.
   const marketOf = (c: Container) => depotList.find(d => d.name === c.depotLocation)?.destination || ''
   const areaMarkets = [...new Set(tabListable.map(marketOf).filter(Boolean))].sort()
@@ -374,6 +398,8 @@ export default function MarketplacePage() {
     }))
     const failedIds = new Set(cart.filter((_, idx) => results[idx].status === 'rejected').map(i => i.container.id))
     setCart(prev => prev.filter(i => failedIds.has(i.container.id)))
+    // The checkout ZIP becomes the shopper's remembered delivery ZIP.
+    if (details.zip.length === 5) { setAreaZip(details.zip); try { localStorage.setItem('sbx_zip', details.zip) } catch { /* private mode */ } }
     await refetchContainers()
     if (failedIds.size > 0) {
       throw new Error(failedIds.size === cart.length
@@ -735,6 +761,30 @@ export default function MarketplacePage() {
 
       </div>{/* end shop-content wrapper */}
 
+      {/* ── First-visit ZIP prompt — sets branding + service-area filter ── */}
+      <Modal open={zipAskOpen} onClose={() => closeZipAsk()} maxWidth={400}>
+        <h2 style={{ fontSize: '19px', fontWeight: 700, marginBottom: '6px' }}>Where's your container headed?</h2>
+        <p style={{ fontSize: '13px', color: 'var(--ink3)', lineHeight: 1.55, marginBottom: '14px' }}>
+          What ZIP code would you like your container shipped to? We'll show the reseller
+          serving your area, their local inventory, and all-in delivered pricing.
+        </p>
+        <form onSubmit={e => { e.preventDefault(); if (zipAskInput.length === 5) closeZipAsk(zipAskInput) }}>
+          <input
+            autoFocus inputMode="numeric" maxLength={5} placeholder="Delivery ZIP"
+            value={zipAskInput}
+            onChange={e => setZipAskInput(e.target.value.replace(/\D/g, '').slice(0, 5))}
+            style={{ width: '100%', padding: '12px 14px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '16px', fontFamily: 'var(--mono)', letterSpacing: '2px', outline: 'none', boxSizing: 'border-box', marginBottom: '12px' }}
+          />
+          <button type="submit" disabled={zipAskInput.length !== 5}
+            style={{ width: '100%', padding: '12px', borderRadius: 'var(--pill)', border: 'none', background: zipAskInput.length === 5 ? 'var(--primary)' : 'var(--div)', color: zipAskInput.length === 5 ? '#fff' : 'var(--ink3)', fontSize: '14px', fontWeight: 700, cursor: zipAskInput.length === 5 ? 'pointer' : 'default' }}>
+            Show containers for my area
+          </button>
+        </form>
+        <button onClick={() => closeZipAsk()} style={{ width: '100%', marginTop: '8px', padding: '10px', borderRadius: 'var(--pill)', border: 'none', background: 'transparent', color: 'var(--ink3)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+          Skip for now
+        </button>
+      </Modal>
+
       {/* ── Container detail modal ── */}
       <DetailModal
         relayInfo={relayInfo}
@@ -838,7 +888,11 @@ export default function MarketplacePage() {
         initialTab={accountTab}
         onClose={() => setAccountOpen(false)}
         onMessageDriver={() => { setAccountOpen(false); setMsgOpen(true) }}
-        onSaved={() => { setAccountOpen(false); setProfileOpen(true) }}
+        onSaved={() => {
+          setAccountOpen(false); setProfileOpen(true)
+          // Apply a just-saved default delivery ZIP to the live view.
+          try { const z = localStorage.getItem('sbx_zip') || ''; if (z.length === 5 && z !== areaZip) setAreaZip(z) } catch { /* private mode */ }
+        }}
         toast={toast}
       />
 

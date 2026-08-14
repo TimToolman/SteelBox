@@ -195,7 +195,12 @@ function Hero({ tenant }: { tenant: Tenant }) {
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     const v = input.trim().slice(0, 5)
-    if (v.length === 5) setChecked(v)
+    if (v.length === 5) {
+      setChecked(v)
+      // Carry the ZIP into the marketplace: branding, service-area filter,
+      // and the delivery estimate all pick it up on arrival.
+      try { localStorage.setItem('sbx_zip', v) } catch { /* private mode */ }
+    }
   }
   return (
     <section className={`ld-hero ld-hero--portal${collapsed ? ' ld-hero--collapsed' : ''}`}>
