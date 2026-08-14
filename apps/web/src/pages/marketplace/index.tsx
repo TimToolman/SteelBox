@@ -92,8 +92,7 @@ export default function MarketplacePage() {
   // Delivery-area filter — the customer tells us WHERE they need the
   // container. A ZIP is geo-fenced against every depot's service circle
   // (yard ZIP + the radius the global admin granted it); only inventory
-  // from depots whose circle covers the customer is shown. The dropdown
-  // picks a delivery market directly. null/[] = show every area.
+  // from depots whose circle covers the customer is shown. No ZIP = every area.
   // The shopper's delivery ZIP survives across pages and visits: URL param
   // first (hero deep-links), then the remembered ZIP (hero check, a past
   // checkout, or the profile's default delivery ZIP).
@@ -106,7 +105,6 @@ export default function MarketplacePage() {
   const [zipAskInput, setZipAskInput] = useState('')
   const [geoHits, setGeoHits] = useState<DepotInRange[] | null>(null)   // depots covering the ZIP
   const [geoMiss, setGeoMiss] = useState(false)                          // 5-digit ZIP, nobody covers it
-  const [area, setArea] = useState<string | null>(null)                  // market picked from the dropdown
   const [depotList, setDepotList] = useState<Depot[]>([])
   useEffect(() => { depotsApi.list().then(setDepotList).catch(() => {}) }, [])
   const [minPrice, setMinPrice] = useState('')
@@ -252,13 +250,12 @@ export default function MarketplacePage() {
   // Sub-filters are condition-scoped: grade applies when browsing Used,
   // color when browsing New (they're hidden otherwise, so they can't strand results).
   // Geo-fence the ZIP as soon as 5 digits are typed: which depots' service
-  // circles cover this customer? Typing a ZIP clears any picked market.
+  // circles cover this customer?
   useEffect(() => {
     if (areaZip.length === 5) {
       const hits = depotsServingZip(areaZip, depotList)
       setGeoHits(hits && hits.length > 0 ? hits : null)
       setGeoMiss(!hits || hits.length === 0)
-      setArea(null)
       // Remember it — the next visit (and the landing page) starts here.
       try { localStorage.setItem('sbx_zip', areaZip) } catch { /* private mode */ }
     } else {
@@ -279,13 +276,10 @@ export default function MarketplacePage() {
     try { sessionStorage.setItem('sbx_zip_prompted', '1') } catch { /* private mode */ }
     if (zip && zip.length === 5) setAreaZip(zip)
   }
-  // Markets that actually have browsable stock, for the fallback picker.
-  const marketOf = (c: Container) => depotList.find(d => d.name === c.depotLocation)?.destination || ''
-  const areaMarkets = [...new Set(tabListable.map(marketOf).filter(Boolean))].sort()
   // Who services the customer — resellers owning the in-range yards.
   const geoDepotNames = geoHits ? new Set(geoHits.map(h => h.depot.name)) : null
   const areaSellers = [...new Set(
-    (geoHits ? geoHits.map(h => h.depot) : area ? depotList.filter(d => d.destination === area) : [])
+    (geoHits ? geoHits.map(h => h.depot) : [])
       .map(d => sellerById.get(d.sellerId || '')?.name).filter(Boolean)
   )] as string[]
 
@@ -294,7 +288,6 @@ export default function MarketplacePage() {
     if (favOnly && !favs.has(c.id)) return false
     if (condFilter !== 'all' && condOf(c) !== condFilter) return false
     if (geoDepotNames && !geoDepotNames.has(c.depotLocation)) return false
-    if (!geoDepotNames && area && marketOf(c) !== area) return false
     if (sizeFilters.size > 0 && !sizeFilters.has(c.size)) return false
     if (condFilter === 'used' && gradeFilters.size > 0 && !gradeFilters.has(c.grade)) return false
     if (condFilter === 'new' && colorSel && colorSel.size > 0 && !colorSel.has(c.color || 'Unspecified')) return false
@@ -500,10 +493,45 @@ export default function MarketplacePage() {
             : { width: 'var(--sb-w)', flexShrink: 0, borderRight: '1px solid var(--div)', padding: '14px 10px', position: 'sticky', top: 'var(--nav-h)', height: 'calc(100vh - var(--nav-h))', overflowY: 'auto', background: 'var(--surf-w)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.4px' }}>Filters</span>
-              <button onClick={() => { setCondFilter('used'); setSizeFilters(new Set()); setGradeFilters(new Set()); setColorSel(null); setArea(null); setAreaZip(''); setGeoHits(null); setGeoMiss(false) }} style={{ background: 'none', border: 'none', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>Reset</button>
+              <button onClick={() => { setCondFilter('used'); setSizeFilters(new Set()); setGradeFilters(new Set()); setColorSel(null); setAreaZip(''); setGeoHits(null); setGeoMiss(false) }} style={{ background: 'none', border: 'none', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>Reset</button>
             </div>
 
-            {/* Sort — first, per merchandising: order matters before narrowing */}
+            {/* Zip Destination — first and loudest: the delivery ZIP drives
+                which reseller serves the shopper (nav branding), which yards'
+                inventory shows, and the all-in delivered price. */}
+            <div style={{ marginBottom: '12px', padding: '10px 10px 11px', borderRadius: 'var(--r8)', background: 'var(--primary-cont, #E3F0FF)', border: '1.5px solid var(--primary)', boxSizing: 'border-box' }}>
+              <span style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--primary-dark, var(--primary))', display: 'block', marginBottom: '6px', whiteSpace: 'nowrap' }}>Zip Destination</span>
+              <input
+                value={areaZip}
+                inputMode="numeric"
+                maxLength={5}
+                placeholder="Delivery ZIP"
+                onChange={e => setAreaZip(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                style={{ width: '100%', padding: '9px 11px', border: `1.5px solid ${geoHits ? 'var(--primary)' : 'var(--div)'}`, borderRadius: 'var(--r8)', fontSize: '14px', fontFamily: 'var(--mono)', letterSpacing: '2px', fontWeight: 700, outline: 'none', boxSizing: 'border-box', background: 'var(--surf-w)' }}
+              />
+              {geoHits && (
+                <div style={{ fontSize: '11px', color: 'var(--green)', fontWeight: 600, marginTop: '6px', lineHeight: 1.5 }}>
+                  ✓ Serviced by {areaSellers.join(' & ')}
+                  {geoHits.map(h => (
+                    <div key={h.depot.id} style={{ color: 'var(--ink3)', fontWeight: 400 }}>
+                      {h.depot.name} · {h.miles} mi away
+                    </div>
+                  ))}
+                </div>
+              )}
+              {geoMiss && (
+                <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '6px', lineHeight: 1.45 }}>
+                  No seller's service area covers {areaZip} yet — showing every area. Call us and we'll quote it anyway.
+                </div>
+              )}
+              {!areaZip && (
+                <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '6px', lineHeight: 1.45 }}>
+                  Enter your ZIP for local inventory and all-in delivered pricing.
+                </div>
+              )}
+            </div>
+
+            {/* Sort — next, per merchandising: order matters before narrowing */}
             <div style={{ marginBottom: '10px' }}>
               <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Sort By</span>
               <select value={sort} onChange={e => setSort(e.target.value as SortKey)} style={{ width: '100%', padding: '8px 10px', borderRadius: 'var(--r8)', border: '1.5px solid var(--div)', background: 'var(--surf-w)', fontSize: '12px', cursor: 'pointer', outline: 'none', fontFamily: 'var(--sans)' }}>
@@ -582,51 +610,6 @@ export default function MarketplacePage() {
               </>
             )}
 
-            <hr style={{ border: 'none', borderTop: '1px solid var(--div)', margin: '8px 0' }} />
-
-            {/* Delivery area — last, after the unit is narrowed down: the
-                customer tells us where the container is going; we resolve
-                their ZIP to a delivery market and show only inventory
-                serviced by the reseller(s) in that geography. */}
-            <div style={{ marginBottom: '10px' }}>
-              <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Where do you need a container?</span>
-              <input
-                value={areaZip}
-                inputMode="numeric"
-                maxLength={5}
-                placeholder="Enter delivery ZIP"
-                onChange={e => setAreaZip(e.target.value.replace(/\D/g, '').slice(0, 5))}
-                style={{ width: '100%', padding: '9px 11px', border: `1.5px solid ${geoHits ? 'var(--primary)' : 'var(--div)'}`, borderRadius: 'var(--r8)', fontSize: '13px', fontFamily: 'var(--mono)', letterSpacing: '1px', outline: 'none', boxSizing: 'border-box' }}
-              />
-              {geoHits && (
-                <div style={{ fontSize: '11px', color: 'var(--green)', fontWeight: 600, marginTop: '6px', lineHeight: 1.5 }}>
-                  ✓ Serviced by {areaSellers.join(' & ')}
-                  {geoHits.map(h => (
-                    <div key={h.depot.id} style={{ color: 'var(--ink3)', fontWeight: 400 }}>
-                      {h.depot.name} · {h.miles} mi away
-                    </div>
-                  ))}
-                </div>
-              )}
-              {geoMiss && (
-                <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '6px', lineHeight: 1.45 }}>
-                  No seller's service area covers {areaZip} yet — showing every area. Call us and we'll quote it anyway.
-                </div>
-              )}
-              {!geoHits && !geoMiss && area && (
-                <div style={{ fontSize: '11px', color: 'var(--green)', fontWeight: 600, marginTop: '6px', lineHeight: 1.45 }}>
-                  ✓ {area}{areaSellers.length > 0 && <> — serviced by {areaSellers.join(' & ')}</>}
-                </div>
-              )}
-              <select
-                value={area ?? ''}
-                onChange={e => { setArea(e.target.value || null); setAreaZip(''); setGeoHits(null); setGeoMiss(false) }}
-                style={{ width: '100%', marginTop: '7px', padding: '8px 10px', borderRadius: 'var(--r8)', border: '1.5px solid var(--div)', background: 'var(--surf-w)', fontSize: '12px', cursor: 'pointer', outline: 'none', fontFamily: 'var(--sans)' }}
-              >
-                <option value="">All areas</option>
-                {areaMarkets.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
           </aside>
 
           {/* Grid area */}
