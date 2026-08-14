@@ -438,13 +438,18 @@ function verifyToken(token) {
 // then offers each granted portal as a tab. Grants can never confer
 // admin/driver — those stay primary-role only.
 const PORTAL_GRANTS = ['marketplace', 'supplier', 'shipper']
+// 'blocked' is a stored sentinel: an admin explicitly removed every grant.
+// Without it, "all grants removed" (empty list) would be indistinguishable
+// from a legacy row that predates grants — which defaults to marketplace.
 function grantsOf(u) {
-  const list = Array.isArray(u?.roles) ? u.roles.filter(r => PORTAL_GRANTS.includes(r)) : []
+  const raw = Array.isArray(u?.roles) ? u.roles : []
+  const list = raw.filter(r => PORTAL_GRANTS.includes(r))
+  if (raw.includes('blocked')) return list // explicit lockout — no defaults
   return list.length ? list : ['marketplace'] // legacy rows: marketplace by default
 }
 function sanitizeGrants(list) {
-  const clean = (Array.isArray(list) ? list : []).filter(r => PORTAL_GRANTS.includes(r))
-  return [...new Set(clean)]
+  const clean = [...new Set((Array.isArray(list) ? list : []).filter(r => PORTAL_GRANTS.includes(r)))]
+  return clean.length ? clean : ['blocked']
 }
 
 function publicUser(u) {

@@ -166,8 +166,10 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
     const acct = accountFor(String(body.email || ''))
     // The 'marketplace' grant is the master switch — removing it in admin
     // blocks the account from signing in at all (mirrors the API server).
+    // An empty list means an admin removed every grant this session — that
+    // blocks sign-in too, not just an explicit non-marketplace list.
     const grants = (acct as { roles?: string[] }).roles
-    if (Array.isArray(grants) && grants.length > 0 && !grants.includes('marketplace')) {
+    if (Array.isArray(grants) && !grants.includes('marketplace')) {
       throw new Error('Sign-in for this account has been disabled — contact your administrator.')
     }
     return ok(signIn(acct))
@@ -314,7 +316,10 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
   const [, col, rid, extra] = route.split('/')
   if (col && !extra && col in db) {
     const rows = db[col]
-    if (method === 'GET' && !rid) return ok(tenantScope(col, rows))
+    // Always hand back a fresh array — returning the live db reference makes
+    // React bail out of re-renders (same object identity) after in-place
+    // writes, so new rows would never appear until a reload.
+    if (method === 'GET' && !rid) return ok([...tenantScope(col, rows)])
     if (method === 'GET' && rid) {
       const r = rows.find(x => x.id === rid)
       if (!r) throw new Error('Not found')

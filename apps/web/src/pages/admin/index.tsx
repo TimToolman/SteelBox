@@ -771,7 +771,9 @@ function UserModal({ target, drivers, sellers, suppliers, shipperLines, sellerId
   useEffect(() => {
     if (!target) return
     if (target === 'new') setForm({ name: '', email: '', role: 'customer', phone: '', driverId: '', password: '', sellerId: sellerId || '', roles: ['marketplace'], supplierId: '', shipperId: '' })
-    else setForm({ name: target.name, email: target.email, role: target.role, phone: target.phone || '', driverId: target.driverId || '', password: '', sellerId: target.sellerId || '', roles: target.roles?.length ? [...target.roles] : ['marketplace'], supplierId: target.supplierId || '', shipperId: target.shipperId || '' })
+    // An explicit empty/blocked list stays empty (admin removed every grant);
+    // only a missing field (legacy account) defaults to marketplace.
+    else setForm({ name: target.name, email: target.email, role: target.role, phone: target.phone || '', driverId: target.driverId || '', password: '', sellerId: target.sellerId || '', roles: Array.isArray(target.roles) ? target.roles.filter(r => ['marketplace', 'supplier', 'shipper'].includes(r)) : ['marketplace'], supplierId: target.supplierId || '', shipperId: target.shipperId || '' })
     setError('')
   }, [target, sellerId])
 
