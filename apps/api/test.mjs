@@ -315,6 +315,20 @@ try {
   const lockTry = await api(`/users/${selfLock.body.id}`, { method: 'PATCH', token: admin, body: { roles: ['supplier'] } })
   check('admin cannot remove their own marketplace access', lockTry.status === 400)
 
+  // ── Repair-shop network: HQ CRUD + per-site assignments ──
+  console.log('Repair shops')
+  const shopsSeed = (await api('/repairshops', { token: admin })).body
+  check('3 shops seeded with contacts + site assignments', shopsSeed.length >= 3 && shopsSeed.every(s => s.contactName) && shopsSeed.some(s => (s.siteIds || []).includes('dep_hou')))
+  const shopNew = await api('/repairshops', { method: 'POST', token: admin, body: { name: 'Music City Container Repair', city: 'Nashville', state: 'TN', specialty: 'Full refurb', contactName: 'Gus Harlan', email: 'gus@musiccityrepair.com', phone: '(615) 555-0344', siteIds: ['mp_03'] } })
+  check('shop created with site assignment', shopNew.status === 201 && shopNew.body?.siteIds?.includes('mp_03'))
+  const shopPatch = await api(`/repairshops/${shopNew.body.id}`, { method: 'PATCH', token: admin, body: { siteIds: ['mp_03', 'dep_fc'] } })
+  check('site assignments editable', shopPatch.status === 200 && shopPatch.body?.siteIds?.length === 2)
+  const shopDel = await api(`/repairshops/${shopNew.body.id}`, { method: 'DELETE', token: admin })
+  const shopAfter = (await api('/repairshops', { token: admin })).body.find(s => s.id === shopNew.body.id)
+  check('delete is a soft un-approve', shopDel.status === 200 && shopAfter?.approved === false)
+  const shopForbidden = await api('/repairshops', { method: 'POST', token: mvpAdmin, body: { name: 'Rogue Repair' } })
+  check('reseller admin cannot edit the network', shopForbidden.status === 403)
+
   // ── Reject path frees the container ──
   console.log('Reject path')
   const unit2 = containers.find(c => c.status === 'available' && c.id !== unit.id)

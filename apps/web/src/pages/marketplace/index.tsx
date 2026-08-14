@@ -412,20 +412,23 @@ export default function MarketplacePage() {
         }
       />
 
-      {/* ── Portal strip — one sign-in, every granted portal as a tab ── */}
+      {/* ── Portal strip — one sign-in, every granted portal as a tab.
+             Light-blue band so it reads as its own layer, not part of the
+             page; text-only labels per the 2D-simple iconography rule. ── */}
       {(hasGrant(user, 'supplier') || hasGrant(user, 'shipper')) && (
-        <div style={{ background: 'var(--surf-w)', borderBottom: '1px solid var(--div)', padding: '0 16px', display: 'flex', gap: '4px', overflowX: 'auto', position: 'sticky', top: 0, zIndex: 40 }}>
+        <div style={{ background: 'var(--primary-cont, #E3F0FF)', borderBottom: '2px solid var(--primary)', padding: '0 16px', display: 'flex', gap: '6px', overflowX: 'auto', position: 'sticky', top: 0, zIndex: 40 }}>
           {([
-            { key: 'shop' as const, label: '🛒 Marketplace', show: true },
-            { key: 'fleet' as const, label: '📦 My Containers', show: hasGrant(user, 'supplier') },
-            { key: 'supplier' as const, label: '🛠 Damage Claims', show: hasGrant(user, 'supplier') },
-            { key: 'shipper' as const, label: '⚓ Claims Review', show: hasGrant(user, 'shipper') },
+            { key: 'shop' as const, label: 'Marketplace', show: true },
+            { key: 'fleet' as const, label: 'My Containers', show: hasGrant(user, 'supplier') },
+            { key: 'supplier' as const, label: 'Damage Claims', show: hasGrant(user, 'supplier') },
+            { key: 'shipper' as const, label: 'Claims Review', show: hasGrant(user, 'shipper') },
           ]).filter(t => t.show).map(t => (
             <button key={t.key} onClick={() => setPortal(t.key)} style={{
-              padding: '12px 16px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700, fontFamily: 'inherit',
-              background: 'transparent', whiteSpace: 'nowrap',
-              color: portal === t.key ? 'var(--primary)' : 'var(--ink3)',
-              borderBottom: portal === t.key ? '2.5px solid var(--primary)' : '2.5px solid transparent',
+              padding: '11px 18px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700, fontFamily: 'inherit',
+              whiteSpace: 'nowrap', borderRadius: '10px 10px 0 0', marginTop: '6px',
+              background: portal === t.key ? 'var(--surf-w)' : 'transparent',
+              color: portal === t.key ? 'var(--primary)' : '#3D5A80',
+              boxShadow: portal === t.key ? '0 -1px 4px rgba(0,40,90,.10)' : 'none',
             }}>{t.label}</button>
           ))}
         </div>

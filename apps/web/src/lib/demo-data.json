@@ -5705,7 +5705,13 @@
    "state": "LA",
    "phone": "(504) 555-0274",
    "specialty": "Structural & welding",
-   "approved": true
+   "approved": true,
+   "contactName": "Ray Thibodeaux",
+   "email": "ray@bayourepair.com",
+   "siteIds": [
+    "dep_nola",
+    "dep_br"
+   ]
   },
   {
    "id": "shop_02",
@@ -5714,7 +5720,12 @@
    "state": "TX",
    "phone": "(713) 555-0285",
    "specialty": "Doors, seals & floors",
-   "approved": true
+   "approved": true,
+   "contactName": "Elena Vasquez",
+   "email": "elena@portcityboxworks.com",
+   "siteIds": [
+    "dep_hou"
+   ]
   },
   {
    "id": "shop_03",
@@ -5723,7 +5734,13 @@
    "state": "AL",
    "phone": "(251) 555-0296",
    "specialty": "Blast & repaint",
-   "approved": true
+   "approved": true,
+   "contactName": "Miles Turner",
+   "email": "miles@coastalrefinish.com",
+   "siteIds": [
+    "mp_02",
+    "dep_cdi"
+   ]
   }
  ],
  "claims": [

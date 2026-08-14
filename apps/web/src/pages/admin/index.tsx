@@ -12,6 +12,9 @@ import { orders as ordersApi, containers as containersApi, activity as activityA
 import { meetPoints as meetPointsApi, shippersApi, suppliersApi, type MeetPoint, type Shipper, type Supplier } from '../../lib/api'
 import { parseZones, zoneOverlaps } from '../../lib/territory'
 import { CoverageMap } from './CoverageMap'
+import { RepairShopsView } from './RepairShops'
+import { AnalyticsView } from './Analytics'
+import { claims as claimsAdminApi } from '../../lib/api'
 
 // Every size/type code, for the container add/edit selects.
 const SIZE_SELECT_OPTIONS = Object.entries(SIZE_LABEL) as [ContainerSize, string][]
@@ -27,7 +30,7 @@ const TRUCK_SIZES: { value: ContainerSize; label: string }[] = [
 
 // ── Types ─────────────────────────────────────────────────
 
-type AdminView = 'dashboard' | 'orders' | 'inventory' | 'schedule' | 'activity' | 'inbox' | 'drivers' | 'customers' | 'users' | 'notifications' | 'depots' | 'sellers' | 'shippinglines' | 'builds'
+type AdminView = 'dashboard' | 'analytics' | 'orders' | 'inventory' | 'schedule' | 'activity' | 'inbox' | 'drivers' | 'customers' | 'users' | 'notifications' | 'depots' | 'repairshops' | 'sellers' | 'shippinglines' | 'builds'
 
 const VIEW_TITLES: Record<AdminView, string> = {
   dashboard:     'Dashboard',
@@ -41,9 +44,11 @@ const VIEW_TITLES: Record<AdminView, string> = {
   users:         'Users & Access',
   notifications: 'Alerts',
   depots:        'Depots',
+  repairshops:   'Repair Shops',
   sellers:       'Sellers',
   shippinglines: 'Shipping Lines',
   builds:        'Custom Builds',
+  analytics:     'Analytics',
 }
 
 const ACTIVITY_META: Record<string, { label: string; color: string; bg: string }> = {
@@ -1735,6 +1740,13 @@ export default function AdminPage() {
   // Supplier companies — for linking a supplier-portal grant to its fleet.
   const [supplierCos, setSupplierCos] = useState<Supplier[]>([])
   useEffect(() => { suppliersApi.list().then(setSupplierCos).catch(() => {}) }, [])
+  // Open damage-claim count for the Analytics KPI tiles.
+  const [openClaims, setOpenClaims] = useState(0)
+  useEffect(() => {
+    claimsAdminApi.list()
+      .then(list => setOpenClaims(list.filter(c => !['closed', 'sell_as_damaged'].includes(c.status)).length))
+      .catch(() => {})
+  }, [])
   const sellerName = (id?: string) => sellerList.find(x => x.id === id)?.name || (id ? id : '—')
   const refetchDepots = useCallback(() => depotsApi.list().then(setDepotList), [])
   useEffect(() => { refetchDepots().catch(() => {}) }, [refetchDepots])
@@ -2310,8 +2322,12 @@ export default function AdminPage() {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '10px 0' }}>
-          <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', padding: '8px 18px 3px' }}>Operations</div>
+          {/* Reporting & Analytics — every reseller admin gets these scoped
+              to their tenant; HQ sees the whole platform + per-reseller. */}
+          <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', padding: '8px 18px 3px' }}>Reporting &amp; Analytics</div>
           <NavItem active={view === 'dashboard'} onClick={() => go('dashboard')} label="Dashboard" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="2" y="2" width="7" height="7" rx="1.5" /><rect x="11" y="2" width="7" height="7" rx="1.5" /><rect x="2" y="11" width="7" height="7" rx="1.5" /><rect x="11" y="11" width="7" height="7" rx="1.5" /></svg>} />
+          <NavItem active={view === 'analytics'} onClick={() => go('analytics')} label="Analytics" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 17V9" /><path d="M8 17V4" /><path d="M13 17v-6" /><path d="M18 17V7" /></svg>} />
+          <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', padding: '16px 18px 3px' }}>Operations</div>
           <NavItem active={view === 'orders'} onClick={() => go('orders')} label="Orders" badge={pipelineOrders.length + reserved.filter(c => !pipelineContainerKeys.has(c.id) && !pipelineContainerKeys.has(c.sku)).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="4" y="2" width="12" height="16" rx="1.5" /><line x1="7" y1="7" x2="13" y2="7" /><line x1="7" y1="10" x2="13" y2="10" /><line x1="7" y1="13" x2="11" y2="13" /></svg>} />
           <NavItem active={view === 'inventory'} onClick={() => go('inventory')} label="Inventory" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="5" width="18" height="12" rx="1.5" /><line x1="5" y1="5" x2="5" y2="17" /><line x1="9" y1="5" x2="9" y2="17" /><line x1="13" y1="5" x2="13" y2="17" /></svg>} />
           <NavItem active={view === 'schedule'} onClick={() => go('schedule')} label="Schedule" badge={scheduleEvents.length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="2" y="4" width="16" height="14" rx="2" /><line x1="2" y1="8.5" x2="18" y2="8.5" /><line x1="7" y1="2" x2="7" y2="6" /><line x1="13" y1="2" x2="13" y2="6" /></svg>} />
@@ -2324,6 +2340,7 @@ export default function AdminPage() {
           <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', padding: '16px 18px 3px' }}>System</div>
           <NavItem active={view === 'notifications'} onClick={() => go('notifications')} label="Alerts" badge={reserved.length + orderList.filter(o => !o.driverId && o.status !== 'delivered').length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M4 8A6 6 0 0 1 16 8L16 12L18 14L2 14L4 12Z" /><path d="M8 16a2 2 0 004 0" /></svg>} />
           <NavItem active={view === 'depots'} onClick={() => go('depots')} label="Depots" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2a5.5 5.5 0 0 0-5.5 5.5c0 4 5.5 10 5.5 10s5.5-6 5.5-10A5.5 5.5 0 0 0 10 2z" /><circle cx="10" cy="7.5" r="1.8" /></svg>} />
+          <NavItem active={view === 'repairshops'} onClick={() => go('repairshops')} label="Repair Shops" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13.5 6.5a3.5 3.5 0 0 0-4.8-3.2l2.1 2.1-2.1 2.1-2.1-2.1a3.5 3.5 0 0 0 4.6 4.6l4.4 4.4a1.5 1.5 0 0 0 2.1-2.1l-4.4-4.4c.13-.44.2-.9.2-1.4z" /></svg>} />
           {scope === 'global' && <NavItem active={view === 'sellers'} onClick={() => go('sellers')} label="Sellers" badge={sellerList.filter(x => x.active !== false).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7l1-4h12l1 4" /><path d="M3 7h14v10H3z" /><path d="M8 11h4" /></svg>} />}
           {scope === 'global' && <NavItem active={view === 'shippinglines'} onClick={() => go('shippinglines')} label="Shipping Lines" badge={shipperLines.filter(x => x.active !== false).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 3v10" /><circle cx="10" cy="4.5" r="1.6" /><path d="M6.5 7h7" /><path d="M4 11c0 3.3 2.7 6 6 6s6-2.7 6-6l-2 1-2-1-2 1-2-1-2 1z" /></svg>} />}
           <NavItem active={view === 'builds'} onClick={() => go('builds')} label="Custom Builds" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5.5l2 2L7 15H5v-2z" /><path d="M11 7l2 2" /><rect x="2" y="4" width="16" height="13" rx="1.5" /></svg>} />
@@ -3589,6 +3606,16 @@ export default function AdminPage() {
                 <CoverageMap sellers={sellerList} zoneDrafts={zoneDrafts} depots={depotListAll} meetPoints={mpList} />
               </div>
             </div>
+          )}
+
+          {/* ── Analytics — Reporting & Analytics, tenant-scoped ── */}
+          {view === 'analytics' && (
+            <AnalyticsView orders={orderList} containers={containerList} sellers={sellerList} scope={scope} openClaims={openClaims} />
+          )}
+
+          {/* ── Repair shops — approved network + work-order board ── */}
+          {view === 'repairshops' && (
+            <RepairShopsView depots={depotListAll} meetPoints={mpList} canEdit={scope === 'global' && !lockedSellerId} toast={toast} />
           )}
 
           {/* ── Shipping lines — the carriers claims are filed against ── */}

@@ -883,6 +883,10 @@ export interface Shipper {
 export interface RepairShop {
   id: string; name: string; city: string; state: string; phone: string
   specialty: string; approved: boolean
+  contactName?: string
+  email?: string
+  // Depot / transfer-station ids this shop serves; empty = every site.
+  siteIds?: string[]
 }
 
 // The supplier-facing tracker follows these stages in order; the last two
@@ -963,6 +967,13 @@ export const shippersApi = {
 
 export const repairShops = {
   list: () => request<RepairShop[]>('/repairshops'),
+  create: (data: Partial<RepairShop>) =>
+    request<RepairShop>('/repairshops', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<RepairShop>) =>
+    request<RepairShop>(`/repairshops/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  // Un-approves (soft delete) so claim history keeps its reference.
+  remove: (id: string) =>
+    request<{ id: string; archived: true }>(`/repairshops/${id}`, { method: 'DELETE' }),
 }
 
 export const claims = {

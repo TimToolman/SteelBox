@@ -165,8 +165,10 @@ const SCHEMAS = {
   },
   repairshops: {
     file: 'repairshops.csv',
-    headers: ['id','name','city','state','phone','specialty','approved'],
-    types: { approved: 'boolean' },
+    // siteIds: which depots / transfer stations this shop serves (empty =
+    // every site). Drives the supplier's repair-shop picker per claim.
+    headers: ['id','name','city','state','phone','specialty','approved','contactName','email','siteIds'],
+    types: { approved: 'boolean', siteIds: 'array' },
   },
   // SteelBox Co. meet points — platform-run handoff yards near territory
   // borders where drivers swap containers on cross-territory deliveries.
@@ -728,9 +730,9 @@ function ensureSeedClaimTables() {
   }
   if (readTable('repairshops').length === 0) {
     writeTable('repairshops', [
-      { id: 'shop_01', name: 'Bayou Container Repair', city: 'New Orleans', state: 'LA', phone: '(504) 555-0274', specialty: 'Structural & welding', approved: true },
-      { id: 'shop_02', name: 'Port City Box Works', city: 'Houston', state: 'TX', phone: '(713) 555-0285', specialty: 'Doors, seals & floors', approved: true },
-      { id: 'shop_03', name: 'Coastal Refinishing', city: 'Mobile', state: 'AL', phone: '(251) 555-0296', specialty: 'Blast & repaint', approved: true },
+      { id: 'shop_01', name: 'Bayou Container Repair', city: 'New Orleans', state: 'LA', phone: '(504) 555-0274', specialty: 'Structural & welding', approved: true, contactName: 'Ray Thibodeaux', email: 'ray@bayourepair.com', siteIds: ['dep_nola', 'dep_br'] },
+      { id: 'shop_02', name: 'Port City Box Works', city: 'Houston', state: 'TX', phone: '(713) 555-0285', specialty: 'Doors, seals & floors', approved: true, contactName: 'Elena Vasquez', email: 'elena@portcityboxworks.com', siteIds: ['dep_hou'] },
+      { id: 'shop_03', name: 'Coastal Refinishing', city: 'Mobile', state: 'AL', phone: '(251) 555-0296', specialty: 'Blast & repaint', approved: true, contactName: 'Miles Turner', email: 'miles@coastalrefinish.com', siteIds: ['mp_02', 'dep_cdi'] },
     ])
     console.log('Seeded repair shops (3)')
   }
@@ -2184,9 +2186,41 @@ async function handleRequest(req, res) {
         return send(res, 200, { id: shippers[shpIdx].id, archived: true })
       }
     }
-    if (seg[0] === 'repairshops' && seg.length === 1 && method === 'GET') {
+    // Repair-shop network: staff read it (suppliers pick a shop when booking
+    // a repair); SteelBox Co. HQ maintains it and assigns shops to sites.
+    if (seg[0] === 'repairshops') {
       if (!hasRole('admin', 'driver', 'supplier', 'shipper')) return denied(user ? 403 : 401, 'Staff access required')
-      return send(res, 200, readTable('repairshops'))
+      const shops = readTable('repairshops')
+      if (seg.length === 1 && method === 'GET') return send(res, 200, shops)
+      if (!hasRole('admin') || tenantOf(user)) return denied(403, 'SteelBox Co. HQ access required')
+      if (seg.length === 1 && method === 'POST') {
+        const body = await readBody(req)
+        if (!body.name) return send(res, 400, { message: 'name is required' })
+        const record = {
+          id: uid('shop'), name: body.name, city: body.city || '', state: body.state || '',
+          phone: body.phone || '', specialty: body.specialty || '',
+          approved: body.approved ?? true,
+          contactName: body.contactName || '', email: body.email || '',
+          siteIds: Array.isArray(body.siteIds) ? body.siteIds : [],
+        }
+        shops.push(record)
+        writeTable('repairshops', shops)
+        return send(res, 201, record)
+      }
+      const shopIdx = shops.findIndex(x => x.id === seg[1])
+      if (shopIdx === -1) return send(res, 404, { message: 'Repair shop not found' })
+      if (seg.length === 2 && method === 'PATCH') {
+        const body = await readBody(req)
+        shops[shopIdx] = { ...shops[shopIdx], ...body, id: shops[shopIdx].id }
+        writeTable('repairshops', shops)
+        return send(res, 200, shops[shopIdx])
+      }
+      // Soft delete — un-approve, so claim history keeps its reference.
+      if (seg.length === 2 && method === 'DELETE') {
+        shops[shopIdx] = { ...shops[shopIdx], approved: false }
+        writeTable('repairshops', shops)
+        return send(res, 200, { id: shops[shopIdx].id, archived: true })
+      }
     }
 
     // ── Meet points — public read (marketplace prices the relay), admin write ──
