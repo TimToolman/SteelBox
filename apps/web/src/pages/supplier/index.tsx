@@ -19,6 +19,7 @@ import {
   type Container, type DamageClaim, type Supplier, type Shipper, type RepairShop, type ClaimStatus, type AuthUser, type Depot,
 } from '../../lib/api'
 import { GRADE_META, DAMAGE_DISCOUNT } from '../../lib/specs'
+import { FilterRail, FilterGroup, ChipRow, Chip, useSetFilter, railSelect, PeriodFilter, PERIOD_ALL, periodPasses, type Period } from '../../components/filters'
 import { ClaimTimeline, ClaimPacket } from './claimkit'
 import { gradeLabel, damageLabel, SEVERITY_WORD } from '../../lib/grading'
 import { Snackbar } from '../../components/ui'
@@ -181,8 +182,27 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
     } catch (err) { toast(err instanceof Error ? err.message : 'Could not close the claim') }
   }
 
-  const active = myClaims.filter(c => c.status !== 'closed')
-  const closed = myClaims.filter(c => c.status === 'closed')
+  // ── Claim filters (left rail, marketplace-style) ──────────
+  const fStage = useSetFilter<ClaimStatus>()
+  const fSeverity = useSetFilter<number>()
+  const [fLine, setFLine] = useState('')
+  const [period, setPeriod] = useState<Period>(PERIOD_ALL)
+  const resetClaimFilters = () => { fStage.clear(); fSeverity.clear(); setFLine(''); setPeriod(PERIOD_ALL) }
+  const claimYears = [...new Set(myClaims.map(c => new Date(c.createdAt).getFullYear()))].sort()
+  const stagesPresent = [...new Set(myClaims.map(c => c.status))]
+  const severitiesPresent = [...new Set(myClaims.map(c => c.severity).filter(s => s > 0))].sort()
+  const STAGE_WORD: Record<string, string> = {
+    awaiting_inspection: 'Awaiting inspection', awaiting_estimate: 'Awaiting estimate',
+    awaiting_shipper: 'Awaiting shipper', awaiting_decision: 'Awaiting decision',
+    repair_scheduled: 'Repair scheduled', sell_as_damaged: 'Sell as damaged', closed: 'Closed',
+  }
+  const filteredClaims = myClaims.filter(c =>
+    fStage.passes(c.status) && (fSeverity.set.size === 0 || fSeverity.set.has(c.severity))
+    && (!fLine || c.shipperId === fLine) && periodPasses(c.createdAt, period))
+  const filtersOn = fStage.set.size > 0 || fSeverity.set.size > 0 || !!fLine || period.quick !== 'all' || period.year !== 'all' || period.month !== 'all'
+
+  const active = filteredClaims.filter(c => c.status !== 'closed')
+  const closed = filteredClaims.filter(c => c.status === 'closed')
 
   return (
     <div style={{ fontFamily: 'var(--sans)', background: embedded ? 'transparent' : 'var(--pg)', minHeight: embedded ? undefined : '100vh', color: INK }}>
@@ -239,8 +259,28 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {active.length === 0 && <div style={{ ...card, color: INK3, fontSize: '13px', textAlign: 'center' }}>No active claims.</div>}
+          {/* Left filter rail + claims column, marketplace-style */}
+          <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <FilterRail count={filteredClaims.length} total={myClaims.length} onReset={resetClaimFilters}>
+            <FilterGroup label="Stage">
+              <ChipRow>{stagesPresent.map(s => <Chip key={s} on={fStage.set.has(s)} onClick={() => fStage.toggle(s)}>{STAGE_WORD[s] ?? s}</Chip>)}</ChipRow>
+            </FilterGroup>
+            {severitiesPresent.length > 0 && (
+              <FilterGroup label="Severity">
+                <ChipRow>{severitiesPresent.map(s => <Chip key={s} on={fSeverity.set.has(s)} onClick={() => fSeverity.toggle(s)}>{damageLabel(s)}</Chip>)}</ChipRow>
+              </FilterGroup>
+            )}
+            <FilterGroup label="Shipping line">
+              <select value={fLine} onChange={e => setFLine(e.target.value)} style={railSelect}>
+                <option value="">All lines</option>
+                {shipperList.map(sh => <option key={sh.id} value={sh.id}>{sh.name}</option>)}
+              </select>
+            </FilterGroup>
+            <PeriodFilter period={period} onChange={setPeriod} years={claimYears} />
+          </FilterRail>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1, minWidth: '440px' }}>
+            {active.length === 0 && <div style={{ ...card, color: INK3, fontSize: '13px', textAlign: 'center' }}>{filtersOn ? 'No claims match these filters.' : 'No active claims.'}</div>}
             {active.map(c => (
               <div key={c.id} style={card}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
@@ -331,10 +371,11 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
                 <ClaimTimeline claim={c} />
               </div>
             ))}
+            {closed.length > 0 && (
+              <div style={{ fontSize: '12px', color: INK3 }}>{closed.length} closed claim{closed.length > 1 ? 's' : ''}: {closed.map(c => `${c.containerSku} (${c.claimNumber})`).join(' · ')}</div>
+            )}
           </div>
-          {closed.length > 0 && (
-            <div style={{ marginTop: '10px', fontSize: '12px', color: INK3 }}>{closed.length} closed claim{closed.length > 1 ? 's' : ''}: {closed.map(c => `${c.containerSku} (${c.claimNumber})`).join(' · ')}</div>
-          )}
+          </div>{/* rail + claims row */}
         </section>
 
         {/* Fleet */}
