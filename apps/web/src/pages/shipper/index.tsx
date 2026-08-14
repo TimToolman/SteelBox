@@ -19,7 +19,9 @@ import { ClaimTimeline, ClaimPacket } from '../supplier/claimkit'
 const INK = '#0D0E12', INK2 = '#44474F', INK3 = '#6B7280', DIV = '#E2E4E9', RED = '#B3261E', GREEN = '#1B7A5A'
 const card: React.CSSProperties = { background: '#fff', border: `1px solid ${DIV}`, borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,.06)' }
 
-export default function ShipperReviewPage() {
+// embedded: rendered as a tab inside the marketplace (single sign-in) — the
+// standalone chrome (header, page background) is skipped, content only.
+export default function ShipperReviewPage({ embedded = false }: { embedded?: boolean }) {
   const { user, logout } = useAuth()
   const { toast, message, open: snackOpen, close: snackClose } = useSnackbar()
   const [claimList, setClaimList] = useState<DamageClaim[]>([])
@@ -55,7 +57,8 @@ export default function ShipperReviewPage() {
   const decided = claimList.filter(c => !!c.shipperDecision)
 
   return (
-    <div style={{ fontFamily: 'var(--sans)', background: 'var(--pg)', minHeight: '100vh', color: INK }}>
+    <div style={{ fontFamily: 'var(--sans)', background: embedded ? 'transparent' : 'var(--pg)', minHeight: embedded ? undefined : '100vh', color: INK }}>
+      {!embedded && (
       <header style={{ background: '#fff', borderBottom: `1px solid ${DIV}`, padding: '0 20px', height: '60px', display: 'flex', alignItems: 'center', gap: '12px', position: 'sticky', top: 0, zIndex: 50 }}>
         <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#0E7490', display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 700, fontSize: '15px' }}>⚓</div>
         <div>
@@ -73,6 +76,7 @@ export default function ShipperReviewPage() {
         </label>
         <button onClick={logout} style={{ padding: '9px 16px', borderRadius: '999px', border: `1.5px solid ${DIV}`, background: '#fff', color: INK2, fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>Sign out</button>
       </header>
+      )}
 
       <main style={{ maxWidth: '900px', margin: '0 auto', padding: '22px 16px 80px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div>

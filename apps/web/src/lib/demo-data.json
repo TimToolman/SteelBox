@@ -5432,7 +5432,10 @@
    "phoneVerified": false,
    "active": true,
    "createdAt": "2026-07-03T18:36:22.696Z",
-   "sellerId": ""
+   "sellerId": "",
+   "roles": [
+    "marketplace"
+   ]
   },
   {
    "id": "usr_mr59yc6h70l",
@@ -5445,7 +5448,10 @@
    "phoneVerified": false,
    "active": true,
    "createdAt": "2026-07-03T18:36:22.720Z",
-   "sellerId": ""
+   "sellerId": "",
+   "roles": [
+    "marketplace"
+   ]
   },
   {
    "id": "usr_mr59yc74xp",
@@ -5458,7 +5464,10 @@
    "phoneVerified": false,
    "active": true,
    "createdAt": "2026-07-03T18:36:22.742Z",
-   "sellerId": ""
+   "sellerId": "",
+   "roles": [
+    "marketplace"
+   ]
   },
   {
    "id": "usr_mr59yc7q123",
@@ -5471,7 +5480,10 @@
    "phoneVerified": false,
    "active": true,
    "createdAt": "2026-07-03T18:36:22.764Z",
-   "sellerId": ""
+   "sellerId": "",
+   "roles": [
+    "marketplace"
+   ]
   },
   {
    "id": "usr_mr59yc8c7lp",
@@ -5484,7 +5496,10 @@
    "phoneVerified": false,
    "active": true,
    "createdAt": "2026-07-03T18:36:22.785Z",
-   "sellerId": ""
+   "sellerId": "",
+   "roles": [
+    "marketplace"
+   ]
   },
   {
    "id": "usr_mr59yc8y2j4",
@@ -5497,7 +5512,10 @@
    "phoneVerified": false,
    "active": true,
    "createdAt": "2026-07-03T18:36:22.807Z",
-   "sellerId": ""
+   "sellerId": "",
+   "roles": [
+    "marketplace"
+   ]
   },
   {
    "id": "usr_mrdvccx5e03465ab8f",
@@ -5510,7 +5528,10 @@
    "phoneVerified": false,
    "active": true,
    "createdAt": "2026-07-09T18:57:18.210Z",
-   "sellerId": ""
+   "sellerId": "",
+   "roles": [
+    "marketplace"
+   ]
   },
   {
    "id": "usr_mrjlpzx3db89287de3",
@@ -5523,7 +5544,10 @@
    "phoneVerified": false,
    "active": true,
    "createdAt": "2026-07-13T19:14:35.439Z",
-   "sellerId": ""
+   "sellerId": "",
+   "roles": [
+    "marketplace"
+   ]
   },
   {
    "id": "usr_msgyxy492e15352f4b",
@@ -5536,7 +5560,10 @@
    "phoneVerified": false,
    "active": true,
    "createdAt": "2026-08-06T03:41:05.170Z",
-   "sellerId": ""
+   "sellerId": "",
+   "roles": [
+    "marketplace"
+   ]
   },
   {
    "id": "usr_msgyxy4z99d16cc20f",
@@ -5549,7 +5576,10 @@
    "phoneVerified": false,
    "active": true,
    "createdAt": "2026-08-06T03:41:05.194Z",
-   "sellerId": ""
+   "sellerId": "",
+   "roles": [
+    "marketplace"
+   ]
   },
   {
    "id": "usr_sup01",
@@ -5563,7 +5593,11 @@
    "phoneVerified": false,
    "active": true,
    "createdAt": "2026-08-07T14:00:00.000Z",
-   "digestFreq": "per_container"
+   "digestFreq": "per_container",
+   "roles": [
+    "marketplace",
+    "supplier"
+   ]
   },
   {
    "id": "usr_shp01",
@@ -5577,7 +5611,11 @@
    "phoneVerified": false,
    "active": true,
    "createdAt": "2026-08-07T14:00:00.000Z",
-   "digestFreq": "daily"
+   "digestFreq": "daily",
+   "roles": [
+    "marketplace",
+    "shipper"
+   ]
   },
   {
    "id": "usr_mvpadmin01",
@@ -5590,7 +5628,10 @@
    "phoneVerified": false,
    "active": true,
    "createdAt": "2026-07-03T18:36:22.696Z",
-   "sellerId": "sel_mvp"
+   "sellerId": "sel_mvp",
+   "roles": [
+    "marketplace"
+   ]
   },
   {
    "id": "usr_demoadmin01",
@@ -5603,7 +5644,10 @@
    "phoneVerified": false,
    "active": true,
    "createdAt": "2026-07-03T18:36:22.696Z",
-   "sellerId": "sel_demo"
+   "sellerId": "sel_demo",
+   "roles": [
+    "marketplace"
+   ]
   }
  ],
  "outbox": [],

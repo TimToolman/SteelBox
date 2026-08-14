@@ -193,8 +193,8 @@ const SCHEMAS = {
   // driverId links driver accounts to drivers.csv, customerId links buyers to customers.csv.
   users: {
     file: 'users.csv',
-    headers: ['id','email','passwordHash','role','name','phone','driverId','customerId','phoneVerified','active','createdAt','sellerId','supplierId','shipperId','digestFreq','lastDigestAt','lastLoginAt'],
-    types: { phoneVerified: 'boolean', active: 'boolean' },
+    headers: ['id','email','passwordHash','role','name','phone','driverId','customerId','phoneVerified','active','createdAt','sellerId','supplierId','shipperId','digestFreq','lastDigestAt','lastLoginAt','roles'],
+    types: { phoneVerified: 'boolean', active: 'boolean', roles: 'array' },
   },
   // Outbound email + SMS log. In dev nothing actually leaves the machine —
   // every message the system "sends" is recorded here (admin portal shows it).
@@ -431,9 +431,25 @@ function verifyToken(token) {
   if (sig !== expect || Number(exp) < Date.now()) return null
   return id
 }
+// ── Portal grants (multi-role accounts) ───────────────────
+// users.roles holds portal GRANTS on top of the primary role: 'marketplace'
+// (the base — everyone has it by default; removing it blocks sign-in
+// entirely), plus 'supplier' and/or 'shipper'. A single marketplace login
+// then offers each granted portal as a tab. Grants can never confer
+// admin/driver — those stay primary-role only.
+const PORTAL_GRANTS = ['marketplace', 'supplier', 'shipper']
+function grantsOf(u) {
+  const list = Array.isArray(u?.roles) ? u.roles.filter(r => PORTAL_GRANTS.includes(r)) : []
+  return list.length ? list : ['marketplace'] // legacy rows: marketplace by default
+}
+function sanitizeGrants(list) {
+  const clean = (Array.isArray(list) ? list : []).filter(r => PORTAL_GRANTS.includes(r))
+  return [...new Set(clean)]
+}
+
 function publicUser(u) {
   const { passwordHash, ...rest } = u
-  return rest
+  return { ...rest, roles: grantsOf(u) }
 }
 function currentUser(req) {
   const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')
@@ -477,8 +493,8 @@ function ensureSeedUsers() {
   ensure('admin@mvpcontainer.com', { role: 'admin', name: 'Marie Landry', sellerId: 'sel_mvp' })
   ensure('admin@democontainercorp.com', { role: 'admin', name: 'Dana Whitfield', sellerId: 'sel_demo' })
   // Damage-claim personas: the container owner and the shipping line.
-  ensure('supplier@oceanbox.co', { role: 'supplier', name: 'Dana Reyes', supplierId: 'sup_01' })
-  ensure('shipper@meridianlines.com', { role: 'shipper', name: 'Kofi Mensah', shipperId: 'shp_01' })
+  ensure('supplier@oceanbox.co', { role: 'supplier', name: 'Dana Reyes', supplierId: 'sup_01', roles: ['marketplace', 'supplier'] })
+  ensure('shipper@meridianlines.com', { role: 'shipper', name: 'Kofi Mensah', shipperId: 'shp_01', roles: ['marketplace', 'shipper'] })
   for (const d of readTable('drivers')) {
     if (d.active === false) continue
     const first = (d.name || 'driver').trim().split(/\s+/)[0].toLowerCase()
@@ -937,8 +953,13 @@ async function handleRequest(req, res) {
     const denied = (status = 401, message = 'Sign in required') => send(res, status, { message })
     // 'adjuster' (container condition grader) carries driver-level access:
     // field-app reads plus container updates from the grading flow.
+    // Effective roles = primary role + portal grants (supplier/shipper), so a
+    // customer granted the supplier portal passes hasRole('supplier').
+    // 'marketplace' is a sign-in gate, not a permission, so it's excluded.
     const hasRole = (...roles) => !!user &&
-      (roles.includes(user.role) || (user.role === 'adjuster' && roles.includes('driver')))
+      (roles.includes(user.role)
+        || (user.role === 'adjuster' && roles.includes('driver'))
+        || grantsOf(user).some(g => g !== 'marketplace' && roles.includes(g)))
 
     // ── Auth ──
     if (path === '/auth/login' && method === 'POST') {
@@ -947,6 +968,11 @@ async function handleRequest(req, res) {
         (x.email || '').toLowerCase() === String(email || '').trim().toLowerCase() && x.active !== false)
       if (!u || !checkPassword(password || '', u.passwordHash)) {
         return send(res, 401, { message: 'Invalid email or password' })
+      }
+      // The 'marketplace' grant is the master switch: every account has it by
+      // default, and an admin removing it blocks this login entirely.
+      if (!grantsOf(u).includes('marketplace')) {
+        return send(res, 403, { message: 'Sign-in for this account has been disabled — contact your administrator.' })
       }
       // Anyone still on the seeded dev password must set a real one.
       const mustChangePassword = String(password) === SEED_PASSWORD
@@ -1130,9 +1156,13 @@ async function handleRequest(req, res) {
         if (!body.password || String(body.password).length < 8) return send(res, 400, { message: 'Password must be at least 8 characters' })
         const rec = {
           id: uid('usr'), email, passwordHash: hashPassword(body.password),
-          role: ['admin', 'driver', 'customer'].includes(body.role) ? body.role : 'customer',
+          role: ['admin', 'driver', 'adjuster', 'customer', 'supplier', 'shipper'].includes(body.role) ? body.role : 'customer',
           name: body.name || email, phone: body.phone || '',
           driverId: body.driverId || '', customerId: body.customerId || '',
+          // Portal grants: marketplace (base) + supplier/shipper portals, with
+          // the entity links each portal scopes to.
+          roles: body.roles != null ? sanitizeGrants(body.roles) : ['marketplace'],
+          supplierId: body.supplierId || '', shipperId: body.shipperId || '',
           // Blank sellerId = platform-wide staff; set = scoped to that seller.
           // A reseller admin can only mint accounts inside their own tenant.
           sellerId: tenant || body.sellerId || '',
@@ -1154,9 +1184,20 @@ async function handleRequest(req, res) {
         if (body.name != null) patch.name = body.name
         if (body.phone != null) patch.phone = body.phone
         if (body.driverId != null) patch.driverId = body.driverId
+        // Portal grants + the entity links they scope to. sanitizeGrants
+        // means this path can never hand out admin/driver. Self-lockout is
+        // blocked, same as self-deactivation.
+        if (body.roles != null) {
+          if (users[idx].id === user.id && !sanitizeGrants(body.roles).includes('marketplace')) {
+            return send(res, 400, { message: 'You cannot remove your own marketplace access' })
+          }
+          patch.roles = sanitizeGrants(body.roles)
+        }
+        if (body.supplierId != null) patch.supplierId = body.supplierId
+        if (body.shipperId != null) patch.shipperId = body.shipperId
         // Re-homing an account to another reseller is HQ-only.
         if (body.sellerId != null && !tenant) patch.sellerId = body.sellerId
-        if (['admin', 'driver', 'customer'].includes(body.role)) patch.role = body.role
+        if (['admin', 'driver', 'adjuster', 'customer', 'supplier', 'shipper'].includes(body.role)) patch.role = body.role
         if (body.active != null) patch.active = body.active === true
         if (body.password) {
           if (String(body.password).length < 8) return send(res, 400, { message: 'Password must be at least 8 characters' })

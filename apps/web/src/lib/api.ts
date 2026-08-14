@@ -69,6 +69,10 @@ export interface AuthUser {
   sellerId?: string             // set on seller-scoped staff accounts
   supplierId?: string           // links a supplier login to suppliers.csv
   shipperId?: string            // links a shipping-line login to shippers.csv
+  // Portal grants on top of the primary role: 'marketplace' is the base
+  // (removing it blocks sign-in entirely); 'supplier' / 'shipper' add those
+  // portals as tabs behind the single marketplace login.
+  roles?: string[]
   digestFreq?: 'per_container' | 'daily' | 'weekly'  // claim-email preference
   lastLoginAt?: string          // login audit (arbitration evidence)
 }
@@ -84,6 +88,13 @@ export interface AuthPending {
   twoFaRequired: true
   pendingToken: string
   devCode?: string   // dev only — surfaced when the server has no SMTP configured
+}
+
+// Does this account carry a role — either as its primary role or as a
+// portal grant? The single check every portal tab and route guard uses.
+export function hasGrant(user: AuthUser | null | undefined, role: Role | 'marketplace'): boolean {
+  if (!user) return false
+  return user.role === role || (user.roles || []).includes(role)
 }
 
 export const auth = {
@@ -118,7 +129,7 @@ export const auth = {
 
 export const users = {
   list: () => request<AuthUser[]>('/users'),
-  create: (data: { email: string; password: string; role: Role; name?: string; phone?: string; driverId?: string; sellerId?: string }) =>
+  create: (data: { email: string; password: string; role: Role; name?: string; phone?: string; driverId?: string; sellerId?: string; roles?: string[]; supplierId?: string; shipperId?: string }) =>
     request<AuthUser>('/users', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<AuthUser> & { password?: string }) =>
     request<AuthUser>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
