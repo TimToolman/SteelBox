@@ -138,6 +138,19 @@ export default function MarketplacePage() {
     const needed = portal === 'shipper' ? 'shipper' : 'supplier'
     if (!hasGrant(user, needed)) setPortal('shop')
   }, [user, portal])
+  // Signing in from the profile sheet closes it and lands on the marketplace
+  // (with any granted portal tabs now visible) instead of showing the
+  // account menu.
+  const prevUserRef = useRef(user)
+  useEffect(() => {
+    const signedIn = !prevUserRef.current && !!user
+    prevUserRef.current = user
+    if (signedIn && profileOpen) {
+      setProfileOpen(false)
+      const portals = ['supplier', 'shipper'].filter(g => hasGrant(user, g as 'supplier' | 'shipper'))
+      toast(`Signed in as ${user!.name || user!.email}${portals.length ? ' — your portal tabs are below the menu' : ''}`)
+    }
+  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
   const customerEmail = user?.email.toLowerCase() ?? ''
 
   // Custom Builds catalog (admin-managed) + the order-a-build dialog.
