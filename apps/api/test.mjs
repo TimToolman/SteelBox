@@ -231,6 +231,37 @@ try {
   const legs = schedAfter.filter(x => x.sku === relayUnit.sku && String(x.destination || '').includes(mps[0].name) || (x.sku === relayUnit.sku && String(x.origin || '').includes(mps[0].name)))
   check('two relay legs land on the schedule (transfer + delivery)', schedAfter.length === schedBefore + 2 && legs.length === 2 && legs.some(l => l.type === 'transfer') && legs.some(l => l.type === 'delivery'))
 
+  // ── Reseller tenancy: a seller-scoped admin only sees their company ──
+  console.log('Reseller tenancy')
+  const sellerRows = (await api('/sellers')).body
+  check('territory defaults seeded on both resellers', sellerRows.every(s => (s.territoryZips || '').length > 0))
+  check('Demo Corp holds the Mobile-Nashville corridor', (sellerRows.find(s => s.id === 'sel_demo')?.territoryZips || '').includes('350-374'))
+  const stations = (await api('/meetpoints')).body
+  check('3 transfer stations seeded incl. Nashville', stations.length >= 3 && stations.some(m => m.name.includes('Nashville')))
+  const rl1 = await api('/auth/login', { method: 'POST', body: { email: 'admin@mvpcontainer.com', password: 'test1234' } })
+  const rl2 = await api('/auth/login/verify', { method: 'POST', body: { pendingToken: rl1.body?.pendingToken, code: rl1.body?.devCode } })
+  check('reseller admin logs in scoped to MVP', rl2.status === 200 && rl2.body?.user?.sellerId === 'sel_mvp')
+  const mvpAdmin = rl2.body.token
+  const tOrders = (await api('/orders', { token: mvpAdmin })).body
+  check('orders list scoped to MVP Container', Array.isArray(tOrders) && tOrders.length > 0 && tOrders.every(o => (o.sellerId || 'sel_mvp') === 'sel_mvp'))
+  const tDrivers = (await api('/drivers', { token: mvpAdmin })).body
+  check('drivers list scoped to the MVP fleet', tDrivers.length > 0 && tDrivers.every(d => (d.sellerId || 'sel_mvp') === 'sel_mvp'))
+  const tUsers = (await api('/users', { token: mvpAdmin })).body
+  check('users list hides HQ and other resellers', tUsers.some(u => u.email === 'admin@mvpcontainer.com')
+    && !tUsers.some(u => u.email === 'tgmoore@gmail.com')
+    && !tUsers.some(u => u.email === 'admin@democontainercorp.com'))
+  const hqUsers = (await api('/users', { token: admin })).body
+  check('HQ still sees every account', hqUsers.some(u => u.email === 'admin@democontainercorp.com') && hqUsers.some(u => u.email === 'admin@mvpcontainer.com'))
+  const demoAdminAcct = hqUsers.find(u => u.email === 'admin@democontainercorp.com')
+  const forbid = await api(`/users/${demoAdminAcct.id}`, { method: 'PATCH', token: mvpAdmin, body: { name: 'Hijacked' } })
+  check("editing another reseller's account is blocked", forbid.status === 403)
+  const hqOrders = (await api('/orders', { token: admin })).body
+  const tCust = (await api('/customers', { token: mvpAdmin })).body
+  check('customers list scoped to MVP buyers', tCust.every(c => c.sellerId === 'sel_mvp' || hqOrders.some(o => (o.sellerId || 'sel_mvp') === 'sel_mvp' && ((o.customerId && o.customerId === c.id) || (o.customerEmail || '').toLowerCase() === (c.email || '').toLowerCase()))))
+  const tSched = (await api('/schedule', { token: mvpAdmin })).body
+  const demoDriverIds = new Set((await api('/drivers', { token: admin })).body.filter(d => (d.sellerId || 'sel_mvp') !== 'sel_mvp').map(d => d.id))
+  check('schedule hides other fleets’ jobs', tSched.every(j => !demoDriverIds.has(j.driverId)))
+
   // ── Reject path frees the container ──
   console.log('Reject path')
   const unit2 = containers.find(c => c.status === 'available' && c.id !== unit.id)

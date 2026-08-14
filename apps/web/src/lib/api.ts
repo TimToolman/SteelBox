@@ -118,7 +118,7 @@ export const auth = {
 
 export const users = {
   list: () => request<AuthUser[]>('/users'),
-  create: (data: { email: string; password: string; role: Role; name?: string; phone?: string; driverId?: string }) =>
+  create: (data: { email: string; password: string; role: Role; name?: string; phone?: string; driverId?: string; sellerId?: string }) =>
     request<AuthUser>('/users', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<AuthUser> & { password?: string }) =>
     request<AuthUser>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -693,6 +693,7 @@ export interface Customer {
   createdAt: string
   notifySms: boolean    // customer opt-in for text notifications
   notifyEmail: boolean  // always true — email is mandatory
+  sellerId?: string     // set when a reseller admin creates the customer; otherwise derived from orders
 }
 
 export const customers = {
