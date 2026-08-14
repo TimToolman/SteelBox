@@ -12,7 +12,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import '../../styles/landing.css'
-import { quotes, isZipCovered } from '../../lib/api'
+import { quotes, isZipCovered, type Seller } from '../../lib/api'
 import type { Tenant } from '../../tenant'
 import { attributionFields } from '../../lib/attribution'
 import {
@@ -45,11 +45,16 @@ const NAV_CATEGORIES: { tab: ShopTab; label: string }[] = [
 // marketplace passes `active`/`onSelect` (tabs switch in-page instead of
 // reloading) and its cart/profile controls via `right`. Keeping every page
 // on this component is what keeps the nav identical across the site.
-export function SiteNav({ tenant, active, onSelect, right }: {
+export function SiteNav({ tenant, active, onSelect, right, brand }: {
   tenant: Tenant
   active?: ShopTab
   onSelect?: (t: ShopTab) => void
   right?: React.ReactNode
+  // Reseller positioning: when the shopper's delivery ZIP lands in a
+  // reseller's territory, the nav wears THAT reseller's logo, name, and
+  // colors with a "powered by <platform>" line; outside every territory
+  // (or with no ZIP) the platform brand shows as usual.
+  brand?: Seller
 }) {
   const [open, setOpen] = useState(false)
   const [contactOpen, setContactOpen] = useState(false)
@@ -65,8 +70,9 @@ export function SiteNav({ tenant, active, onSelect, right }: {
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
   }, [open, contactOpen])
   // Two-tone wordmark: first word in the brand color, the rest in the
-  // accent — "MVP Container" → blue / orange.
-  const [brandWord, ...accentWords] = tenant.logoText.split(' ')
+  // accent — "MVP Container" → blue / orange. A ZIP-resolved reseller
+  // brand takes over the wordmark and colors when present.
+  const [brandWord, ...accentWords] = (brand?.name || tenant.logoText).split(' ')
   const sectionLinks = [
     { label: 'How It Works', href: u('#how-it-works') },
     { label: 'Why Us', href: u('#why-us') },
@@ -84,10 +90,11 @@ export function SiteNav({ tenant, active, onSelect, right }: {
     )
     : <a key={c.tab} className={cls} href={u(`shop?tab=${c.tab}`)} onClick={() => setOpen(false)}>{c.label}</a>
   // Brand vars are set here (not only on the .ld page root) so the nav is
-  // fully styled on any page, marketplace included.
+  // fully styled on any page, marketplace included. A ZIP-resolved reseller
+  // repaints the nav in its own colors.
   const brandVars = {
-    '--ld-brand': tenant.brand.primary,
-    '--ld-accent': tenant.brand.accent,
+    '--ld-brand': brand?.brandPrimary || tenant.brand.primary,
+    '--ld-accent': brand?.brandAccent || tenant.brand.accent,
     '--ld-ink': tenant.brand.ink,
   } as React.CSSProperties
   return (
@@ -96,12 +103,20 @@ export function SiteNav({ tenant, active, onSelect, right }: {
         <div className="ld-nav-row">
           <button className="ld-nav-burger" aria-expanded={open} aria-label="Menu" onClick={() => setOpen(o => !o)}>☰</button>
           <a className="ld-logo" href={u('')} aria-label={`${tenant.name} home`}>
-            <span className="ld-logo-badge" aria-hidden="true">
+            <span className="ld-logo-badge" aria-hidden="true" style={brand ? { background: `linear-gradient(135deg, ${brand.brandPrimary || '#0057B8'} 50%, ${brand.brandAccent || '#E65100'} 50%)` } : undefined}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><rect x="1" y="6" width="22" height="14" rx="2" /><line x1="6" y1="6" x2="6" y2="20" /><line x1="11" y1="6" x2="11" y2="20" /><line x1="16" y1="6" x2="16" y2="20" /></svg>
             </span>
-            <span className="ld-logo-word">
-              <span className="ld-logo-brand">{brandWord}</span>
-              {accentWords.length > 0 && <span className="ld-logo-accent">&nbsp;{accentWords.join(' ')}</span>}
+            <span className="ld-logo-word" style={brand ? { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.15 } : undefined}>
+              <span>
+                <span className="ld-logo-brand">{brandWord}</span>
+                {accentWords.length > 0 && <span className="ld-logo-accent">&nbsp;{accentWords.join(' ')}</span>}
+              </span>
+              {/* Reseller storefronts always credit the platform */}
+              {brand && (
+                <span style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.4px', color: 'var(--ld-ink)', opacity: 0.62, whiteSpace: 'nowrap' }}>
+                  powered by Nationwide SteelBox
+                </span>
+              )}
             </span>
           </a>
           <nav aria-label="Main" className="ld-nav-main">
