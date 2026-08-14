@@ -9,6 +9,8 @@ import { useIsMobile } from '../../hooks'
 import { auth as authApi, photoUrl, type AuthUser } from '../../lib/api'
 import { GRADE_META } from '../../lib/specs'
 import { allowedModes, SIZE_LABELS, type CartItem, type CartMode, type CheckoutDetails } from './shared'
+import type { RelayQuote } from '../../lib/territory'
+import type { Container, Seller } from '../../lib/api'
 
 // ── Cart / Checkout ────────────────────────────────────────
 
@@ -29,13 +31,14 @@ interface CartModalProps {
   onUpdateItem: (id: string, patch: Partial<CartItem>) => void
   onLongTermInquiry: () => void
   onPlaceOrder: (d: CheckoutDetails) => Promise<void>
+  relayInfo?: (c: Container, zip: string) => { owner: Seller | null; cross: boolean; quote: RelayQuote | null } | null
 }
 
 const fieldLabel: React.CSSProperties = { display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '5px' }
 const fieldInput: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '13px', outline: 'none', fontFamily: 'var(--sans)', background: 'var(--surf-w)' }
 const sectionTitle: React.CSSProperties = { fontSize: '14px', fontWeight: 700, marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }
 
-export function CartModal({ open, cart, user, onClose, onRemove, onUpdateItem, onLongTermInquiry, onPlaceOrder }: CartModalProps) {
+export function CartModal({ open, cart, user, onClose, onRemove, onUpdateItem, onLongTermInquiry, onPlaceOrder, relayInfo }: CartModalProps) {
   const isMobile = useIsMobile()
   const [form, setForm] = useState<CheckoutDetails>(EMPTY_CHECKOUT)
   const [placing, setPlacing] = useState(false)
@@ -66,7 +69,12 @@ export function CartModal({ open, cart, user, onClose, onRemove, onUpdateItem, o
   const rentMonthly = rentItems.reduce((s, i) => s + (i.container.rentMonthly || 0), 0) // combined /mo rate
   const rentContract = rentItems.reduce((s, i) => s + (i.container.rentMonthly || 0) * i.rentTerm, 0) // months × rate
   const deposit = rentMonthly // one-month refundable deposit per unit
-  const dueToday = buyTotal + rentContract + deposit
+  // Cross-territory relay fees — priced once the delivery ZIP is entered.
+  const relays = cart
+    .map(i => ({ item: i, t: relayInfo?.(i.container, (form.zip || '').trim()) ?? null }))
+    .filter(x => x.t?.cross && x.t.quote)
+  const relayTotal = relays.reduce((s2, x) => s2 + x.t!.quote!.fee, 0)
+  const dueToday = buyTotal + rentContract + deposit + relayTotal
 
   const contactOk = form.firstName && form.lastName && form.email && form.phone
   const deliveryOk = form.address && form.city && form.state && form.zip
@@ -290,13 +298,24 @@ export function CartModal({ open, cart, user, onClose, onRemove, onUpdateItem, o
               <Row key={c.id} label={`Rent · ${rentTerm} mo × $${c.rentMonthly}`} val={num((c.rentMonthly || 0) * rentTerm)} />
             ))}
             {rentItems.length > 0 && <Row label="Refundable deposit" val={num(deposit)} sub />}
-            <Row label="Delivery" val="Included" green />
+            <Row label="Delivery" val={relays.length === cart.length && cart.length > 0 ? 'Relay fees below' : 'Included'} green={relays.length < cart.length || cart.length === 0} />
+            {relays.map(x => (
+              <Row key={x.item.container.id}
+                label={`Cross-territory relay · ${x.item.container.sku} via ${x.t!.quote!.meetPoint.name}`}
+                val={num(x.t!.quote!.fee)} />
+            ))}
           </div>
           <div style={{ borderTop: '1px solid var(--div)', margin: '12px 0', paddingTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <span style={{ fontSize: '13px', fontWeight: 700 }}>Due today</span>
             <span style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'var(--mono)' }}>{num(dueToday)}</span>
           </div>
           {rentItems.length > 0 && <div style={{ fontSize: '11px', color: 'var(--ink3)', marginBottom: '12px', textAlign: 'right' }}>{num(rentContract)} rental + {num(deposit)} deposit</div>}
+          {relays.length > 0 && (
+            <div style={{ fontSize: '11px', color: 'var(--ink2)', background: 'var(--surf-w)', border: '1px solid var(--div)', borderRadius: 'var(--r8)', padding: '8px 10px', marginBottom: '12px', lineHeight: 1.5 }}>
+              🔁 Your delivery ZIP is in <b>{relays[0].t!.owner!.name}</b>'s territory. The container hands off at a
+              SteelBox Co. meet point and {relays[0].t!.owner!.name} runs the final leg — the relay fee covers both drivers.
+            </div>
+          )}
 
           {placeError && (
             <div style={{ background: '#FDECEA', border: '1px solid #F5C6C0', color: '#B3261E', borderRadius: 'var(--r8)', padding: '9px 12px', fontSize: '12px', lineHeight: 1.5, marginBottom: '10px' }}>

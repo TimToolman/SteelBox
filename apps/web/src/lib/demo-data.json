@@ -4456,7 +4456,8 @@
    "email": "sales@mvpcontainers.com",
    "tos": "Service agreement — MVP Container LLC. Delivery within 3–5 business days of confirmed payment, performed by MVP Container drivers and equipment. Payment is authorized at checkout and captured only after the container is set and inspected on site. 30-day wind-and-watertight guarantee on all graded units. Rentals bill monthly in advance; pickup is scheduled within 5 business days of the end of term. Site must provide the clearances published on the listing.",
    "active": true,
-   "createdAt": "2026-08-06T02:49:06.256Z"
+   "createdAt": "2026-08-06T02:49:06.256Z",
+   "territoryZips": "700-716,770-778,300-312,398-399"
   },
   {
    "id": "sel_demo",
@@ -4468,7 +4469,8 @@
    "email": "sales@democontainercorp.com",
    "tos": "Service agreement — Demo Container Corporation. Deliveries are fulfilled by Demo Container Corp within 5 business days of confirmed payment. All units carry a 14-day defect guarantee from the day of delivery. Payment terms, scheduling, and post-sale support are handled directly by Demo Container Corp — Nationwide SteelBox Corp operates the marketplace only.",
    "active": true,
-   "createdAt": "2026-08-06T02:49:06.257Z"
+   "createdAt": "2026-08-06T02:49:06.257Z",
+   "territoryZips": "206-219,220-246,270-289,320-339"
   }
  ],
  "drivers": [
@@ -5770,6 +5772,24 @@
    "createdAt": "2026-08-01T08:00:00.000Z",
    "events": "[{\"t\":\"2026-08-01T08:00:00Z\",\"actor\":\"Marcus Webb\",\"text\":\"Claim filed against Austral Shipping (MV IBIS 314N)\"},{\"t\":\"2026-08-05T09:00:00Z\",\"actor\":\"M. Torres\",\"text\":\"Damage inspected — severity D·2\"},{\"t\":\"2026-08-05T14:00:00Z\",\"actor\":\"Marcus Webb\",\"text\":\"Repair estimate $1,150 submitted to Austral Shipping\"},{\"t\":\"2026-08-06T19:45:00Z\",\"actor\":\"Austral Shipping\",\"text\":\"Shipper signed in and viewed the claim\"},{\"t\":\"2026-08-06T20:00:00Z\",\"actor\":\"Austral Shipping\",\"text\":\"Shipper approved the estimate — “Approved at quoted amount”\"}]",
    "shipperViewedAt": "2026-08-06T19:45:00Z"
+  }
+ ],
+ "meetpoints": [
+  {
+   "id": "mp_01",
+   "name": "I-85 Charlotte Relay Yard",
+   "address": "4200 Freight Ln, Charlotte, NC",
+   "zip": "28208",
+   "notes": "Border: Southeast ↔ Mid-Atlantic",
+   "active": true
+  },
+  {
+   "id": "mp_02",
+   "name": "I-10 Mobile Relay Yard",
+   "address": "880 Port Access Rd, Mobile, AL",
+   "zip": "36602",
+   "notes": "Border: Gulf Coast ↔ Southeast",
+   "active": true
   }
  ]
 }

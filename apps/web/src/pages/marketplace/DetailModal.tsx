@@ -9,6 +9,8 @@ import { isZipCovered, estimateDelivery, photoUrl, type Container, type Seller }
 import { GRADE_META } from '../../lib/specs'
 import { gradeLabel, damageLabel, SEVERITY_WORD } from '../../lib/grading'
 import { allowedModes, condOf, SIZE_LABELS, type CartMode } from './shared'
+import type { RelayQuote } from '../../lib/territory'
+import type { Seller as SellerT } from '../../lib/api'
 import { PhotoGallery } from './PhotoGallery'
 import { SellerLogo } from './SellerMark'
 
@@ -24,9 +26,12 @@ interface DetailModalProps {
   index: number
   total: number
   seller?: Seller   // multi-tenant: the seller who owns/fulfills this unit
+  // Territory check: whose turf is a delivery ZIP, and the relay quote when
+  // it crosses reseller territories (two legs via a SteelBox Co. meet point).
+  relayInfo?: (c: Container, zip: string) => { owner: SellerT | null; cross: boolean; quote: RelayQuote | null } | null
 }
 
-export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onNavigate, index, total, seller }: DetailModalProps) {
+export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onNavigate, index, total, seller, relayInfo }: DetailModalProps) {
   const isMobile = useIsMobile()
   const [delivery, setDelivery] = useState('Enter your ZIP above')
   const [zip, setZip] = useState('')
@@ -236,7 +241,29 @@ export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onN
               />
               <button onClick={checkDelivery} style={{ padding: '6px 12px', borderRadius: 'var(--r8)', background: 'var(--primary)', color: '#fff', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>Check</button>
             </div>
-            <div style={{ marginTop: '6px', fontSize: '11px', color: isZipCovered(zip) ? 'var(--green)' : 'var(--ink3)', fontWeight: isZipCovered(zip) ? 600 : 400 }}>{delivery}</div>
+            {/* Territory verdict — in-territory delivery is included; a ZIP in
+                another reseller's territory relays via a SteelBox Co. meet point.
+                When a relay applies it IS the delivery answer, so the plain
+                radius estimate is hidden rather than contradicting it. */}
+            {(() => {
+              const t = relayInfo?.(container, zip)
+              const estimate = <div style={{ marginTop: '6px', fontSize: '11px', color: isZipCovered(zip) ? 'var(--green)' : 'var(--ink3)', fontWeight: isZipCovered(zip) ? 600 : 400 }}>{delivery}</div>
+              if (!t) return estimate
+              if (!t.cross) return t.owner ? (
+                <>
+                  {estimate}
+                  <div style={{ marginTop: '5px', fontSize: '11px', color: 'var(--green)', fontWeight: 600 }}>✓ {t.owner.name} territory — local delivery included</div>
+                </>
+              ) : estimate
+              return t.quote ? (
+                <div style={{ marginTop: '5px', fontSize: '11px', color: 'var(--ink2)', lineHeight: 1.5 }}>
+                  <b style={{ color: 'var(--cta)' }}>{t.owner!.name} territory</b> — cross-territory relay via <b>{t.quote.meetPoint.name}</b>:
+                  {' '}<b style={{ fontFamily: 'var(--mono)' }}>+${t.quote.fee.toLocaleString()}</b> ({t.quote.linehaulMiles + t.quote.lastMiles} mi, final leg by {t.owner!.name})
+                </div>
+              ) : (
+                <div style={{ marginTop: '5px', fontSize: '11px', color: 'var(--ink3)' }}>{t.owner!.name} territory — cross-territory fee quoted at checkout</div>
+              )
+            })()}
           </div>
 
           {isDraft && (

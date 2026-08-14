@@ -142,6 +142,9 @@ export interface Seller {
   tos: string
   active?: boolean
   createdAt?: string
+  // Reseller territory: 3-digit ZIP prefix zones, e.g. "700-705,770-778".
+  // Drives the marketplace ZIP search and cross-territory relay fees.
+  territoryZips?: string
 }
 
 export const sellers = {
@@ -480,6 +483,19 @@ export interface Order {
   // Multi-tenant: the seller who owns this sale, snapshotted at order time.
   sellerId?: string
   sellerName?: string
+  // Cross-territory relay: delivery lands in another reseller's territory,
+  // so the container travels in two legs through a SteelBox Co. meet point.
+  crossTerritory?: boolean
+  sellerToId?: string        // receiving reseller (owns the delivery ZIP)
+  sellerToName?: string
+  meetPointId?: string
+  meetPointName?: string
+  relayFee?: number          // buyer-paid relay fee (on top of amount)
+  relayLinehaul?: number     // fee share: selling reseller's linehaul leg
+  relayLastMile?: number     // fee share: receiving reseller's last-mile leg
+  relayPlatform?: number     // fee share: SteelBox Co.
+  relayLinehaulMiles?: number
+  relayLastMiles?: number
 }
 
 export const orders = {
@@ -944,4 +960,26 @@ export const claims = {
 export const prefs = {
   update: (data: { digestFreq: 'per_container' | 'daily' | 'weekly' }) =>
     request<AuthUser>('/auth/me', { method: 'PATCH', body: JSON.stringify(data) }),
+}
+
+// ── SteelBox Co. meet points (cross-territory handoffs) ─────
+// Platform-run sub-depots near territory borders where drivers swap
+// containers when a sale crosses reseller territories.
+export interface MeetPoint {
+  id: string
+  name: string
+  address: string
+  zip: string
+  notes: string
+  active: boolean
+}
+
+export const meetPoints = {
+  list: () => request<MeetPoint[]>('/meetpoints'),
+  create: (data: Partial<MeetPoint>) =>
+    request<MeetPoint>('/meetpoints', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<MeetPoint>) =>
+    request<MeetPoint>(`/meetpoints/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  remove: (id: string) =>
+    request<{ deleted: boolean }>(`/meetpoints/${id}`, { method: 'DELETE' }),
 }

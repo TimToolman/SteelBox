@@ -9,8 +9,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Modal, Snackbar, BuildClipart } from '../../components/ui'
 import { useContainers, useSnackbar, useAuth, useIsMobile, useLive } from '../../hooks'
 import { LoginForm } from '../../lib/auth'
-import { containers, orders, messages as messagesApi, customBuilds as customBuildsApi, depots as depotsApi, sellers as sellersApi, photoUrl, type Container, type ContainerGrade, type ContainerSize, type ContainerCondition, type CustomBuild, type Depot, type Seller } from '../../lib/api'
+import { containers, orders, messages as messagesApi, customBuilds as customBuildsApi, depots as depotsApi, sellers as sellersApi, meetPoints as meetPointsApi, photoUrl, type MeetPoint, type Container, type ContainerGrade, type ContainerSize, type ContainerCondition, type CustomBuild, type Depot, type Seller } from '../../lib/api'
 import { GRADE_META } from '../../lib/specs'
+import { sellerForZip, relayQuote, type RelayQuote } from '../../lib/territory'
 import { SiteNav } from '../landing'
 import { resolveTenant } from '../../tenant'
 import { SIZE_OPTIONS, condOf, useFavorites, type Tab, type SortKey, type CartMode, type CartItem, type CheckoutDetails } from './shared'
@@ -131,6 +132,22 @@ export default function MarketplacePage() {
   const [sellerList, setSellerList] = useState<Seller[]>([])
   useEffect(() => { sellersApi.list().then(setSellerList).catch(() => {}) }, [])
   const sellerById = new Map(sellerList.map(s => [s.id, s]))
+  // SteelBox Co. meet points — price cross-territory relays at checkout.
+  const [meetPointList, setMeetPointList] = useState<MeetPoint[]>([])
+  useEffect(() => { meetPointsApi.list().then(setMeetPointList).catch(() => {}) }, [])
+
+  // Territory verdict for a unit + delivery ZIP: whose turf is the ZIP, and
+  // if it isn't the unit's seller's, quote the two-leg relay via the best
+  // SteelBox Co. meet point.
+  const relayInfo = useCallback((c: Container, zip: string): { owner: Seller | null; cross: boolean; quote: RelayQuote | null } | null => {
+    if (!/^\d{5}$/.test(zip)) return null
+    const owner = sellerForZip(zip, sellerList)
+    const sellingId = c.sellerId || 'sel_mvp'
+    if (!owner || owner.id === sellingId) return { owner, cross: false, quote: null }
+    const depot = depotList.find(d => d.name === c.depotLocation)
+    const quote = depot?.zip ? relayQuote(depot.zip, zip, meetPointList) : null
+    return { owner, cross: true, quote }
+  }, [sellerList, depotList, meetPointList])
   const [orderBuild, setOrderBuild] = useState<CustomBuild | null>(null)
   const loadBuilds = useCallback(() => customBuildsApi.list().then(setBuilds).catch(() => {}), [])
   useEffect(() => { loadBuilds() }, [loadBuilds])
@@ -293,7 +310,20 @@ export default function MarketplacePage() {
       await containers.reserve(i.container.id).catch(() => {})
       const isRent = i.mode === 'rent'
       const amount = isRent ? (i.container.rentMonthly || 0) * i.rentTerm : i.container.buyPrice
+      // Cross-territory: snapshot the relay quote (meet point + fee split)
+      // on the order so dispatch and payouts see the same numbers the
+      // buyer approved at checkout.
+      const relay = relayInfo(i.container, details.zip.trim())
+      const relayFields = relay?.cross && relay.quote ? {
+        crossTerritory: true,
+        sellerToId: relay.owner?.id || '', sellerToName: relay.owner?.name || '',
+        meetPointId: relay.quote.meetPoint.id, meetPointName: relay.quote.meetPoint.name,
+        relayFee: relay.quote.fee, relayLinehaul: relay.quote.linehaulShare,
+        relayLastMile: relay.quote.lastMileShare, relayPlatform: relay.quote.platformShare,
+        relayLinehaulMiles: relay.quote.linehaulMiles, relayLastMiles: relay.quote.lastMiles,
+      } : {}
       await orders.create({
+        ...relayFields,
         containerId: i.container.id,
         containerSku: i.container.sku,
         customerName: `${details.firstName} ${details.lastName}`.trim(),
@@ -675,6 +705,7 @@ export default function MarketplacePage() {
 
       {/* ── Container detail modal ── */}
       <DetailModal
+        relayInfo={relayInfo}
         container={selectedContainer}
         onClose={() => setSelectedContainer(null)}
         onAddToCart={addToCart}
@@ -692,6 +723,7 @@ export default function MarketplacePage() {
 
       {/* ── Cart / checkout ── */}
       <CartModal
+        relayInfo={relayInfo}
         open={cartOpen}
         cart={cart}
         user={user}
