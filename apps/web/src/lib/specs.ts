@@ -120,3 +120,12 @@ export const CUSTOM_MODS: CustomMod[] = [
   { name: 'Vents & ventilation', blurb: 'Passive whirlybird or louvered vents to stop condensation.' },
   { name: 'Paint & branding', blurb: 'Full repaint in your color with logo and signage.' },
 ]
+
+// ── Cross-territory relay economics ────────────────────────
+// A container sold by one reseller but delivered into another reseller's
+// territory travels in two legs through a SteelBox Co. meet point. The
+// buyer pays a distance-based relay fee at checkout; the fee splits by
+// work performed, with the platform's cut for brokering + the meet point.
+export const RELAY_RATE_PER_MILE = 3.25   // $/mile, both legs
+export const RELAY_MIN_FEE = 250          // floor for short cross-border hops
+export const RELAY_PLATFORM_CUT = 0.10    // SteelBox Co. share of the relay fee

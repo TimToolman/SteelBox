@@ -252,6 +252,7 @@ export function InsightsPanel({ user, containers }: { user: AuthUser | null; con
             <Tile label="Listed inventory" value={String(listed.length)} sub={`${damagedListed.length} damaged deals`} />
             <Tile label="AI-graded" value={`${Math.round((containers.filter(c => c.aiGraded).length / Math.max(1, containers.length)) * 100)}%`} sub="of all units" accent={PURPLE} />
             <Tile label="Open claims" value={String(claimList.filter(c => !['closed', 'sell_as_damaged'].includes(c.status)).length)} />
+            <Tile label="Relay fees (SteelBox Co.)" value={money(orderList.filter(o => o.crossTerritory && isYtd(o.createdAt)).reduce((s2, o) => s2 + (o.relayPlatform || 0), 0))} sub={`${orderList.filter(o => o.crossTerritory && isYtd(o.createdAt)).length} cross-territory orders YTD`} accent={TEAL} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '12px' }}>
             <MoMBars title="Revenue — last 6 months" points={momOf(revenue.map(o => ({ at: o.createdAt, value: o.amount })), true)} color={GREEN} fmt={money} />

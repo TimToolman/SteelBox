@@ -106,13 +106,12 @@ const SCHEMAS = {
     // validatedAt/calledAt/paidAt timestamp the phone-payment pipeline:
     // staff validate availability → call the customer → collect payment
     // (status becomes 'confirmed') → assign a driver.
-    headers: ['id','orderNumber','containerId','containerSku','customerId','customerName','customerEmail','customerPhone','deliveryAddress','deliveryZip','amount','status','driverId','driverName','scheduledDate','completedAt','createdAt','saleType','unitCost','deposit','driverHours','validatedAt','calledAt','paidAt','sellerId','sellerName'],
+    headers: ['id','orderNumber','containerId','containerSku','customerId','customerName','customerEmail','customerPhone','deliveryAddress','deliveryZip','amount','status','driverId','driverName','scheduledDate','completedAt','createdAt','saleType','unitCost','deposit','driverHours','validatedAt','calledAt','paidAt','sellerId','sellerName','crossTerritory','sellerToId','sellerToName','meetPointId','meetPointName','relayFee','relayLinehaul','relayLastMile','relayPlatform','relayLinehaulMiles','relayLastMiles'],
     types: {
       amount: 'number', unitCost: 'number', deposit: 'number', driverHours: 'number',
       driverId: 'stringOrNull', driverName: 'stringOrNull',
       scheduledDate: 'stringOrNull', completedAt: 'stringOrNull',
-      validatedAt: 'stringOrNull', calledAt: 'stringOrNull', paidAt: 'stringOrNull',
-    },
+      validatedAt: 'stringOrNull', calledAt: 'stringOrNull', paidAt: 'stringOrNull', crossTerritory: 'boolean', relayFee: 'number', relayLinehaul: 'number', relayLastMile: 'number', relayPlatform: 'number', relayLinehaulMiles: 'number', relayLastMiles: 'number', },
   },
   drivers: {
     file: 'drivers.csv',
@@ -169,6 +168,13 @@ const SCHEMAS = {
     headers: ['id','name','city','state','phone','specialty','approved'],
     types: { approved: 'boolean' },
   },
+  // SteelBox Co. meet points — platform-run handoff yards near territory
+  // borders where drivers swap containers on cross-territory deliveries.
+  meetpoints: {
+    file: 'meetpoints.csv',
+    headers: ['id','name','address','zip','notes','active'],
+    types: { active: 'boolean' },
+  },
   // Sea-freight damage claims: supplier → field inspection → estimate →
   // shipper approval → repair (retail) or sell-as-damaged (wholesale).
   claims: {
@@ -210,7 +216,7 @@ const SCHEMAS = {
   // the seller at sale time, and drivers belong to a seller's fleet.
   sellers: {
     file: 'sellers.csv',
-    headers: ['id','name','legalName','brandPrimary','brandAccent','phone','email','tos','active','createdAt'],
+    headers: ['id','name','legalName','brandPrimary','brandAccent','phone','email','tos','active','createdAt','territoryZips'],
     types: { active: 'boolean' },
   },
 }
@@ -572,6 +578,12 @@ function ensureSeedCustomBuilds() {
 // preference: per_container emails immediately; daily/weekly sends at most
 // one rolled-up email per period, triggered lazily by the next activity.
 
+function logActivityRow(note, sku = '', containerId = '') {
+  const rows = readTable('activity')
+  rows.push({ id: uid('act'), timestamp: new Date().toISOString(), type: 'event', jobType: 'relay', sku, containerId, actor: 'SteelBox Co.', location: '', note })
+  writeTable('activity', rows)
+}
+
 const SITE_ORIGIN = process.env.SITE_ORIGIN || 'https://www.mvpcontainers.com'
 
 function addClaimEvent(claim, actor, text) {
@@ -632,6 +644,13 @@ function ensureSeedClaimTables() {
       { id: 'shp_02', name: 'Austral Shipping', line: 'Gulf-Atlantic', email: 'claims@australshipping.com', phone: '(305) 555-0263', active: true, createdAt: new Date().toISOString() },
     ])
     console.log('Seeded shippers (2)')
+  }
+  if (readTable('meetpoints').length === 0) {
+    writeTable('meetpoints', [
+      { id: 'mp_01', name: 'I-85 Charlotte Relay Yard', address: '4200 Freight Ln, Charlotte, NC', zip: '28208', notes: 'Border: Southeast ↔ Mid-Atlantic', active: true },
+      { id: 'mp_02', name: 'I-10 Mobile Relay Yard', address: '880 Port Access Rd, Mobile, AL', zip: '36602', notes: 'Border: Gulf Coast ↔ Southeast', active: true },
+    ])
+    console.log('Seeded meet points (2)')
   }
   if (readTable('repairshops').length === 0) {
     writeTable('repairshops', [
@@ -1360,6 +1379,19 @@ async function handleRequest(req, res) {
           deposit: Number(body.deposit) || 0,
           driverHours: Number(body.driverHours) || 0,
           validatedAt: null, calledAt: null, paidAt: null,
+          // Cross-territory relay (two legs through a SteelBox Co. meet point):
+          // fee split snapshotted at checkout for payout accounting.
+          crossTerritory: body.crossTerritory === true,
+          sellerToId: body.sellerToId || '',
+          sellerToName: body.sellerToName || '',
+          meetPointId: body.meetPointId || '',
+          meetPointName: body.meetPointName || '',
+          relayFee: Number(body.relayFee) || 0,
+          relayLinehaul: Number(body.relayLinehaul) || 0,
+          relayLastMile: Number(body.relayLastMile) || 0,
+          relayPlatform: Number(body.relayPlatform) || 0,
+          relayLinehaulMiles: Number(body.relayLinehaulMiles) || 0,
+          relayLastMiles: Number(body.relayLastMiles) || 0,
         }
         // Multi-tenant: snapshot which seller owns this sale (via the unit's
         // depot at order time) so history is stable across depot transfers.
@@ -1532,6 +1564,41 @@ async function handleRequest(req, res) {
           status: 'assigned',
         }
         writeTable('orders', orders)
+        // Cross-territory relay: two legs land on the shared schedule.
+        // Leg 1 (transfer): the ASSIGNED driver (selling reseller) hauls the
+        // unit from its depot to the SteelBox Co. meet point. Leg 2 (delivery):
+        // a driver from the RECEIVING reseller's fleet takes it to the customer.
+        {
+          const o0 = orders[idx]
+          if (o0.crossTerritory && o0.meetPointName) {
+            const unit = readTable('containers').find(c => c.id === o0.containerId || c.sku === o0.containerSku)
+            const mp = readTable('meetpoints').find(m2 => m2.id === o0.meetPointId)
+            const leg2Driver = drivers.find(d => d.active !== false && (d.sellerId || 'sel_mvp') === o0.sellerToId) || driver
+            const dayOffset = (() => {
+              if (!o0.scheduledDate) return 1
+              const diff = Math.round((new Date(String(o0.scheduledDate).slice(0, 10)).getTime() - new Date(new Date().toDateString()).getTime()) / 86400000)
+              return Math.max(0, Math.min(27, diff))
+            })()
+            const sched = readTable('schedule')
+            sched.push({
+              id: uid('sch'), dayOffset, startMin: 9 * 60, driverId: driver.id, type: 'transfer',
+              sku: o0.containerSku, customer: `Relay leg 1 · ${o0.orderNumber}`,
+              origin: unit?.depotLocation || 'Origin depot', originAddress: '',
+              destination: `Meet point — ${o0.meetPointName}`, destinationAddress: mp?.address || '',
+              miles: o0.relayLinehaulMiles || 0, contact: 'SteelBox Co. dispatch',
+            })
+            sched.push({
+              id: uid('sch'), dayOffset, startMin: 13 * 60 + 30, driverId: leg2Driver.id, type: 'delivery',
+              sku: o0.containerSku, customer: o0.customerName || 'Customer',
+              origin: `Meet point — ${o0.meetPointName}`, originAddress: mp?.address || '',
+              destination: o0.deliveryZip ? `Customer · ${o0.deliveryZip}` : 'Customer',
+              destinationAddress: o0.deliveryAddress || '',
+              miles: o0.relayLastMiles || 0, contact: o0.customerPhone || '',
+            })
+            writeTable('schedule', sched)
+            logActivityRow(`Relay scheduled: ${driver.name} → ${o0.meetPointName} → ${leg2Driver.name} (${o0.sellerToName || 'receiving reseller'})`, o0.containerSku, o0.containerId)
+          }
+        }
         // Notify the customer their delivery is scheduled (email + opted-in SMS).
         const o = orders[idx]
         const when = o.scheduledDate ? ` on ${String(o.scheduledDate).slice(0, 10)}` : ''
@@ -1927,6 +1994,36 @@ async function handleRequest(req, res) {
     if (seg[0] === 'repairshops' && seg.length === 1 && method === 'GET') {
       if (!hasRole('admin', 'driver', 'supplier', 'shipper')) return denied(user ? 403 : 401, 'Staff access required')
       return send(res, 200, readTable('repairshops'))
+    }
+
+    // ── Meet points — public read (marketplace prices the relay), admin write ──
+    if (seg[0] === 'meetpoints') {
+      const mps = readTable('meetpoints')
+      if (seg.length === 1 && method === 'GET') {
+        return send(res, 200, hasRole('admin', 'driver') ? mps : mps.map(m2 => ({ id: m2.id, name: m2.name, zip: m2.zip, active: m2.active })))
+      }
+      if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
+      if (seg.length === 1 && method === 'POST') {
+        const body = await readBody(req)
+        if (!body.name || !/^\d{5}$/.test(String(body.zip || ''))) return send(res, 400, { message: 'name and a 5-digit zip are required' })
+        const record = { id: uid('mp'), name: body.name, address: body.address || '', zip: String(body.zip), notes: body.notes || '', active: body.active !== false }
+        mps.push(record)
+        writeTable('meetpoints', mps)
+        return send(res, 201, record)
+      }
+      const mi = mps.findIndex(m2 => m2.id === seg[1])
+      if (mi === -1) return send(res, 404, { message: 'Meet point not found' })
+      if (seg.length === 2 && method === 'PATCH') {
+        const body = await readBody(req)
+        mps[mi] = { ...mps[mi], ...body, id: mps[mi].id }
+        writeTable('meetpoints', mps)
+        return send(res, 200, mps[mi])
+      }
+      if (seg.length === 2 && method === 'DELETE') {
+        mps.splice(mi, 1)
+        writeTable('meetpoints', mps)
+        return send(res, 200, { deleted: true })
+      }
     }
 
     // ── Damage claims (sea-freight arbitration pipeline) ──

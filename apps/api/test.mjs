@@ -204,6 +204,33 @@ try {
   const denied2 = await api(`/containers/${other.id}`, { method: 'PATCH', token: supplier, body: { grade: 'D' } })
   check("supplier cannot touch another owner's unit", denied2.status === 403 || denied2.status === 401)
 
+  // ── Cross-territory relay: territory config → relay order → two legs ──
+  console.log('Territories & relay')
+  const sellers = (await api('/sellers')).body
+  const tset = await api(`/sellers/${sellers[0].id}`, { method: 'PATCH', token: admin, body: { territoryZips: '700-716,770-778' } })
+  check('territory zones saved on seller', tset.status === 200 && tset.body?.territoryZips === '700-716,770-778')
+  const mps = (await api('/meetpoints')).body
+  check('meet points seeded & public-readable', Array.isArray(mps) && mps.length >= 2 && !!mps[0].zip)
+  const relayUnit = [...containers].filter(c => c.status === 'available').slice(-3)[0]
+  const rord = await api('/orders', {
+    method: 'POST', token: admin,
+    body: {
+      containerId: relayUnit.id, containerSku: relayUnit.sku, customerName: 'Relay Buyer', customerEmail: 'relay@test.dev',
+      deliveryAddress: '9 Peachtree St, Atlanta, GA', deliveryZip: '30318', amount: relayUnit.buyPrice, saleType: 'buy',
+      crossTerritory: true, sellerToId: 'sel_demo', sellerToName: 'Demo Container Corp',
+      meetPointId: mps[0].id, meetPointName: mps[0].name,
+      relayFee: 980, relayLinehaul: 500, relayLastMile: 382, relayPlatform: 98,
+      relayLinehaulMiles: 160, relayLastMiles: 140,
+    },
+  })
+  check('relay order stores the fee split', rord.status === 201 && rord.body?.crossTerritory === true && rord.body?.relayFee === 980 && rord.body?.relayPlatform === 98)
+  const schedBefore = (await api('/schedule', { token: admin })).body.length
+  const rasg = await api(`/orders/${rord.body.id}/assign-driver`, { method: 'POST', token: admin, body: { driverId: drivers[0].id, scheduledDate: '2026-08-20' } })
+  check('relay assign-driver succeeds', rasg.status === 200 && rasg.body?.status === 'assigned')
+  const schedAfter = (await api('/schedule', { token: admin })).body
+  const legs = schedAfter.filter(x => x.sku === relayUnit.sku && String(x.destination || '').includes(mps[0].name) || (x.sku === relayUnit.sku && String(x.origin || '').includes(mps[0].name)))
+  check('two relay legs land on the schedule (transfer + delivery)', schedAfter.length === schedBefore + 2 && legs.length === 2 && legs.some(l => l.type === 'transfer') && legs.some(l => l.type === 'delivery'))
+
   // ── Reject path frees the container ──
   console.log('Reject path')
   const unit2 = containers.find(c => c.status === 'available' && c.id !== unit.id)

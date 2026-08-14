@@ -9,6 +9,8 @@ import { GradeBadge, StatusBadge, Button, Modal, Snackbar, BuildClipart, Progres
 import { ShowPasswordButton } from '../../lib/auth'
 import { useContainers, useOrders, useDrivers, useLive, useSnackbar, useAuth, useFavicon, useIsMobile } from '../../hooks'
 import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, sellers as sellersApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, customBuilds as customBuildsApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, cutoutContainer, SHOT_LABELS, RENDER_SLOT, RENDER_LABEL, EXTRA_SLOT_START, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Seller, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role, type CustomBuild, type Message, CUSTOM_STAGES, SIZE_LABEL } from '../../lib/api'
+import { meetPoints as meetPointsApi, type MeetPoint } from '../../lib/api'
+import { parseZones, zoneOverlaps } from '../../lib/territory'
 
 // Every size/type code, for the container add/edit selects.
 const SIZE_SELECT_OPTIONS = Object.entries(SIZE_LABEL) as [ContainerSize, string][]
@@ -1557,6 +1559,12 @@ export default function AdminPage() {
   const [editSeller, setEditSeller] = useState<Seller | 'new' | null>(null)
   const refetchSellers = useCallback(() => sellersApi.list().then(setSellerList).catch(() => {}), [])
   useEffect(() => { refetchSellers() }, [refetchSellers])
+  // Territories & meet points (Sellers section)
+  const [zoneDrafts, setZoneDrafts] = useState<Record<string, string>>({})
+  const [mpList, setMpList] = useState<MeetPoint[]>([])
+  const [mpForm, setMpForm] = useState({ name: '', zip: '', address: '' })
+  const refetchMeetPoints = useCallback(() => meetPointsApi.list().then(setMpList).catch(() => {}), [])
+  useEffect(() => { refetchMeetPoints() }, [refetchMeetPoints])
   const sellerName = (id?: string) => sellerList.find(x => x.id === id)?.name || (id ? id : '—')
   const refetchDepots = useCallback(() => depotsApi.list().then(setDepotList), [])
   useEffect(() => { refetchDepots().catch(() => {}) }, [refetchDepots])
@@ -3249,6 +3257,102 @@ export default function AdminPage() {
                   )
                 })}
                 {sellerList.length === 0 && <div style={{ fontSize: '13px', color: 'var(--ink3)', padding: '20px' }}>No sellers yet.</div>}
+              </div>
+
+              {/* ── Territories — each reseller owns ZIP-prefix zones ── */}
+              <div style={{ marginTop: '22px', background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', padding: '16px 18px' }}>
+                <div style={{ fontSize: '15px', fontWeight: 700 }}>Territories</div>
+                <div style={{ fontSize: '12px', color: 'var(--ink3)', margin: '2px 0 12px' }}>
+                  Each reseller owns 3-digit ZIP-prefix zones (e.g. <span style={{ fontFamily: 'var(--mono)' }}>700-705, 770-778</span>).
+                  The marketplace ZIP search resolves the buyer's territory from these, and a delivery into another reseller's
+                  territory relays through a SteelBox Co. meet point with a mileage-based fee.
+                </div>
+                {sellerList.map(sl => (
+                  <div key={sl.id} style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--div)', flexWrap: 'wrap' }}>
+                    <span style={{ width: '18px', height: '18px', borderRadius: '5px', flexShrink: 0, background: sl.brandPrimary || 'var(--primary)' }} />
+                    <span style={{ fontSize: '13px', fontWeight: 700, width: '190px' }}>{sl.name}</span>
+                    <input
+                      value={zoneDrafts[sl.id] ?? sl.territoryZips ?? ''}
+                      onChange={e => setZoneDrafts(pz => ({ ...pz, [sl.id]: e.target.value }))}
+                      placeholder="700-705, 770-778"
+                      style={{ flex: 1, minWidth: '220px', padding: '8px 11px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontFamily: 'var(--mono)', fontSize: '12px', outline: 'none' }}
+                    />
+                    <span style={{ fontSize: '11px', color: 'var(--ink3)', width: '86px' }}>{parseZones(zoneDrafts[sl.id] ?? sl.territoryZips).reduce((n, [lo, hi]) => n + (hi - lo + 1), 0)} prefixes</span>
+                    <TblBtn variant="primary" onClick={() => {
+                      sellersApi.update(sl.id, { territoryZips: (zoneDrafts[sl.id] ?? sl.territoryZips ?? '').trim() })
+                        .then(() => { toast(`${sl.name} territory saved`); refetchSellers() })
+                        .catch(e => toast(e instanceof Error ? e.message : 'Save failed'))
+                    }}>Save</TblBtn>
+                  </div>
+                ))}
+                {(() => {
+                  const overlaps = zoneOverlaps(sellerList.map(sl => ({ ...sl, territoryZips: zoneDrafts[sl.id] ?? sl.territoryZips })))
+                  return overlaps.length > 0 && (
+                    <div style={{ marginTop: '10px', background: 'var(--warning-cont)', border: '1px solid var(--warning)', borderRadius: 'var(--r8)', padding: '8px 12px', fontSize: '12px', color: '#7B4F00' }}>
+                      ⚠ Overlapping prefixes: {overlaps.slice(0, 8).map(o => `${o.prefix} (${o.names.join(' + ')})`).join(', ')}{overlaps.length > 8 ? ` +${overlaps.length - 8} more` : ''} — first match wins on the marketplace.
+                    </div>
+                  )
+                })()}
+                {/* ZIP-space map: 10×10 grid of 2-digit blocks, colored by owner */}
+                <div style={{ marginTop: '14px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.6px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '8px' }}>Coverage map — ZIP prefix space (00–99 blocks, west→east by first digit 9→0)</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '2px', maxWidth: '560px' }}>
+                    {Array.from({ length: 100 }, (_, cell) => {
+                      const row = Math.floor(cell / 10), col = cell % 10
+                      // Render west (9xx) on the left → east (0xx) on the right, so it reads like a US map.
+                      const firstDigit = 9 - col, secondDigit = row
+                      const block = firstDigit * 100 + secondDigit * 10
+                      const owners = sellerList.filter(sl => {
+                        const zones = parseZones(zoneDrafts[sl.id] ?? sl.territoryZips)
+                        return Array.from({ length: 10 }, (_, k) => block + k).some(pfx => zones.some(([lo, hi]) => pfx >= lo && pfx <= hi))
+                      })
+                      const bg = owners.length === 0 ? 'var(--surf1)' : owners.length > 1 ? 'repeating-linear-gradient(45deg,#F9A825 0 4px,#B3261E 4px 8px)' : (owners[0].brandPrimary || 'var(--primary)')
+                      return (
+                        <div key={cell} title={`ZIP ${String(block).padStart(3, '0')}–${String(block + 9).padStart(3, '0')}${owners.length ? ` · ${owners.map(o => o.name).join(' + ')}` : ' · unclaimed'}`}
+                          style={{ aspectRatio: '1', borderRadius: '3px', background: bg, border: '1px solid var(--div)', cursor: 'default' }} />
+                      )
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '8px', flexWrap: 'wrap', fontSize: '11px', color: 'var(--ink2)' }}>
+                    {sellerList.map(sl => (
+                      <span key={sl.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                        <span style={{ width: '11px', height: '11px', borderRadius: '3px', background: sl.brandPrimary || 'var(--primary)' }} />{sl.name}
+                      </span>
+                    ))}
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><span style={{ width: '11px', height: '11px', borderRadius: '3px', background: 'var(--surf1)', border: '1px solid var(--div)' }} />Unclaimed</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><span style={{ width: '11px', height: '11px', borderRadius: '3px', background: 'repeating-linear-gradient(45deg,#F9A825 0 3px,#B3261E 3px 6px)' }} />Overlap</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── SteelBox Co. meet points — cross-territory handoff yards ── */}
+              <div style={{ marginTop: '16px', background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', padding: '16px 18px' }}>
+                <div style={{ fontSize: '15px', fontWeight: 700 }}>SteelBox Co. Meet Points</div>
+                <div style={{ fontSize: '12px', color: 'var(--ink3)', margin: '2px 0 12px' }}>
+                  Platform-run handoff yards near territory borders. Cross-territory orders auto-pick the meet point that
+                  minimizes total relay miles; drivers swap the container there (leg 1 transfer + leg 2 delivery).
+                </div>
+                {mpList.map(mp2 => (
+                  <div key={mp2.id} style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--div)', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 700, minWidth: '190px' }}>🔁 {mp2.name}</span>
+                    <span style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: 'var(--ink2)' }}>{mp2.zip}</span>
+                    <span style={{ fontSize: '12px', color: 'var(--ink3)', flex: 1, minWidth: '160px' }}>{mp2.address || '—'}</span>
+                    <TblBtn onClick={() => meetPointsApi.update(mp2.id, { active: mp2.active === false }).then(refetchMeetPoints)}>{mp2.active === false ? 'Activate' : 'Deactivate'}</TblBtn>
+                    <TblBtn onClick={() => meetPointsApi.remove(mp2.id).then(refetchMeetPoints)}>Delete</TblBtn>
+                    {mp2.active === false && <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ink3)', textTransform: 'uppercase' }}>inactive</span>}
+                  </div>
+                ))}
+                {mpList.length === 0 && <div style={{ fontSize: '12px', color: 'var(--ink3)', padding: '8px 0' }}>No meet points yet — add one near a territory border.</div>}
+                <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+                  <input value={mpForm.name} onChange={e => setMpForm(f => ({ ...f, name: e.target.value }))} placeholder="Name (e.g. I-10 Baton Rouge Relay Yard)" style={{ flex: 2, minWidth: '220px', padding: '8px 11px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '12px', outline: 'none' }} />
+                  <input value={mpForm.zip} onChange={e => setMpForm(f => ({ ...f, zip: e.target.value.replace(/\D/g, '').slice(0, 5) }))} placeholder="ZIP" style={{ width: '90px', padding: '8px 11px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontFamily: 'var(--mono)', fontSize: '12px', outline: 'none' }} />
+                  <input value={mpForm.address} onChange={e => setMpForm(f => ({ ...f, address: e.target.value }))} placeholder="Street address" style={{ flex: 2, minWidth: '180px', padding: '8px 11px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '12px', outline: 'none' }} />
+                  <TblBtn variant="primary" onClick={() => {
+                    if (!mpForm.name || mpForm.zip.length !== 5) { toast('Meet point needs a name and 5-digit ZIP'); return }
+                    meetPointsApi.create(mpForm).then(() => { setMpForm({ name: '', zip: '', address: '' }); toast('Meet point added'); refetchMeetPoints() })
+                      .catch(e => toast(e instanceof Error ? e.message : 'Could not add'))
+                  }}>Add Meet Point</TblBtn>
+                </div>
               </div>
             </div>
           )}

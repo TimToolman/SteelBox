@@ -41,6 +41,7 @@ const db: Record<string, Row[]> = Object.fromEntries([
   ['shippers', snapshot.shippers],
   ['repairshops', snapshot.repairshops],
   ['claims', snapshot.claims],
+  ['meetpoints', snapshot.meetpoints],
 ].map(([k, v]) => [k as string, JSON.parse(JSON.stringify(v ?? []))]))
 
 const uid = (p: string) => `${p}_demo_${Math.random().toString(36).slice(2, 10)}`
@@ -128,6 +129,15 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
       order.driverName = d ? String(d.name) : ''
       order.scheduledDate = String(body.scheduledDate || '')
       order.status = 'assigned'
+      // Cross-territory relay: both legs land on the (session) schedule —
+      // leg 1 transfer to the meet point, leg 2 delivery by the receiving
+      // reseller's driver.
+      const ro = order as Row & { crossTerritory?: boolean; meetPointName?: string; sellerToId?: string; containerSku?: string; customerName?: string; deliveryAddress?: string; relayLinehaulMiles?: number; relayLastMiles?: number }
+      if (ro.crossTerritory && ro.meetPointName) {
+        const leg2 = db.drivers.find(x => x.active !== false && (x.sellerId || 'sel_mvp') === ro.sellerToId) ?? d
+        db.schedule.push({ id: uid('sch'), dayOffset: 1, startMin: 540, driverId: d?.id || '', type: 'transfer', sku: ro.containerSku, customer: `Relay leg 1`, origin: 'Origin depot', originAddress: '', destination: `Meet point — ${ro.meetPointName}`, destinationAddress: '', miles: ro.relayLinehaulMiles || 0, contact: 'SteelBox Co. dispatch' } as Row)
+        db.schedule.push({ id: uid('sch'), dayOffset: 1, startMin: 810, driverId: leg2?.id || '', type: 'delivery', sku: ro.containerSku, customer: ro.customerName || 'Customer', origin: `Meet point — ${ro.meetPointName}`, originAddress: '', destination: 'Customer', destinationAddress: ro.deliveryAddress || '', miles: ro.relayLastMiles || 0, contact: '' } as Row)
+      }
     }
     if (action[2] === 'delivered') { order.status = 'delivered'; order.completedAt = now }
     return ok(order)
