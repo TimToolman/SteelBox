@@ -5635,7 +5635,10 @@
    "email": "shipper@meridianlines.com",
    "phone": "(310) 555-0252",
    "active": true,
-   "createdAt": "2026-08-07T14:00:00.000Z"
+   "createdAt": "2026-08-07T14:00:00.000Z",
+   "contactName": "Kofi Mensah",
+   "address": "1 Harbor Plaza, Long Beach, CA 90802",
+   "notes": ""
   },
   {
    "id": "shp_02",
@@ -5644,7 +5647,10 @@
    "email": "claims@australshipping.com",
    "phone": "(305) 555-0263",
    "active": true,
-   "createdAt": "2026-08-07T14:00:00.000Z"
+   "createdAt": "2026-08-07T14:00:00.000Z",
+   "contactName": "Ines Duarte",
+   "address": "400 Port Blvd, Miami, FL 33132",
+   "notes": ""
   }
  ],
  "repairshops": [

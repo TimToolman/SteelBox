@@ -160,7 +160,7 @@ const SCHEMAS = {
   },
   shippers: {
     file: 'shippers.csv',
-    headers: ['id','name','line','email','phone','active','createdAt'],
+    headers: ['id','name','line','contactName','email','phone','address','notes','active','createdAt'],
     types: { active: 'boolean' },
   },
   repairshops: {
@@ -690,8 +690,8 @@ function ensureSeedClaimTables() {
   }
   if (readTable('shippers').length === 0) {
     writeTable('shippers', [
-      { id: 'shp_01', name: 'Meridian Lines', line: 'Trans-Pacific', email: 'shipper@meridianlines.com', phone: '(310) 555-0252', active: true, createdAt: new Date().toISOString() },
-      { id: 'shp_02', name: 'Austral Shipping', line: 'Gulf-Atlantic', email: 'claims@australshipping.com', phone: '(305) 555-0263', active: true, createdAt: new Date().toISOString() },
+      { id: 'shp_01', name: 'Meridian Lines', line: 'Trans-Pacific', contactName: 'Kofi Mensah', email: 'shipper@meridianlines.com', phone: '(310) 555-0252', address: '1 Harbor Plaza, Long Beach, CA 90802', notes: '', active: true, createdAt: new Date().toISOString() },
+      { id: 'shp_02', name: 'Austral Shipping', line: 'Gulf-Atlantic', contactName: 'Ines Duarte', email: 'claims@australshipping.com', phone: '(305) 555-0263', address: '400 Port Blvd, Miami, FL 33132', notes: '', active: true, createdAt: new Date().toISOString() },
     ])
     console.log('Seeded shippers (2)')
   }
@@ -2066,9 +2066,50 @@ async function handleRequest(req, res) {
       if (!hasRole('admin', 'driver', 'supplier', 'shipper')) return denied(user ? 403 : 401, 'Staff access required')
       return send(res, 200, readTable('suppliers'))
     }
-    if (seg[0] === 'shippers' && seg.length === 1 && method === 'GET') {
+    // Shipping lines: full directory CRUD in the admin portal; suppliers read
+    // it to pick the line when filing a damage claim.
+    if (seg[0] === 'shippers') {
       if (!hasRole('admin', 'driver', 'supplier', 'shipper')) return denied(user ? 403 : 401, 'Staff access required')
-      return send(res, 200, readTable('shippers'))
+      const shippers = readTable('shippers')
+      if (seg.length === 1 && method === 'GET') return send(res, 200, shippers)
+      // The directory is platform-level (like Sellers): HQ admins only.
+      if (!hasRole('admin') || tenantOf(user)) return denied(403, 'SteelBox Co. HQ access required')
+      if (seg.length === 1 && method === 'POST') {
+        const body = await readBody(req)
+        if (!body.name) return send(res, 400, { message: 'name is required' })
+        const record = {
+          id: uid('shp'), name: body.name, line: body.line || '',
+          contactName: body.contactName || '', email: body.email || '', phone: body.phone || '',
+          address: body.address || '', notes: body.notes || '',
+          active: body.active ?? true, createdAt: new Date().toISOString(),
+        }
+        shippers.push(record)
+        writeTable('shippers', shippers)
+        return send(res, 201, record)
+      }
+      const shpIdx = shippers.findIndex(x => x.id === seg[1])
+      if (shpIdx === -1) return send(res, 404, { message: 'Shipping line not found' })
+      if (seg.length === 2 && method === 'PATCH') {
+        const body = await readBody(req)
+        shippers[shpIdx] = { ...shippers[shpIdx], ...body, id: shippers[shpIdx].id }
+        writeTable('shippers', shippers)
+        // Open claims carry the line's name — keep them in sync on rename.
+        if (body.name) {
+          const claims = readTable('claims')
+          let changed = false
+          claims.forEach((c, i) => {
+            if (c.shipperId === shippers[shpIdx].id && c.shipperName !== body.name) { claims[i] = { ...c, shipperName: body.name }; changed = true }
+          })
+          if (changed) writeTable('claims', claims)
+        }
+        return send(res, 200, shippers[shpIdx])
+      }
+      // Soft delete — deactivate so claim history keeps its reference.
+      if (seg.length === 2 && method === 'DELETE') {
+        shippers[shpIdx] = { ...shippers[shpIdx], active: false }
+        writeTable('shippers', shippers)
+        return send(res, 200, { id: shippers[shpIdx].id, archived: true })
+      }
     }
     if (seg[0] === 'repairshops' && seg.length === 1 && method === 'GET') {
       if (!hasRole('admin', 'driver', 'supplier', 'shipper')) return denied(user ? 403 : 401, 'Staff access required')

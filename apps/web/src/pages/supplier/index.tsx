@@ -215,7 +215,8 @@ export default function SupplierPortalPage() {
                 </select>
                 <select value={newForm.shipperId} onChange={e => setNewForm(f => ({ ...f, shipperId: e.target.value }))} style={{ ...inp, minWidth: '190px' }}>
                   <option value="">— Shipping line —</option>
-                  {shipperList.map(sh => <option key={sh.id} value={sh.id}>{sh.name}</option>)}
+                  {/* Directory managed in Admin → Shipping Lines; deactivated carriers stay out of the picker */}
+                  {shipperList.filter(sh => sh.active !== false).map(sh => <option key={sh.id} value={sh.id}>{sh.name}{sh.line ? ` · ${sh.line}` : ''}</option>)}
                 </select>
                 <input value={newForm.vesselRef} onChange={e => setNewForm(f => ({ ...f, vesselRef: e.target.value }))} placeholder="Vessel / BOL ref" style={{ ...inp, width: '160px' }} />
                 <input value={newForm.notes} onChange={e => setNewForm(f => ({ ...f, notes: e.target.value }))} placeholder="What happened?" style={{ ...inp, flex: 1, minWidth: '200px' }} />

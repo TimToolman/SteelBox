@@ -9,7 +9,7 @@ import { GradeBadge, StatusBadge, Button, Modal, Snackbar, BuildClipart, Progres
 import { ShowPasswordButton } from '../../lib/auth'
 import { useContainers, useOrders, useDrivers, useLive, useSnackbar, useAuth, useFavicon, useIsMobile } from '../../hooks'
 import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, sellers as sellersApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, customBuilds as customBuildsApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, cutoutContainer, SHOT_LABELS, RENDER_SLOT, RENDER_LABEL, EXTRA_SLOT_START, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Seller, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role, type CustomBuild, type Message, CUSTOM_STAGES, SIZE_LABEL } from '../../lib/api'
-import { meetPoints as meetPointsApi, type MeetPoint } from '../../lib/api'
+import { meetPoints as meetPointsApi, shippersApi, type MeetPoint, type Shipper } from '../../lib/api'
 import { parseZones, zoneOverlaps } from '../../lib/territory'
 import { CoverageMap } from './CoverageMap'
 
@@ -27,7 +27,7 @@ const TRUCK_SIZES: { value: ContainerSize; label: string }[] = [
 
 // ── Types ─────────────────────────────────────────────────
 
-type AdminView = 'dashboard' | 'orders' | 'inventory' | 'schedule' | 'activity' | 'inbox' | 'drivers' | 'customers' | 'users' | 'notifications' | 'depots' | 'sellers' | 'builds'
+type AdminView = 'dashboard' | 'orders' | 'inventory' | 'schedule' | 'activity' | 'inbox' | 'drivers' | 'customers' | 'users' | 'notifications' | 'depots' | 'sellers' | 'shippinglines' | 'builds'
 
 const VIEW_TITLES: Record<AdminView, string> = {
   dashboard:     'Dashboard',
@@ -42,6 +42,7 @@ const VIEW_TITLES: Record<AdminView, string> = {
   notifications: 'Alerts',
   depots:        'Depots',
   sellers:       'Sellers',
+  shippinglines: 'Shipping Lines',
   builds:        'Custom Builds',
 }
 
@@ -864,6 +865,93 @@ function UserModal({ target, drivers, sellers, sellerId, onClose, onSaved }: {
   )
 }
 
+// ── Shipping Line Add/Edit Modal ───────────────────────────
+// The directory behind the claim form's shipping-line picker: name,
+// address, and the claims contact a supplier's paperwork goes to.
+
+function ShipperModal({ target, onClose, onSaved }: {
+  target: Shipper | 'new' | null
+  onClose: () => void
+  onSaved: (msg: string) => void
+}) {
+  const isNew = target === 'new'
+  const blank = { name: '', line: '', contactName: '', email: '', phone: '', address: '', notes: '' }
+  const [form, setForm] = useState(blank)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!target) return
+    if (target === 'new') setForm(blank)
+    else setForm({ name: target.name, line: target.line || '', contactName: target.contactName || '', email: target.email || '', phone: target.phone || '', address: target.address || '', notes: target.notes || '' })
+    setError('')
+  }, [target]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!target) return null
+
+  const save = async () => {
+    if (saving) return
+    if (!form.name.trim()) { setError('The shipping line needs a name'); return }
+    setSaving(true)
+    setError('')
+    try {
+      if (isNew) {
+        await shippersApi.create(form)
+        onSaved(`${form.name} added — it's now in the claim form's shipping-line picker`)
+      } else {
+        await shippersApi.update((target as Shipper).id, form)
+        onSaved(`${form.name} updated`)
+      }
+      onClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Save failed — please try again')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const lbl: React.CSSProperties = { display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '5px' }
+  const inp: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '13px', outline: 'none', fontFamily: 'var(--sans)', marginBottom: '12px', boxSizing: 'border-box' }
+
+  return (
+    <Modal open onClose={onClose} maxWidth={520}>
+      <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '4px' }}>{isNew ? 'Add Shipping Line' : 'Edit Shipping Line'}</h2>
+      <p style={{ fontSize: '12px', color: 'var(--ink3)', marginBottom: '18px' }}>
+        Suppliers pick from this directory when filing a sea-freight damage claim.
+      </p>
+      <label style={lbl}>Shipping line name</label>
+      <input style={inp} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Meridian Lines" />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+        <div>
+          <label style={lbl}>Trade lane / service</label>
+          <input style={inp} value={form.line} onChange={e => setForm(p => ({ ...p, line: e.target.value }))} placeholder="Trans-Pacific" />
+        </div>
+        <div>
+          <label style={lbl}>Claims contact</label>
+          <input style={inp} value={form.contactName} onChange={e => setForm(p => ({ ...p, contactName: e.target.value }))} placeholder="Kofi Mensah" />
+        </div>
+        <div>
+          <label style={lbl}>Claims email</label>
+          <input style={inp} type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="claims@line.com" />
+        </div>
+        <div>
+          <label style={lbl}>Phone</label>
+          <input style={inp} type="tel" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="(310) 555-0000" />
+        </div>
+      </div>
+      <label style={lbl}>Address</label>
+      <input style={inp} value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} placeholder="1 Harbor Plaza, Long Beach, CA 90802" />
+      <label style={lbl}>Notes (optional)</label>
+      <input style={inp} value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Files via broker; cc their adjuster on packets" />
+      {error && <div style={{ background: '#FDECEA', border: '1px solid #F5C6C0', color: '#B3261E', borderRadius: 'var(--r8)', padding: '9px 12px', fontSize: '12px', marginBottom: '10px' }}>{error}</div>}
+      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '8px' }}>
+        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button variant="primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : isNew ? 'Add Shipping Line' : 'Save Changes'}</Button>
+      </div>
+    </Modal>
+  )
+}
+
 // ── Custom Build Add/Edit Modal (Settings) ─────────────────
 
 function CustomBuildModal({ target, onClose, onSaved }: {
@@ -1589,6 +1677,11 @@ export default function AdminPage() {
   const [mpForm, setMpForm] = useState({ name: '', zip: '', address: '' })
   const refetchMeetPoints = useCallback(() => meetPointsApi.list().then(setMpList).catch(() => {}), [])
   useEffect(() => { refetchMeetPoints() }, [refetchMeetPoints])
+  // Shipping lines directory — feeds the shipping-line picker on new claims.
+  const [shipperLines, setShipperLines] = useState<Shipper[]>([])
+  const [editShipper, setEditShipper] = useState<Shipper | 'new' | null>(null)
+  const refetchShippers = useCallback(() => shippersApi.list().then(setShipperLines).catch(() => {}), [])
+  useEffect(() => { refetchShippers() }, [refetchShippers])
   const sellerName = (id?: string) => sellerList.find(x => x.id === id)?.name || (id ? id : '—')
   const refetchDepots = useCallback(() => depotsApi.list().then(setDepotList), [])
   useEffect(() => { refetchDepots().catch(() => {}) }, [refetchDepots])
@@ -1608,7 +1701,7 @@ export default function AdminPage() {
   const inScope = (sellerId?: string) => scope === 'global' || (sellerId || 'sel_mvp') === scope
   const scopeSeller = sellerList.find(x => x.id === scope)
   // The Sellers directory is platform-level — leave it when entering a tenant.
-  useEffect(() => { if (scope !== 'global' && view === 'sellers') setView('dashboard') }, [scope]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (scope !== 'global' && (view === 'sellers' || view === 'shippinglines')) setView('dashboard') }, [scope]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const containerList = containerListAll.filter(c => inScope(c.sellerId))
   const orderList = orderListAll.filter(o => inScope(o.sellerId))
@@ -2179,6 +2272,7 @@ export default function AdminPage() {
           <NavItem active={view === 'notifications'} onClick={() => go('notifications')} label="Alerts" badge={reserved.length + orderList.filter(o => !o.driverId && o.status !== 'delivered').length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M4 8A6 6 0 0 1 16 8L16 12L18 14L2 14L4 12Z" /><path d="M8 16a2 2 0 004 0" /></svg>} />
           <NavItem active={view === 'depots'} onClick={() => go('depots')} label="Depots" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2a5.5 5.5 0 0 0-5.5 5.5c0 4 5.5 10 5.5 10s5.5-6 5.5-10A5.5 5.5 0 0 0 10 2z" /><circle cx="10" cy="7.5" r="1.8" /></svg>} />
           {scope === 'global' && <NavItem active={view === 'sellers'} onClick={() => go('sellers')} label="Sellers" badge={sellerList.filter(x => x.active !== false).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7l1-4h12l1 4" /><path d="M3 7h14v10H3z" /><path d="M8 11h4" /></svg>} />}
+          {scope === 'global' && <NavItem active={view === 'shippinglines'} onClick={() => go('shippinglines')} label="Shipping Lines" badge={shipperLines.filter(x => x.active !== false).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 3v10" /><circle cx="10" cy="4.5" r="1.6" /><path d="M6.5 7h7" /><path d="M4 11c0 3.3 2.7 6 6 6s6-2.7 6-6l-2 1-2-1-2 1-2-1-2 1z" /></svg>} />}
           <NavItem active={view === 'builds'} onClick={() => go('builds')} label="Custom Builds" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5.5l2 2L7 15H5v-2z" /><path d="M11 7l2 2" /><rect x="2" y="4" width="16" height="13" rx="1.5" /></svg>} />
         </div>
 
@@ -3444,6 +3538,61 @@ export default function AdminPage() {
             </div>
           )}
 
+          {/* ── Shipping lines — the carriers claims are filed against ── */}
+          {view === 'shippinglines' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <div>
+                  <div style={{ fontSize: '15px', fontWeight: 700 }}>Shipping Lines</div>
+                  <div style={{ fontSize: '12px', color: 'var(--ink3)', marginTop: '2px' }}>
+                    {shipperLines.filter(x => x.active !== false).length} active carrier{shipperLines.filter(x => x.active !== false).length === 1 ? '' : 's'} · these names fill the shipping-line picker when a supplier files a damage claim
+                  </div>
+                </div>
+                <Button variant="primary" size="md" onClick={() => setEditShipper('new')} icon={<span>+</span>}>Add Shipping Line</Button>
+              </div>
+              <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', overflow: 'hidden' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '860px' }}>
+                    <thead><tr><Th>Shipping line</Th><Th>Trade lane</Th><Th>Claims contact</Th><Th>Address</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
+                    <tbody>
+                      {shipperLines.map(sh => (
+                        <tr key={sh.id} style={{ opacity: sh.active === false ? 0.5 : 1 }}>
+                          <Td>
+                            <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '7px' }}>⚓ {sh.name}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--ink3)', fontFamily: 'var(--mono)' }}>{sh.id}</div>
+                          </Td>
+                          <Td>{sh.line || '—'}</Td>
+                          <Td>
+                            <div>{sh.contactName || '—'}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--ink3)' }}>{sh.email || ''}{sh.email && sh.phone ? ' · ' : ''}<span style={{ fontFamily: 'var(--mono)' }}>{sh.phone || ''}</span></div>
+                          </Td>
+                          <Td>{sh.address || '—'}</Td>
+                          <Td>{sh.active === false
+                            ? <span style={{ color: 'var(--cta)', fontWeight: 600, fontSize: '11px' }}>Deactivated</span>
+                            : <span style={{ color: 'var(--green)', fontWeight: 600, fontSize: '11px' }}>Active</span>}</Td>
+                          <Td>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <TblBtn onClick={() => setEditShipper(sh)}>Edit</TblBtn>
+                              {sh.active === false ? (
+                                <TblBtn variant="success" onClick={() => shippersApi.update(sh.id, { active: true }).then(() => { toast(`${sh.name} reactivated`); refetchShippers() }).catch(e => toast(e instanceof Error ? e.message : 'Failed'))}>Reactivate</TblBtn>
+                              ) : (
+                                <TblBtn variant="danger" onClick={() => {
+                                  if (!window.confirm(`Deactivate ${sh.name}? Existing claims keep their history; the line just leaves the picker.`)) return
+                                  shippersApi.remove(sh.id).then(() => { toast(`${sh.name} deactivated`); refetchShippers() }).catch(e => toast(e instanceof Error ? e.message : 'Failed'))
+                                }}>Deactivate</TblBtn>
+                              )}
+                            </div>
+                          </Td>
+                        </tr>
+                      ))}
+                      {shipperLines.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', padding: '20px', color: 'var(--ink3)', fontSize: '13px' }}>No shipping lines yet — add the carriers your suppliers file claims against.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ── Custom Builds catalog (marketplace Custom Builds tab) ── */}
           {view === 'builds' && (
             <div>
@@ -3650,6 +3799,11 @@ export default function AdminPage() {
         target={editBuild}
         onClose={() => setEditBuild(null)}
         onSaved={(msg) => { toast(msg); refetchBuilds().catch(() => {}) }}
+      />
+      <ShipperModal
+        target={editShipper}
+        onClose={() => setEditShipper(null)}
+        onSaved={(msg) => { toast(msg); refetchShippers() }}
       />
       <DepotModal
         target={editDepot}

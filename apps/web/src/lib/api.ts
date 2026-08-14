@@ -860,6 +860,9 @@ export interface Supplier {
 
 export interface Shipper {
   id: string; name: string; line: string; email: string; phone: string
+  contactName?: string   // claims contact at the line
+  address?: string       // head office / claims department
+  notes?: string
   active: boolean; createdAt: string
 }
 
@@ -935,6 +938,13 @@ export const suppliersApi = {
 
 export const shippersApi = {
   list: () => request<Shipper[]>('/shippers'),
+  create: (data: Partial<Shipper>) =>
+    request<Shipper>('/shippers', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<Shipper>) =>
+    request<Shipper>(`/shippers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  // Deactivates (soft delete) so existing claims keep their reference.
+  remove: (id: string) =>
+    request<{ id: string; archived: true }>(`/shippers/${id}`, { method: 'DELETE' }),
 }
 
 export const repairShops = {
