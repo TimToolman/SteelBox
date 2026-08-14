@@ -329,6 +329,12 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
     }
     if (method === 'DELETE' && rid) {
       const i = rows.findIndex(x => x.id === rid)
+      // Shipping lines soft-delete (mirrors the server): claim history keeps
+      // its reference, the line just leaves the pickers.
+      if (col === 'shippers') {
+        if (i !== -1) rows[i] = { ...rows[i], active: false }
+        return ok({ id: rid, archived: true })
+      }
       if (i !== -1) rows.splice(i, 1)
       return ok({ deleted: true })
     }

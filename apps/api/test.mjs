@@ -262,6 +262,23 @@ try {
   const demoDriverIds = new Set((await api('/drivers', { token: admin })).body.filter(d => (d.sellerId || 'sel_mvp') !== 'sel_mvp').map(d => d.id))
   check('schedule hides other fleets’ jobs', tSched.every(j => !demoDriverIds.has(j.driverId)))
 
+  // ── Shipping-line directory: admin CRUD feeds the claim picker ──
+  console.log('Shipping lines')
+  const shpNew = await api('/shippers', { method: 'POST', token: admin, body: { name: 'Pacific Crown Line', line: 'Asia-Gulf', contactName: 'Mei Chen', email: 'claims@pacificcrown.com', phone: '(206) 555-0311', address: '2201 Alaskan Way, Seattle, WA 98121' } })
+  check('shipping line created with contact + address', shpNew.status === 201 && shpNew.body?.contactName === 'Mei Chen' && shpNew.body?.address.includes('Seattle'))
+  check('new line appears in the picker list', (await api('/shippers', { token: admin })).body.some(s => s.name === 'Pacific Crown Line'))
+  const clUnit = containers.find(c => c.status === 'available' && c.id !== unit.id)
+  const clm = await api('/claims', { method: 'POST', token: admin, body: { containerId: clUnit.id, supplierId: 'sup_01', shipperId: shpNew.body.id, vesselRef: 'PCL-778' } })
+  check('claim against the new line resolves its name', clm.status === 201 && clm.body?.shipperName === 'Pacific Crown Line')
+  await api(`/shippers/${shpNew.body.id}`, { method: 'PATCH', token: admin, body: { name: 'Pacific Crown Lines' } })
+  const clmAfter = (await api('/claims', { token: admin })).body.find(c => c.id === clm.body.id)
+  check('rename cascades to open claims', clmAfter?.shipperName === 'Pacific Crown Lines')
+  const shpDel = await api(`/shippers/${shpNew.body.id}`, { method: 'DELETE', token: admin })
+  const shpAfter = (await api('/shippers', { token: admin })).body.find(s => s.id === shpNew.body.id)
+  check('deactivate is a soft delete (history intact)', shpDel.status === 200 && shpAfter?.active === false)
+  const shpForbidden = await api('/shippers', { method: 'POST', token: mvpAdmin, body: { name: 'Rogue Line' } })
+  check('reseller admin cannot edit the directory', shpForbidden.status === 403)
+
   // ── Reject path frees the container ──
   console.log('Reject path')
   const unit2 = containers.find(c => c.status === 'available' && c.id !== unit.id)
