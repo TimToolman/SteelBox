@@ -193,8 +193,8 @@ const SCHEMAS = {
   // driverId links driver accounts to drivers.csv, customerId links buyers to customers.csv.
   users: {
     file: 'users.csv',
-    headers: ['id','email','passwordHash','role','name','phone','driverId','customerId','phoneVerified','active','createdAt','sellerId','supplierId','shipperId','digestFreq','lastDigestAt','lastLoginAt','roles'],
-    types: { phoneVerified: 'boolean', active: 'boolean', roles: 'array' },
+    headers: ['id','email','passwordHash','role','name','phone','driverId','customerId','phoneVerified','active','createdAt','sellerId','supplierId','shipperId','digestFreq','lastDigestAt','lastLoginAt','roles','signupPendingAt'],
+    types: { phoneVerified: 'boolean', active: 'boolean', roles: 'array', signupPendingAt: 'stringOrNull' },
   },
   // Outbound email + SMS log. In dev nothing actually leaves the machine —
   // every message the system "sends" is recorded here (admin portal shows it).
@@ -461,6 +461,8 @@ function currentUser(req) {
   const id = verifyToken(token)
   if (!id) return null
   const u = readTable('users').find(x => x.id === id && x.active !== false)
+  // Sign-ups that never entered their verification code have no API access.
+  if (u && u.signupPendingAt) return null
   return u || null
 }
 
@@ -498,7 +500,7 @@ function ensureSeedUsers() {
   ensure('admin@mvpcontainer.com', { role: 'admin', name: 'Marie Landry', sellerId: 'sel_mvp' })
   ensure('admin@democontainercorp.com', { role: 'admin', name: 'Dana Whitfield', sellerId: 'sel_demo' })
   // Damage-claim personas: the container owner and the shipping line.
-  ensure('supplier@oceanbox.co', { role: 'supplier', name: 'Dana Reyes', supplierId: 'sup_01', roles: ['marketplace', 'supplier'] })
+  ensure('supplier@oceanbox.com', { role: 'supplier', name: 'Dana Reyes', supplierId: 'sup_01', roles: ['marketplace', 'supplier'] })
   ensure('shipper@meridianlines.com', { role: 'shipper', name: 'Kofi Mensah', shipperId: 'shp_01', roles: ['marketplace', 'shipper'] })
   for (const d of readTable('drivers')) {
     if (d.active === false) continue
@@ -704,7 +706,7 @@ function notifyClaimParty(link, subject, body) {
 function ensureSeedClaimTables() {
   if (readTable('suppliers').length === 0) {
     writeTable('suppliers', [
-      { id: 'sup_01', name: 'OceanBox Supply Co', contactName: 'Dana Reyes', email: 'supplier@oceanbox.co', phone: '(504) 555-0230', active: true, createdAt: new Date().toISOString() },
+      { id: 'sup_01', name: 'OceanBox Supply Co', contactName: 'Dana Reyes', email: 'supplier@oceanbox.com', phone: '(504) 555-0230', active: true, createdAt: new Date().toISOString() },
       { id: 'sup_02', name: 'Gulf Container Traders', contactName: 'Marcus Webb', email: 'ops@gulfcontainer.co', phone: '(713) 555-0241', active: true, createdAt: new Date().toISOString() },
     ])
     console.log('Seeded suppliers (2)')
@@ -981,6 +983,15 @@ async function handleRequest(req, res) {
       }
       // Anyone still on the seeded dev password must set a real one.
       const mustChangePassword = String(password) === SEED_PASSWORD
+      // Sign-ups that never finished verification complete it here: correct
+      // password → a fresh code and the same verify step, not a session.
+      if (u.signupPendingAt) {
+        const code = String(randomInt(100000, 1000000))
+        loginCodes.set(u.id, { code, mustChangePassword: false, expires: Date.now() + AUTH_CODE_TTL })
+        queueMessage('email', u.email, 'Verify your MVP Container account',
+          `Your verification code is ${code}. Enter it to finish creating your account.`, 'user', u.id)
+        return send(res, 200, { twoFaRequired: true, pendingToken: signPendingToken(u.id), ...(smtpConfigured() ? {} : { devCode: code }) })
+      }
       // Admin logins take a second factor: a 6-digit code emailed to the
       // account address, entered against a short-lived pending token.
       // ADMIN_2FA=off skips the code step (used while email delivery is
@@ -1017,8 +1028,15 @@ async function handleRequest(req, res) {
       if (!rec || Date.now() > rec.expires) return send(res, 400, { message: 'Code expired — sign in again to get a new one' })
       if (String(code || '').trim() !== rec.code) return send(res, 400, { message: 'Incorrect code — check the email and try again' })
       loginCodes.delete(uid_)
-      const u = readTable('users').find(x => x.id === uid_ && x.active !== false)
-      if (!u) return send(res, 401, { message: 'Account not found' })
+      const users = readTable('users')
+      const ui = users.findIndex(x => x.id === uid_ && x.active !== false)
+      if (ui === -1) return send(res, 401, { message: 'Account not found' })
+      // A verified code completes a pending sign-up — the account goes live.
+      if (users[ui].signupPendingAt) {
+        users[ui] = { ...users[ui], signupPendingAt: null, lastLoginAt: new Date().toISOString() }
+        writeTable('users', users)
+      }
+      const u = users[ui]
       return send(res, 200, { token: signToken(u.id), user: { ...publicUser(u), mustChangePassword: rec.mustChangePassword } })
     }
 
@@ -1076,6 +1094,12 @@ async function handleRequest(req, res) {
       const email = String(body.email || '').trim().toLowerCase()
       if (!/^\S+@\S+\.\S+$/.test(email)) return send(res, 400, { message: 'A valid email is required' })
       if (!body.name || !String(body.name).trim()) return send(res, 400, { message: 'Name is required' })
+      // Unknown sign-ups must leave a real profile: name AND a mobile number,
+      // then verify a 6-digit emailed code before the session exists. Fraud
+      // screening beyond that stays manual for now (the order-review call).
+      if (String(body.phone || '').replace(/\D/g, '').length < 10) {
+        return send(res, 400, { message: 'A mobile number is required to create an account' })
+      }
       if (!body.password || String(body.password).length < 8) return send(res, 400, { message: 'Password must be at least 8 characters' })
       const users = readTable('users')
       if (users.some(u => (u.email || '').toLowerCase() === email)) {
@@ -1086,14 +1110,17 @@ async function handleRequest(req, res) {
         id: uid('usr'), email, passwordHash: hashPassword(body.password),
         role: 'customer', name: String(body.name).trim(), phone: body.phone || '',
         driverId: '', customerId, phoneVerified: false, active: true,
-        createdAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(), roles: ['marketplace'],
+        signupPendingAt: new Date().toISOString(),
       }
       users.push(rec)
       writeTable('users', users)
-      queueMessage('email', email, 'Welcome to MVP Container',
-        `Hi ${rec.name}, your MVP Container account is ready. Browse containers and order any time — you'll verify your mobile number at checkout.`,
+      const code = String(randomInt(100000, 1000000))
+      loginCodes.set(rec.id, { code, mustChangePassword: false, expires: Date.now() + AUTH_CODE_TTL })
+      queueMessage('email', email, 'Verify your MVP Container account',
+        `Hi ${rec.name}, your verification code is ${code}. Enter it on the sign-up screen to activate your account.`,
         'user', rec.id)
-      return send(res, 201, { token: signToken(rec.id), user: publicUser(rec) })
+      return send(res, 200, { twoFaRequired: true, pendingToken: signPendingToken(rec.id), ...(smtpConfigured() ? {} : { devCode: code }) })
     }
 
     if (path === '/auth/me' && method === 'PATCH') {

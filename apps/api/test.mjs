@@ -93,11 +93,18 @@ try {
   const l3 = await api('/auth/login', { method: 'POST', body: { email: 'tgmoore@gmail.com', password: 'a-real-password-1' } })
   check('new password logs in (2FA step)', l3.status === 200 && l3.body?.twoFaRequired === true)
 
-  // ── Customer register + password reset ──
+  // ── Customer register: profile + verification required up front ──
   console.log('Customer auth')
+  const regNoPhone = await api('/auth/register', { method: 'POST', body: { name: 'No Phone', email: 'nophone@test.dev', password: 'buyerpass1' } })
+  check('register requires a mobile number', regNoPhone.status === 400)
   const reg = await api('/auth/register', { method: 'POST', body: { name: 'Test Buyer', email: 'buyer@test.dev', password: 'buyerpass1', phone: '5045550111' } })
-  check('customer registers (no 2FA step)', reg.status === 201 && !!reg.body?.token)
-  const customer = reg.body.token
+  check('register returns a verification step, not a session', reg.status === 200 && reg.body?.twoFaRequired === true && !!reg.body?.devCode)
+  const early = await api('/auth/login', { method: 'POST', body: { email: 'buyer@test.dev', password: 'buyerpass1' } })
+  check('login before verifying re-issues the code step', early.status === 200 && early.body?.twoFaRequired === true)
+  const regV = await api('/auth/login/verify', { method: 'POST', body: { pendingToken: early.body.pendingToken, code: early.body.devCode } })
+  check('verification code activates the account', regV.status === 200 && !!regV.body?.token)
+  const customer = regV.body.token
+  check('activated account has API access', (await api('/auth/me', { token: customer })).status === 200)
   const forgot = await api('/auth/forgot', { method: 'POST', body: { email: 'buyer@test.dev' } })
   check('forgot returns dev code', forgot.status === 200 && !!forgot.body?.devCode)
   const reset = await api('/auth/reset', { method: 'POST', body: { email: 'buyer@test.dev', code: forgot.body.devCode, password: 'buyerpass2' } })
@@ -156,7 +163,7 @@ try {
 
   // ── Damage-claim pipeline: supplier → inspection → estimate → shipper → sell as damaged ──
   console.log('Damage claims')
-  const supLogin = await api('/auth/login', { method: 'POST', body: { email: 'supplier@oceanbox.co', password: 'test1234' } })
+  const supLogin = await api('/auth/login', { method: 'POST', body: { email: 'supplier@oceanbox.com', password: 'test1234' } })
   check('supplier signs in', supLogin.status === 200 && !!supLogin.body?.token)
   const supplier = supLogin.body.token
   const shpLogin = await api('/auth/login', { method: 'POST', body: { email: 'shipper@meridianlines.com', password: 'test1234' } })

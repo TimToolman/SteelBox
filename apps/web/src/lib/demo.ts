@@ -61,18 +61,25 @@ function demoUser(overrides: Partial<AuthUser> = {}): AuthUser {
 
 // The snapshot's users table decides who's who: the seeded admin email gets
 // the admin portal, driver emails get the field app, everyone else shops.
-function accountFor(email: string): Partial<AuthUser> {
+// Unknown emails do NOT get a session — new visitors go through Create an
+// account (profile + code), mirroring the API server. Returns null when the
+// email matches no seeded or session-created account.
+function accountFor(email: string): Partial<AuthUser> | null {
   let norm = String(email || '').trim().toLowerCase()
   // Demo-only extra account: the container adjuster role — lands in the
   // field app with access to the AI condition-grading flow.
   if (norm === 'adjuster@mvpcontainer.com') return { email: norm, role: 'adjuster', name: 'Container Adjuster' }
-  // Forgive the near-miss everyone types for the seeded supplier (.com → .co)
-  // — otherwise the typo silently signs in as a fresh customer with no
-  // portal tabs, which reads as a bug during demos.
-  if (norm === 'supplier@oceanbox.com') norm = 'supplier@oceanbox.co'
+  // The walk-up demo shopper from the tester guide.
+  if (norm === 'demo@mvpcontainers.com') return { email: norm, role: 'customer', name: 'Demo Customer' }
+  // Forgive the near-miss for the seeded supplier (.co → .com rename).
+  if (norm === 'supplier@oceanbox.co') norm = 'supplier@oceanbox.com'
   const acct = db.users.find(u => String(u.email || '').toLowerCase() === norm && u.active !== false)
-  return acct ? (acct as unknown as Partial<AuthUser>) : { email: norm || 'demo@mvpcontainers.com' }
+  return acct ? (acct as unknown as Partial<AuthUser>) : null
 }
+
+// Sign-ups awaiting their verification code (demo code: 123456). The account
+// only lands in db.users once the code is entered.
+const pendingSignups = new Map<string, Row>()
 
 function signIn(overrides: Partial<AuthUser>): { token: string; user: AuthUser } {
   const user = demoUser(overrides)
@@ -168,6 +175,9 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
   // ── Auth — roles come from the snapshot users table ──
   if (method === 'POST' && route === '/auth/login') {
     const acct = accountFor(String(body.email || ''))
+    // New visitors must leave a profile + verify a code first — no silent
+    // walk-in sessions for unknown emails (mirrors the API server).
+    if (!acct) throw new Error(`No account found for ${String(body.email || '').trim()} — choose “Create an account” to sign up.`)
     // The 'marketplace' grant is the master switch — removing it in admin
     // blocks the account from signing in at all (mirrors the API server).
     // An empty list means an admin removed every grant this session — that
@@ -179,9 +189,16 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
     return ok(signIn(acct))
   }
   if (method === 'POST' && route === '/auth/register') {
-    const rec = { id: uid('usr'), email: String(body.email || '').toLowerCase(), role: 'customer', name: String(body.name || 'Demo Customer'), phone: String(body.phone || ''), driverId: '', customerId: '', phoneVerified: false, active: true, createdAt: new Date().toISOString(), roles: ['marketplace'] }
-    db.users.push(rec as Row)
-    return ok(signIn(rec as unknown as Partial<AuthUser>))
+    const email = String(body.email || '').trim().toLowerCase()
+    if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error('A valid email is required')
+    if (!String(body.name || '').trim()) throw new Error('Name is required')
+    if (String(body.phone || '').replace(/\D/g, '').length < 10) throw new Error('A mobile number is required to create an account')
+    if (db.users.some(u => String(u.email || '').toLowerCase() === email)) throw new Error('An account with that email already exists — sign in instead')
+    // Profile captured; the account activates only after the code step.
+    const rec = { id: uid('usr'), email, role: 'customer', name: String(body.name).trim(), phone: String(body.phone || ''), driverId: '', customerId: '', phoneVerified: false, active: true, createdAt: new Date().toISOString(), roles: ['marketplace'] }
+    const pendingToken = uid('pend')
+    pendingSignups.set(pendingToken, rec as Row)
+    return ok({ twoFaRequired: true, pendingToken, devCode: '123456' })
   }
   if (method === 'GET' && route === '/auth/me') {
     const u = storedUser()
@@ -189,6 +206,13 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
     return ok(u)
   }
   if (method === 'POST' && route === '/auth/login/verify') {
+    const pend = pendingSignups.get(String(body.pendingToken || ''))
+    if (pend) {
+      if (String(body.code || '').trim() !== '123456') throw new Error('Incorrect code — the demo verification code is 123456')
+      pendingSignups.delete(String(body.pendingToken))
+      db.users.push(pend)
+      return ok(signIn(pend as unknown as Partial<AuthUser>))
+    }
     return ok({ token: DEMO_TOKEN, user: storedUser() ?? demoUser() })
   }
   if (method === 'POST' && route === '/auth/forgot') return ok({ sent: true, devCode: '123456' })
