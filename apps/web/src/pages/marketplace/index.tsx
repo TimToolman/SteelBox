@@ -72,12 +72,10 @@ export default function MarketplacePage() {
     return t === 'rent' || t === 'custom' || t === 'bulk' || t === 'insights' ? t : 'buy'
   })
   const ALL_SIZES = SIZE_OPTIONS.map(([v]) => v)
-  // Top-level gate: shoppers first pick New or Used ('all' = grouped view);
-  // the remaining filters only appear once a condition is chosen.
-  const [condFilter, setCondFilter] = useState<'all' | ContainerCondition>(() => {
-    const c = qp('cond')
-    return c === 'new' || c === 'used' ? c : 'all'
-  })
+  // Used-only launch: the marketplace sells pre-owned stock for now, so the
+  // condition gate is pinned to 'used' and the New/All controls are hidden.
+  // The plumbing for 'new'/'all' stays for when factory stock returns.
+  const [condFilter, setCondFilter] = useState<'all' | ContainerCondition>('used')
   // Select-pill semantics (matches the supplier/shipper rails): an EMPTY
   // selection means "everything" — chips only narrow.
   const [sizeFilters, setSizeFilters] = useState<Set<ContainerSize>>(() => {
@@ -470,81 +468,15 @@ export default function MarketplacePage() {
             : { width: 'var(--sb-w)', flexShrink: 0, borderRight: '1px solid var(--div)', padding: '14px 10px', position: 'sticky', top: 'var(--nav-h)', height: 'calc(100vh - var(--nav-h))', overflowY: 'auto', background: 'var(--surf-w)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.4px' }}>Filters</span>
-              <button onClick={() => { setCondFilter('all'); setSizeFilters(new Set()); setGradeFilters(new Set()); setColorSel(null); setArea(null); setAreaZip(''); setGeoHits(null); setGeoMiss(false) }} style={{ background: 'none', border: 'none', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>Reset</button>
+              <button onClick={() => { setCondFilter('used'); setSizeFilters(new Set()); setGradeFilters(new Set()); setColorSel(null); setArea(null); setAreaZip(''); setGeoHits(null); setGeoMiss(false) }} style={{ background: 'none', border: 'none', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>Reset</button>
             </div>
 
-            {/* Condition gate — pick New or Used first; sub-filters follow */}
-            <div style={{ marginBottom: '10px' }}>
-              <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Condition</span>
-              <div style={{ display: 'flex', gap: '5px' }}>
-                {([['all', 'All'], ['new', 'New'], ['used', 'Used']] as ['all' | ContainerCondition, string][]).map(([val, label]) => (
-                  <button key={val} onClick={() => setCondFilter(val)} style={{
-                    flex: 1, padding: '7px 4px', borderRadius: 'var(--r8)', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--sans)',
-                    border: `1.5px solid ${condFilter === val ? 'var(--primary)' : 'var(--div)'}`,
-                    background: condFilter === val ? 'var(--primary)' : 'var(--surf-w)',
-                    color: condFilter === val ? '#fff' : 'var(--ink2)',
-                  }}>
-                    {label}{val !== 'all' && <span style={{ fontSize: '10px', fontWeight: 600, opacity: 0.75 }}> {countByCond(val)}</span>}
-                  </button>
-                ))}
-              </div>
-              {condFilter === 'all' && (
-                <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '6px', lineHeight: 1.45 }}>Choose New or Used to unlock size, {`condition & color`} filters.</div>
-              )}
-            </div>
-
-            {/* Delivery area — the customer tells us where the container is
-                going; we resolve their ZIP to a delivery market and show only
-                the inventory serviced by the reseller(s) in that geography. */}
-            <div style={{ marginBottom: '10px' }}>
-              <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Where do you need a container?</span>
-              <input
-                value={areaZip}
-                inputMode="numeric"
-                maxLength={5}
-                placeholder="Enter delivery ZIP"
-                onChange={e => setAreaZip(e.target.value.replace(/\D/g, '').slice(0, 5))}
-                style={{ width: '100%', padding: '9px 11px', border: `1.5px solid ${geoHits ? 'var(--primary)' : 'var(--div)'}`, borderRadius: 'var(--r8)', fontSize: '13px', fontFamily: 'var(--mono)', letterSpacing: '1px', outline: 'none', boxSizing: 'border-box' }}
-              />
-              {geoHits && (
-                <div style={{ fontSize: '11px', color: 'var(--green)', fontWeight: 600, marginTop: '6px', lineHeight: 1.5 }}>
-                  ✓ Serviced by {areaSellers.join(' & ')}
-                  {geoHits.map(h => (
-                    <div key={h.depot.id} style={{ color: 'var(--ink3)', fontWeight: 400 }}>
-                      {h.depot.name} · {h.miles} mi away
-                    </div>
-                  ))}
-                </div>
-              )}
-              {geoMiss && (
-                <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '6px', lineHeight: 1.45 }}>
-                  No seller's service area covers {areaZip} yet — showing every area. Call us and we'll quote it anyway.
-                </div>
-              )}
-              {!geoHits && !geoMiss && area && (
-                <div style={{ fontSize: '11px', color: 'var(--green)', fontWeight: 600, marginTop: '6px', lineHeight: 1.45 }}>
-                  ✓ {area}{areaSellers.length > 0 && <> — serviced by {areaSellers.join(' & ')}</>}
-                </div>
-              )}
-              <select
-                value={area ?? ''}
-                onChange={e => { setArea(e.target.value || null); setAreaZip(''); setGeoHits(null); setGeoMiss(false) }}
-                style={{ width: '100%', marginTop: '7px', padding: '8px 10px', borderRadius: 'var(--r8)', border: '1.5px solid var(--div)', background: 'var(--surf-w)', fontSize: '12px', cursor: 'pointer', outline: 'none', fontFamily: 'var(--sans)' }}
-              >
-                <option value="">All areas</option>
-                {areaMarkets.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-
-            <hr style={{ border: 'none', borderTop: '1px solid var(--div)', margin: '8px 0' }} />
-
-            {/* Sort */}
+            {/* Sort — first, per merchandising: order matters before narrowing */}
             <div style={{ marginBottom: '10px' }}>
               <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Sort By</span>
               <select value={sort} onChange={e => setSort(e.target.value as SortKey)} style={{ width: '100%', padding: '8px 10px', borderRadius: 'var(--r8)', border: '1.5px solid var(--div)', background: 'var(--surf-w)', fontSize: '12px', cursor: 'pointer', outline: 'none', fontFamily: 'var(--sans)' }}>
                 <option value="price-asc">Price: Low → High</option>
                 <option value="price-desc">Price: High → Low</option>
-                <option value="new-first">New → Used</option>
                 <option value="condition">Best Condition First</option>
                 <option value="newest">Newest Listed</option>
               </select>
@@ -617,6 +549,52 @@ export default function MarketplacePage() {
                 </div>
               </>
             )}
+
+            <hr style={{ border: 'none', borderTop: '1px solid var(--div)', margin: '8px 0' }} />
+
+            {/* Delivery area — last, after the unit is narrowed down: the
+                customer tells us where the container is going; we resolve
+                their ZIP to a delivery market and show only inventory
+                serviced by the reseller(s) in that geography. */}
+            <div style={{ marginBottom: '10px' }}>
+              <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '5px' }}>Where do you need a container?</span>
+              <input
+                value={areaZip}
+                inputMode="numeric"
+                maxLength={5}
+                placeholder="Enter delivery ZIP"
+                onChange={e => setAreaZip(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                style={{ width: '100%', padding: '9px 11px', border: `1.5px solid ${geoHits ? 'var(--primary)' : 'var(--div)'}`, borderRadius: 'var(--r8)', fontSize: '13px', fontFamily: 'var(--mono)', letterSpacing: '1px', outline: 'none', boxSizing: 'border-box' }}
+              />
+              {geoHits && (
+                <div style={{ fontSize: '11px', color: 'var(--green)', fontWeight: 600, marginTop: '6px', lineHeight: 1.5 }}>
+                  ✓ Serviced by {areaSellers.join(' & ')}
+                  {geoHits.map(h => (
+                    <div key={h.depot.id} style={{ color: 'var(--ink3)', fontWeight: 400 }}>
+                      {h.depot.name} · {h.miles} mi away
+                    </div>
+                  ))}
+                </div>
+              )}
+              {geoMiss && (
+                <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '6px', lineHeight: 1.45 }}>
+                  No seller's service area covers {areaZip} yet — showing every area. Call us and we'll quote it anyway.
+                </div>
+              )}
+              {!geoHits && !geoMiss && area && (
+                <div style={{ fontSize: '11px', color: 'var(--green)', fontWeight: 600, marginTop: '6px', lineHeight: 1.45 }}>
+                  ✓ {area}{areaSellers.length > 0 && <> — serviced by {areaSellers.join(' & ')}</>}
+                </div>
+              )}
+              <select
+                value={area ?? ''}
+                onChange={e => { setArea(e.target.value || null); setAreaZip(''); setGeoHits(null); setGeoMiss(false) }}
+                style={{ width: '100%', marginTop: '7px', padding: '8px 10px', borderRadius: 'var(--r8)', border: '1.5px solid var(--div)', background: 'var(--surf-w)', fontSize: '12px', cursor: 'pointer', outline: 'none', fontFamily: 'var(--sans)' }}
+              >
+                <option value="">All areas</option>
+                {areaMarkets.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
           </aside>
 
           {/* Grid area */}
