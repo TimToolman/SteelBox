@@ -186,9 +186,11 @@ function Hero({ tenant }: { tenant: Tenant }) {
     <section className={`ld-hero ld-hero--portal${collapsed ? ' ld-hero--collapsed' : ''}`}>
       <img className="ld-hero-bgimg" src={heroImg()} alt="" aria-hidden="true" />
       <div className="ld-hero-inner">
-        <h1>See YOUR Container. Know YOUR Price. Track YOUR delivery.</h1>
+        <h1>Pick It. See It. Price It. Track It.</h1>
         <p className="ld-hero-sub">
-          Every container on our marketplace is field-inspected, photo-documented, and priced to your ZIP — no "calling," no mystery, no friction.
+          Pick your exact container — then see its real photos and AI-verified condition grade,
+          price it all-in to your ZIP before you commit, and track it to your site in 3–5 days.
+          No stock photos, no call-for-quote, no mystery.
         </p>
         <form className="ld-searchbar" onSubmit={submit}>
           <label htmlFor="hero-zip" style={{ position: 'absolute', left: '-9999px' }}>Delivery ZIP code</label>
@@ -212,8 +214,10 @@ function Hero({ tenant }: { tenant: Tenant }) {
           </a>
         </div>
         <div className="ld-hero-points">
-          <span>Photo inspected</span>
-          <span>3–5 day delivery</span>
+          <span>Your exact unit</span>
+          <span>Photos + AI grade</span>
+          <span>All-in ZIP price</span>
+          <span>Tracked 3–5 day delivery</span>
         </div>
         <p className="ld-hero-tagline">Grading performed by Machine Learning / AI technology</p>
       </div>
