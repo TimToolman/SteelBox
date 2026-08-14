@@ -267,11 +267,47 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
     return ok(c)
   }
 
+  // Reseller-admin tenancy (mirrors the API server): an admin signed in with
+  // users.sellerId only ever receives their own company's rows. The blank-
+  // sellerId account is SteelBox Co. HQ and sees everything.
+  const tenantScope = (col: string, rows: Row[]): Row[] => {
+    const u = storedUser()
+    const sid = u && u.role === 'admin' && u.sellerId ? u.sellerId : null
+    if (!sid) return rows
+    const sellerOf = (x?: Row) => String(x?.sellerId || 'sel_mvp')
+    const myDrivers = new Set(db.drivers.filter(d => sellerOf(d) === sid).map(d => d.id))
+    const orderHit = (custId?: unknown, email?: unknown) => db.orders.some(o => sellerOf(o) === sid &&
+      ((custId && o.customerId === custId) || (email && String(o.customerEmail || '').toLowerCase() === String(email).toLowerCase())))
+    switch (col) {
+      case 'orders': return rows.filter(o => sellerOf(o) === sid)
+      case 'drivers': return rows.filter(d => sellerOf(d) === sid)
+      case 'depots': return rows.filter(d => sellerOf(d) === sid)
+      case 'customers': return rows.filter(c => c.sellerId ? c.sellerId === sid : orderHit(c.id, c.email))
+      case 'users': return rows.filter(u2 => {
+        if (u2.sellerId) return u2.sellerId === sid
+        if (u2.driverId) return myDrivers.has(String(u2.driverId))
+        if (u2.customerId || u2.role === 'customer') return orderHit(u2.customerId, u2.email)
+        return false
+      })
+      case 'schedule': return rows.filter(j => {
+        const drv = db.drivers.find(d => d.id === j.driverId)
+        if (drv) return sellerOf(drv) === sid
+        const dep = db.depots.find(d => d.name === j.origin || d.name === j.destination)
+        return dep ? sellerOf(dep) === sid : true
+      })
+      case 'activity': return rows.filter(e => {
+        const c = db.containers.find(x => x.id === e.containerId || x.sku === e.sku)
+        return c ? sellerOf(c) === sid : false
+      })
+      default: return rows
+    }
+  }
+
   // ── Generic collection CRUD — covers the admin & field portals ──
   const [, col, rid, extra] = route.split('/')
   if (col && !extra && col in db) {
     const rows = db[col]
-    if (method === 'GET' && !rid) return ok(rows)
+    if (method === 'GET' && !rid) return ok(tenantScope(col, rows))
     if (method === 'GET' && rid) {
       const r = rows.find(x => x.id === rid)
       if (!r) throw new Error('Not found')

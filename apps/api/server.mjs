@@ -149,7 +149,7 @@ const SCHEMAS = {
   // Customer master list — CRUD in the admin portal; referenced by orders + schedule.
   customers: {
     file: 'customers.csv',
-    headers: ['id','name','company','email','phone','address','city','state','zip','notes','active','createdAt','notifySms','notifyEmail'],
+    headers: ['id','name','company','email','phone','address','city','state','zip','notes','active','createdAt','notifySms','notifyEmail','sellerId'],
     // notifyEmail is always true (email is mandatory); notifySms is the customer's opt-in.
     types: { active: 'boolean', notifySms: 'boolean', notifyEmail: 'boolean' },
   },
@@ -471,6 +471,11 @@ function ensureSeedUsers() {
     console.log(`Seeded ${fields.role} account: ${email} / test1234`)
   }
   ensure('tgmoore@gmail.com', { role: 'admin', name: 'Tim Moore' })
+  // Reseller admins — every reseller gets at least one admin of its own,
+  // locked to that tenant (users.sellerId). The blank-sellerId account above
+  // is SteelBox Co. HQ, which can spoof any tenant.
+  ensure('admin@mvpcontainer.com', { role: 'admin', name: 'Marie Landry', sellerId: 'sel_mvp' })
+  ensure('admin@democontainercorp.com', { role: 'admin', name: 'Dana Whitfield', sellerId: 'sel_demo' })
   // Damage-claim personas: the container owner and the shipping line.
   ensure('supplier@oceanbox.co', { role: 'supplier', name: 'Dana Reyes', supplierId: 'sup_01' })
   ensure('shipper@meridianlines.com', { role: 'shipper', name: 'Kofi Mensah', shipperId: 'shp_01' })
@@ -521,6 +526,19 @@ function ensureSeedSellers() {
     if (!d.serviceRadiusMiles) { d.serviceRadiusMiles = 150; changed = true }
   }
   if (changed) writeTable('depots', depots)
+  // Territory defaults — the Gulf/Southeast corridor the pilot runs on:
+  // MVP Container holds Louisiana + Houston + Atlanta; Demo Container Corp
+  // holds the Mid-Atlantic plus the Mobile→Nashville corridor (AL + middle TN).
+  const TERRITORY_DEFAULTS = {
+    sel_mvp: '700-716,770-778,300-312,398-399',
+    sel_demo: '206-219,220-246,270-289,320-339,350-374',
+  }
+  const sellers2 = readTable('sellers')
+  changed = false
+  for (const s of sellers2) {
+    if (!s.territoryZips && TERRITORY_DEFAULTS[s.id]) { s.territoryZips = TERRITORY_DEFAULTS[s.id]; changed = true }
+  }
+  if (changed) writeTable('sellers', sellers2)
   const drivers = readTable('drivers')
   changed = false
   for (const dr of drivers) {
@@ -554,6 +572,38 @@ function withSeller(containers) {
     const seller = sellerById.get(depotByName.get(c.depotLocation)?.sellerId) || sellerById.get('sel_mvp')
     return { ...c, sellerId: seller?.id || '', sellerName: seller?.name || '' }
   })
+}
+
+// ── Reseller-admin tenancy ────────────────────────────────
+// The blank-sellerId admin is SteelBox Co. HQ — it can spoof any tenant.
+// An admin WITH users.sellerId is a reseller's own admin: every list the
+// portal reads (orders, drivers, users, customers, schedule, activity) is
+// filtered here so their access never leaves their company, regardless of
+// what the client asks for.
+function tenantOf(user) {
+  return user && user.role === 'admin' && user.sellerId ? user.sellerId : null
+}
+// Which reseller does an account belong to? Staff carry sellerId directly,
+// driver logins follow their driver's fleet, customer accounts belong to
+// every seller they've ordered from.
+function userBelongsToSeller(u, sid) {
+  if (u.sellerId) return u.sellerId === sid
+  if (u.driverId) {
+    const drv = readTable('drivers').find(d => d.id === u.driverId)
+    return (drv?.sellerId || 'sel_mvp') === sid
+  }
+  if (u.customerId || u.role === 'customer') {
+    const email = (u.email || '').toLowerCase()
+    return readTable('orders').some(o => (o.sellerId || 'sel_mvp') === sid &&
+      ((u.customerId && o.customerId === u.customerId) || (o.customerEmail || '').toLowerCase() === email))
+  }
+  return false // platform HQ staff, suppliers, shippers — global-only
+}
+function customerBelongsToSeller(c, sid) {
+  if (c.sellerId) return c.sellerId === sid
+  const email = (c.email || '').toLowerCase()
+  return readTable('orders').some(o => (o.sellerId || 'sel_mvp') === sid &&
+    ((o.customerId && o.customerId === c.id) || (o.customerEmail || '').toLowerCase() === email))
 }
 
 // Seed the Custom Builds catalog once (previously hard-coded in the
@@ -649,8 +699,9 @@ function ensureSeedClaimTables() {
     writeTable('meetpoints', [
       { id: 'mp_01', name: 'I-85 Charlotte Relay Yard', address: '4200 Freight Ln, Charlotte, NC', zip: '28208', notes: 'Border: Southeast ↔ Mid-Atlantic', active: true },
       { id: 'mp_02', name: 'I-10 Mobile Relay Yard', address: '880 Port Access Rd, Mobile, AL', zip: '36602', notes: 'Border: Gulf Coast ↔ Southeast', active: true },
+      { id: 'mp_03', name: 'I-24 Nashville Relay Yard', address: '788 Cowan St, Nashville, TN', zip: '37210', notes: 'Corridor north end: middle Tennessee handoffs', active: true },
     ])
-    console.log('Seeded meet points (2)')
+    console.log('Seeded transfer stations (3)')
   }
   if (readTable('repairshops').length === 0) {
     writeTable('repairshops', [
@@ -1066,7 +1117,11 @@ async function handleRequest(req, res) {
     if (seg[0] === 'users') {
       if (!hasRole('admin')) return denied(user ? 403 : 401, user ? 'Admin access required' : 'Sign in required')
       const users = readTable('users')
-      if (seg.length === 1 && method === 'GET') return send(res, 200, users.map(publicUser))
+      const tenant = tenantOf(user)
+      if (seg.length === 1 && method === 'GET') {
+        const scoped = tenant ? users.filter(u => userBelongsToSeller(u, tenant)) : users
+        return send(res, 200, scoped.map(publicUser))
+      }
       if (seg.length === 1 && method === 'POST') {
         const body = await readBody(req)
         const email = String(body.email || '').trim().toLowerCase()
@@ -1079,7 +1134,8 @@ async function handleRequest(req, res) {
           name: body.name || email, phone: body.phone || '',
           driverId: body.driverId || '', customerId: body.customerId || '',
           // Blank sellerId = platform-wide staff; set = scoped to that seller.
-          sellerId: body.sellerId || '',
+          // A reseller admin can only mint accounts inside their own tenant.
+          sellerId: tenant || body.sellerId || '',
           phoneVerified: false, active: true, createdAt: new Date().toISOString(),
         }
         users.push(rec)
@@ -1088,12 +1144,18 @@ async function handleRequest(req, res) {
       }
       const idx = users.findIndex(u => u.id === seg[1])
       if (idx === -1) return send(res, 404, { message: 'User not found' })
+      // Reseller admins can only touch accounts inside their own tenant.
+      if (tenant && seg.length === 2 && !userBelongsToSeller(users[idx], tenant)) {
+        return denied(403, 'Account belongs to another reseller')
+      }
       if (seg.length === 2 && method === 'PATCH') {
         const body = await readBody(req)
         const patch = {}
         if (body.name != null) patch.name = body.name
         if (body.phone != null) patch.phone = body.phone
         if (body.driverId != null) patch.driverId = body.driverId
+        // Re-homing an account to another reseller is HQ-only.
+        if (body.sellerId != null && !tenant) patch.sellerId = body.sellerId
         if (['admin', 'driver', 'customer'].includes(body.role)) patch.role = body.role
         if (body.active != null) patch.active = body.active === true
         if (body.password) {
@@ -1683,7 +1745,8 @@ async function handleRequest(req, res) {
           trucks: body.trucks || '',
           workHours: body.workHours || '1:6-18|2:6-18|3:6-18|4:6-18|5:6-18',
           // Which seller's fleet this driver belongs to (multi-tenant).
-          sellerId: body.sellerId || 'sel_mvp',
+          // Reseller admins always hire into their own fleet.
+          sellerId: tenantOf(user) || body.sellerId || 'sel_mvp',
         }
         drivers.push(record)
         writeTable('drivers', drivers)
@@ -1736,8 +1799,12 @@ async function handleRequest(req, res) {
       const customers = readTable('customers')
       if (seg.length === 1 && method === 'GET') {
         if (!user) return denied()
-        // Staff see everyone; a customer sees only their own record.
-        if (hasRole('admin', 'driver')) return send(res, 200, customers)
+        // Staff see everyone — except reseller admins, who see only customers
+        // of their own company; a customer sees only their own record.
+        if (hasRole('admin', 'driver')) {
+          const tenant = tenantOf(user)
+          return send(res, 200, tenant ? customers.filter(c => customerBelongsToSeller(c, tenant)) : customers)
+        }
         return send(res, 200, customers.filter(c => (c.email || '').toLowerCase() === user.email.toLowerCase()))
       }
 
@@ -1762,6 +1829,9 @@ async function handleRequest(req, res) {
           createdAt: body.createdAt || new Date().toISOString(),
           notifySms: body.notifySms === true,
           notifyEmail: true, // email is mandatory — always on
+          // A reseller admin's new customers are tagged to their company so
+          // they appear in that tenant before any first order exists.
+          sellerId: tenantOf(user) || body.sellerId || '',
         }
         customers.push(record)
         writeTable('customers', customers)
@@ -1920,8 +1990,15 @@ async function handleRequest(req, res) {
       if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Staff access required')
       const events = readTable('activity')
       if (seg.length === 1 && method === 'GET') {
-        // Newest first.
-        return send(res, 200, [...events].sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || '')))
+        // Newest first. Reseller admins only see events on their own units.
+        const tenant = tenantOf(user)
+        let list = [...events].sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))
+        if (tenant) {
+          const bySeller = new Map(withSeller(readTable('containers')).map(c => [c.id, c.sellerId]))
+          const skuSeller = new Map(withSeller(readTable('containers')).map(c => [c.sku, c.sellerId]))
+          list = list.filter(e => (bySeller.get(e.containerId) || skuSeller.get(e.sku)) === tenant)
+        }
+        return send(res, 200, list)
       }
       if (seg.length === 1 && method === 'POST') {
         const body = await readBody(req)
@@ -1950,10 +2027,12 @@ async function handleRequest(req, res) {
       if (seg.length === 1 && method === 'GET') {
         // Admins get everything; the public list powers seller branding on
         // listings (logo colors, contact, service agreement) — active only.
+        // territoryZips is public too: the marketplace resolves the buyer's
+        // territory owner and cross-territory relay fees from it.
         if (hasRole('admin')) return send(res, 200, sellers)
         return send(res, 200, sellers.filter(x => x.active !== false)
-          .map(({ id, name, legalName, brandPrimary, brandAccent, phone, email, tos }) =>
-            ({ id, name, legalName, brandPrimary, brandAccent, phone, email, tos })))
+          .map(({ id, name, legalName, brandPrimary, brandAccent, phone, email, tos, territoryZips }) =>
+            ({ id, name, legalName, brandPrimary, brandAccent, phone, email, tos, territoryZips: territoryZips || '' })))
       }
 
       if (seg.length === 1 && method === 'POST') {
@@ -2206,7 +2285,7 @@ async function handleRequest(req, res) {
           // SKU prefix code; default to the derived code from the name.
           code: (body.code || depotCode(body.name)).toUpperCase(),
           // Ownership: which seller services this yard (multi-tenant).
-          sellerId: body.sellerId || 'sel_mvp',
+          sellerId: tenantOf(user) || body.sellerId || 'sel_mvp',
           // Geo-fence: yard location (ZIP) + service radius in miles.
           zip: String(body.zip || '').replace(/\D/g, '').slice(0, 5),
           serviceRadiusMiles: Number(body.serviceRadiusMiles) || 150,
@@ -2265,7 +2344,22 @@ async function handleRequest(req, res) {
     if (seg[0] === 'schedule') {
       if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Staff access required')
       const sched = readTable('schedule')
-      if (seg.length === 1 && method === 'GET') return send(res, 200, sched)
+      if (seg.length === 1 && method === 'GET') {
+        // Reseller admins: only jobs run by their drivers, or touching one of
+        // their depots (mirrors the portal's own tenant filter).
+        const tenant = tenantOf(user)
+        if (!tenant) return send(res, 200, sched)
+        const drivers = readTable('drivers')
+        const depots = readTable('depots')
+        return send(res, 200, sched.filter(j => {
+          // A job belongs to its driver's fleet first; unassigned jobs fall
+          // back to the seller of the depot they touch.
+          const drv = drivers.find(d => d.id === j.driverId)
+          if (drv) return (drv.sellerId || 'sel_mvp') === tenant
+          const dep = depots.find(d => d.name === j.origin || d.name === j.destination)
+          return dep ? (dep.sellerId || 'sel_mvp') === tenant : true
+        }))
+      }
       if (seg.length === 1 && method === 'POST') {
         const body = await readBody(req)
         const record = {

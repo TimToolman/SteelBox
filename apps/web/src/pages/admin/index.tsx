@@ -11,6 +11,7 @@ import { useContainers, useOrders, useDrivers, useLive, useSnackbar, useAuth, us
 import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, sellers as sellersApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, customBuilds as customBuildsApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, cutoutContainer, SHOT_LABELS, RENDER_SLOT, RENDER_LABEL, EXTRA_SLOT_START, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Seller, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role, type CustomBuild, type Message, CUSTOM_STAGES, SIZE_LABEL } from '../../lib/api'
 import { meetPoints as meetPointsApi, type MeetPoint } from '../../lib/api'
 import { parseZones, zoneOverlaps } from '../../lib/territory'
+import { CoverageMap } from './CoverageMap'
 
 // Every size/type code, for the container add/edit selects.
 const SIZE_SELECT_OPTIONS = Object.entries(SIZE_LABEL) as [ContainerSize, string][]
@@ -102,7 +103,7 @@ function KpiCard({ label, value, color, bgColor, icon, delta }: {
 
 // ── Driver Card ───────────────────────────────────────────
 
-function DriverCard({ driver, onAssign, onToast, onSchedule, onRemove }: { driver: Driver; onAssign: () => void; onToast: (m: string) => void; onSchedule?: () => void; onRemove?: () => void }) {
+function DriverCard({ driver, onAssign, onToast, onSchedule, onRemove, sellerTag }: { driver: Driver; onAssign: () => void; onToast: (m: string) => void; onSchedule?: () => void; onRemove?: () => void; sellerTag?: string }) {
   const isOn = driver.status === 'on_duty'
   const trucks = parseTrucks(driver.trucks || '')
   return (
@@ -111,7 +112,7 @@ function DriverCard({ driver, onAssign, onToast, onSchedule, onRemove }: { drive
         <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: driver.colorHex ?? 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '15px', fontWeight: 700, color: '#fff', flexShrink: 0 }}>{driver.initials}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: '14px', fontWeight: 700 }}>{driver.name}</div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--ink3)', marginTop: '1px' }}>{driver.driverCode} · CDL {driver.cdlClass} · ${driver.hourlyWage || 0}/hr</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', color: 'var(--ink3)', marginTop: '1px' }}>{driver.driverCode} · CDL {driver.cdlClass} · ${driver.hourlyWage || 0}/hr{sellerTag ? ` · ${sellerTag}` : ''}</div>
         </div>
         {/* Duty chip — drivers aren't containers, so don't reuse container StatusBadge */}
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: isOn ? 'var(--green-cont)' : 'var(--surf1)', color: isOn ? 'var(--green)' : 'var(--ink3)', borderRadius: '4px', padding: '3px 9px', fontSize: '10px', fontWeight: 700, whiteSpace: 'nowrap' }}>
@@ -750,27 +751,30 @@ function PhotosModal({ container, onClose, onChanged }: {
 
 // ── User Add/Edit Modal (RBAC accounts) ────────────────────
 
-function UserModal({ target, drivers, sellerId, onClose, onSaved }: {
+function UserModal({ target, drivers, sellers, sellerId, onClose, onSaved }: {
   target: AuthUser | 'new' | null
   drivers: Driver[]
+  sellers: Seller[]  // for assigning an admin to a reseller (HQ view)
   sellerId?: string   // tenant scope: new accounts are created inside this seller
   onClose: () => void
   onSaved: (msg: string) => void
 }) {
   const isNew = target === 'new'
-  const [form, setForm] = useState({ name: '', email: '', role: 'customer' as Role, phone: '', driverId: '', password: '' })
+  const [form, setForm] = useState({ name: '', email: '', role: 'customer' as Role, phone: '', driverId: '', password: '', sellerId: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [showPw, setShowPw] = useState(false)
 
   useEffect(() => {
     if (!target) return
-    if (target === 'new') setForm({ name: '', email: '', role: 'customer', phone: '', driverId: '', password: '' })
-    else setForm({ name: target.name, email: target.email, role: target.role, phone: target.phone || '', driverId: target.driverId || '', password: '' })
+    if (target === 'new') setForm({ name: '', email: '', role: 'customer', phone: '', driverId: '', password: '', sellerId: sellerId || '' })
+    else setForm({ name: target.name, email: target.email, role: target.role, phone: target.phone || '', driverId: target.driverId || '', password: '', sellerId: target.sellerId || '' })
     setError('')
-  }, [target])
+  }, [target, sellerId])
 
   if (!target) return null
+
+  const adminSellerId = sellerId || form.sellerId // scope lock wins over the picker
 
   const save = async () => {
     if (saving) return
@@ -778,14 +782,15 @@ function UserModal({ target, drivers, sellerId, onClose, onSaved }: {
     setError('')
     try {
       if (isNew) {
-        await usersApi.create({ name: form.name, email: form.email, role: form.role, phone: form.phone, driverId: form.role === 'driver' ? form.driverId : '', password: form.password, ...(sellerId && form.role === 'admin' ? { sellerId } : {}) } as Parameters<typeof usersApi.create>[0])
+        await usersApi.create({ name: form.name, email: form.email, role: form.role, phone: form.phone, driverId: form.role === 'driver' ? form.driverId : '', password: form.password, ...(form.role === 'admin' && adminSellerId ? { sellerId: adminSellerId } : {}) } as Parameters<typeof usersApi.create>[0])
         onSaved(`Account created for ${form.email} (${form.role})`)
       } else {
         await usersApi.update((target as AuthUser).id, {
           name: form.name, role: form.role, phone: form.phone,
           driverId: form.role === 'driver' ? form.driverId : '',
+          ...(!sellerId ? { sellerId: form.role === 'admin' ? form.sellerId : '' } : {}),
           ...(form.password ? { password: form.password } : {}),
-        })
+        } as Parameters<typeof usersApi.update>[1])
         onSaved(`Account updated${form.password ? ' · password reset' : ''}`)
       }
       onClose()
@@ -815,6 +820,25 @@ function UserModal({ target, drivers, sellerId, onClose, onSaved }: {
         <option value="driver">Driver — field app</option>
         <option value="customer">Customer — marketplace</option>
       </select>
+      {form.role === 'admin' && (
+        <div>
+          <label style={lbl}>Admin of</label>
+          {sellerId ? (
+            <div style={{ ...inp, background: 'var(--surf1)', color: 'var(--ink2)', fontWeight: 600 }}>
+              {sellers.find(s => s.id === sellerId)?.name || sellerId} (your tenant)
+            </div>
+          ) : (
+            <select style={inp} value={form.sellerId} onChange={e => setForm(p => ({ ...p, sellerId: e.target.value }))}>
+              <option value="">🌐 SteelBox Co. HQ — every reseller (spoof access)</option>
+              {sellers.map(s => <option key={s.id} value={s.id}>{s.name} — this reseller only</option>)}
+            </select>
+          )}
+          <div style={{ fontSize: '11px', color: 'var(--ink3)', margin: '-6px 0 12px', lineHeight: 1.5 }}>
+            A reseller admin manages only their company's drivers, orders, schedule, and customers.
+            HQ admins can spoof into any reseller's view.
+          </div>
+        </div>
+      )}
       {form.role === 'driver' && (
         <div>
           <label style={lbl}>Linked driver record</label>
@@ -1606,6 +1630,49 @@ export default function AdminPage() {
   })
   const inboxUnread = msgList.filter(m => m.toRole === 'admin' && !m.read && !m.trashed).length
 
+  // ── Reseller filter (People views) ─────────────────────────
+  // In Global scope the Drivers / Customers / Users lists can additionally
+  // be narrowed to one reseller; the same membership rules feed the
+  // "Reseller" chips on each row.
+  const [sellerFilter, setSellerFilter] = useState<string>('all')
+  const driverSellerOf = (id?: string) => driverListAll.find(d => d.id === id)?.sellerId || 'sel_mvp'
+  const userSellerIds = (u: AuthUser): string[] => {
+    if (u.sellerId) return [u.sellerId]
+    if (u.driverId) return [driverSellerOf(u.driverId)]
+    const email = (u.email || '').toLowerCase()
+    const ids = new Set<string>()
+    orderListAll.forEach(o => {
+      if ((u.customerId && o.customerId === u.customerId) || (o.customerEmail || '').toLowerCase() === email) ids.add(o.sellerId || 'sel_mvp')
+    })
+    return [...ids]
+  }
+  const customerSellerIds = (c: Customer): string[] => {
+    const ids = new Set<string>()
+    if (c.sellerId) ids.add(c.sellerId)
+    const email = (c.email || '').toLowerCase()
+    orderListAll.forEach(o => {
+      if ((o.customerId && o.customerId === c.id) || (o.customerEmail || '').toLowerCase() === email) ids.add(o.sellerId || 'sel_mvp')
+    })
+    return [...ids]
+  }
+  // Shared dropdown for the three People views (rendered only in Global scope).
+  const SellerFilterSelect = scope === 'global' ? (
+    <select value={sellerFilter} onChange={e => setSellerFilter(e.target.value)}
+      style={{ padding: '8px 10px', borderRadius: 'var(--r8)', border: '1.5px solid var(--div)', fontSize: '12px', fontWeight: 600, outline: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', background: 'var(--surf-w)', color: 'var(--ink)' }}>
+      <option value="all">All resellers</option>
+      {sellerList.map(sl => <option key={sl.id} value={sl.id}>{sl.name}</option>)}
+    </select>
+  ) : null
+  const SellerChip = ({ id }: { id: string }) => {
+    const sl = sellerList.find(x => x.id === id)
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: 'var(--pill)', background: 'var(--surf1)', border: '1px solid var(--div)', fontSize: '10px', fontWeight: 700, color: 'var(--ink2)', whiteSpace: 'nowrap' }}>
+        <span style={{ width: '7px', height: '7px', borderRadius: '2px', background: sl?.brandPrimary || 'var(--primary)' }} />
+        {sl?.name || id}
+      </span>
+    )
+  }
+
   // Only active (non-archived) drivers appear in lists and are schedulable.
   const activeDrivers = driverList.filter(d => d.active !== false)
   const archivedDrivers = driverList.filter(d => d.active === false)
@@ -2070,9 +2137,14 @@ export default function AdminPage() {
         <div style={{ padding: '12px 14px 4px', flexShrink: 0 }}>
           <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '5px' }}>Managing</div>
           {lockedSellerId ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 11px', borderRadius: 'var(--r8)', border: '1.5px solid var(--div)', background: 'var(--surf1)' }}>
-              <span style={{ width: '16px', height: '16px', borderRadius: '4px', flexShrink: 0, background: `linear-gradient(135deg, ${scopeSeller?.brandPrimary || 'var(--primary)'} 50%, ${scopeSeller?.brandAccent || 'var(--cta)'} 50%)` }} />
-              <span style={{ fontSize: '12px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sellerName(lockedSellerId)}</span>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 11px', borderRadius: 'var(--r8)', border: '1.5px solid var(--div)', background: 'var(--surf1)' }}>
+                <span style={{ width: '16px', height: '16px', borderRadius: '4px', flexShrink: 0, background: `linear-gradient(135deg, ${scopeSeller?.brandPrimary || 'var(--primary)'} 50%, ${scopeSeller?.brandAccent || 'var(--cta)'} 50%)` }} />
+                <span style={{ fontSize: '12px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sellerName(lockedSellerId)}</span>
+              </div>
+              <div style={{ fontSize: '10px', color: 'var(--ink3)', marginTop: '5px', lineHeight: 1.4 }}>
+                Reseller admin — your access covers {sellerName(lockedSellerId)}'s activity only.
+              </div>
             </div>
           ) : (
             <select
@@ -2080,13 +2152,13 @@ export default function AdminPage() {
               onChange={e => setScopeSel(e.target.value)}
               style={{ width: '100%', padding: '9px 10px', borderRadius: 'var(--r8)', fontSize: '12px', fontWeight: 700, cursor: 'pointer', outline: 'none', fontFamily: 'var(--sans)', border: `1.5px solid ${scope === 'global' ? 'var(--div)' : (scopeSeller?.brandPrimary || 'var(--primary)')}`, background: 'var(--surf-w)', color: scope === 'global' ? 'var(--ink)' : (scopeSeller?.brandPrimary || 'var(--primary)') }}
             >
-              <option value="global">🌐 Global — all sellers</option>
-              {sellerList.map(sl => <option key={sl.id} value={sl.id}>{sl.name}</option>)}
+              <option value="global">🌐 SteelBox Co. HQ — all resellers</option>
+              {sellerList.map(sl => <option key={sl.id} value={sl.id}>Spoof: {sl.name}</option>)}
             </select>
           )}
           {scope !== 'global' && !lockedSellerId && (
             <div style={{ fontSize: '10px', color: 'var(--ink3)', marginTop: '5px', lineHeight: 1.4 }}>
-              Viewing {sellerName(scope)}'s tenant — everything below is their data only.
+              Spoofing {sellerName(scope)} — you're seeing exactly what their admin sees.
             </div>
           )}
         </div>
@@ -2926,12 +2998,17 @@ export default function AdminPage() {
           {/* ── Drivers ── */}
           {view === 'drivers' && (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', gap: '10px', flexWrap: 'wrap' }}>
                 <div style={{ fontSize: '15px', fontWeight: 700 }}>Driver Management <span style={{ fontSize: '12px', fontWeight: 400, color: 'var(--ink3)' }}>· {activeDrivers.length} active{archivedDrivers.length ? ` · ${archivedDrivers.length} archived` : ''}</span></div>
-                <Button variant="primary" size="md" onClick={() => setAddDriverOpen(true)} icon={<span>+</span>}>Add Driver</Button>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  {SellerFilterSelect}
+                  <Button variant="primary" size="md" onClick={() => setAddDriverOpen(true)} icon={<span>+</span>}>Add Driver</Button>
+                </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: '14px' }}>
-                {activeDrivers.map(d => <DriverCard key={d.id} driver={d} onAssign={() => { setAssignDriverId(d.id); setAssignOpen(true) }} onToast={toast} onSchedule={() => setSchedModal({ driverId: d.id })} onRemove={() => setRemoveDriver(d)} />)}
+                {activeDrivers
+                  .filter(d => scope !== 'global' || sellerFilter === 'all' || (d.sellerId || 'sel_mvp') === sellerFilter)
+                  .map(d => <DriverCard key={d.id} driver={d} sellerTag={scope === 'global' ? sellerName(d.sellerId || 'sel_mvp') : undefined} onAssign={() => { setAssignDriverId(d.id); setAssignOpen(true) }} onToast={toast} onSchedule={() => setSchedModal({ driverId: d.id })} onRemove={() => setRemoveDriver(d)} />)}
               </div>
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: '18px' }}>
                 <Button variant="ghost" onClick={() => setArchiveOpen(true)}>Archive{archivedDrivers.length ? ` (${archivedDrivers.length})` : ''}</Button>
@@ -2964,19 +3041,25 @@ export default function AdminPage() {
           {/* ── Customers ── */}
           {view === 'customers' && (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', gap: '10px', flexWrap: 'wrap' }}>
                 <div style={{ fontSize: '15px', fontWeight: 700 }}>Customers <span style={{ fontSize: '12px', fontWeight: 400, color: 'var(--ink3)' }}>· {customerList.filter(c => c.active !== false).length} active · from customers.csv</span></div>
-                <Button variant="primary" size="md" onClick={() => setEditCustomer('new')} icon={<span>+</span>}>Add Customer</Button>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  {SellerFilterSelect}
+                  <Button variant="primary" size="md" onClick={() => setEditCustomer('new')} icon={<span>+</span>}>Add Customer</Button>
+                </div>
               </div>
               <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', overflow: 'hidden' }}>
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px' }}>
-                    <thead><tr><Th>Customer</Th><Th>Contact</Th><Th>Location</Th><Th>Notes</Th><Th>Actions</Th></tr></thead>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '820px' }}>
+                    <thead><tr><Th>Customer</Th><Th>Contact</Th><Th>Location</Th><Th>Reseller</Th><Th>Notes</Th><Th>Actions</Th></tr></thead>
                     <tbody>
                       {customerList.filter(c => c.active !== false).length === 0 && (
-                        <tr><Td>—</Td><Td>No customers yet.</Td><Td>{''}</Td><Td>{''}</Td><Td>{''}</Td></tr>
+                        <tr><Td>—</Td><Td>No customers yet.</Td><Td>{''}</Td><Td>{''}</Td><Td>{''}</Td><Td>{''}</Td></tr>
                       )}
-                      {customerList.filter(c => c.active !== false).map(c => (
+                      {customerList
+                        .filter(c => c.active !== false)
+                        .filter(c => scope !== 'global' || sellerFilter === 'all' || customerSellerIds(c).includes(sellerFilter))
+                        .map(c => (
                         <tr key={c.id}>
                           <Td>
                             <div style={{ fontWeight: 700 }}>{c.name}</div>
@@ -2987,6 +3070,12 @@ export default function AdminPage() {
                             <div style={{ fontSize: '11px', color: 'var(--ink3)', fontFamily: 'var(--mono)' }}>{c.phone || ''}</div>
                           </Td>
                           <Td>{[c.city, c.state].filter(Boolean).join(', ') || '—'}{c.zip ? ` ${c.zip}` : ''}</Td>
+                          <Td>
+                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                              {customerSellerIds(c).map(id => <SellerChip key={id} id={id} />)}
+                              {customerSellerIds(c).length === 0 && <span style={{ color: 'var(--ink3)' }}>—</span>}
+                            </div>
+                          </Td>
                           <Td>{c.notes || '—'}</Td>
                           <Td>
                             <div style={{ display: 'flex', gap: '6px' }}>
@@ -3180,7 +3269,7 @@ export default function AdminPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                 <div>
                   <div style={{ fontSize: '15px', fontWeight: 700 }}>Pickup Depots</div>
-                  <div style={{ fontSize: '12px', color: 'var(--ink3)', marginTop: '2px' }}>{depotList.length} location{depotList.length === 1 ? '' : 's'} · shown to field drivers when starting a pickup</div>
+                  <div style={{ fontSize: '12px', color: 'var(--ink3)', marginTop: '2px' }}>{depotList.length} reseller-owned yard{depotList.length === 1 ? '' : 's'} · shown to field drivers when starting a pickup · SteelBox Co. transfer stations are listed below</div>
                 </div>
                 <Button variant="primary" size="md" onClick={() => setEditDepot('new')} icon={<span>+</span>}>Add Depot</Button>
               </div>
@@ -3216,6 +3305,52 @@ export default function AdminPage() {
                 ))}
                 {depotList.length === 0 && <div style={{ fontSize: '13px', color: 'var(--ink3)', padding: '20px' }}>No depots yet. Add your first pickup location.</div>}
               </div>
+
+              {/* ── SteelBox Co. transfer stations (sub-depots) ──
+                  Platform-owned handoff yards, NOT reseller depots: no
+                  inventory lives here — a container only passes through on a
+                  cross-territory relay (leg 1 drops it, leg 2 picks it up).
+                  Every reseller admin can see the network; only SteelBox Co.
+                  HQ can change it. */}
+              <div style={{ marginTop: '24px', background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', padding: '16px 18px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ width: '15px', height: '15px', borderRadius: '3px', background: '#E65100', transform: 'rotate(45deg)', flexShrink: 0 }} />
+                  <div style={{ fontSize: '15px', fontWeight: 700 }}>SteelBox Co. Transfer Stations <span style={{ fontSize: '11px', fontWeight: 700, color: '#E65100', background: '#FFF3E0', borderRadius: 'var(--r4)', padding: '2px 8px', marginLeft: '4px', letterSpacing: '0.5px' }}>SUB-DEPOTS</span></div>
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--ink3)', margin: '4px 0 12px' }}>
+                  Platform-run handoff yards near territory borders — different from the pickup depots above: no inventory
+                  is stored here, containers only swap trucks on cross-territory relays (leg 1 transfer in, leg 2 delivery out).
+                  Cross-territory orders auto-pick the station that minimizes total relay miles.
+                  {scope === 'global' && !lockedSellerId ? '' : ' Managed by SteelBox Co. HQ.'}
+                </div>
+                {mpList.map(mp2 => (
+                  <div key={mp2.id} style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--div)', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 700, minWidth: '190px' }}>🔁 {mp2.name}</span>
+                    <span style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: 'var(--ink2)' }}>{mp2.zip}</span>
+                    <span style={{ fontSize: '12px', color: 'var(--ink3)', flex: 1, minWidth: '160px' }}>{mp2.address || '—'}</span>
+                    {scope === 'global' && !lockedSellerId && (
+                      <>
+                        <TblBtn onClick={() => meetPointsApi.update(mp2.id, { active: mp2.active === false }).then(refetchMeetPoints)}>{mp2.active === false ? 'Activate' : 'Deactivate'}</TblBtn>
+                        <TblBtn onClick={() => meetPointsApi.remove(mp2.id).then(refetchMeetPoints)}>Delete</TblBtn>
+                      </>
+                    )}
+                    {mp2.active === false && <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ink3)', textTransform: 'uppercase' }}>inactive</span>}
+                  </div>
+                ))}
+                {mpList.length === 0 && <div style={{ fontSize: '12px', color: 'var(--ink3)', padding: '8px 0' }}>No transfer stations yet — add one near a territory border.</div>}
+                {scope === 'global' && !lockedSellerId && (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+                    <input value={mpForm.name} onChange={e => setMpForm(f => ({ ...f, name: e.target.value }))} placeholder="Name (e.g. I-10 Baton Rouge Relay Yard)" style={{ flex: 2, minWidth: '220px', padding: '8px 11px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '12px', outline: 'none' }} />
+                    <input value={mpForm.zip} onChange={e => setMpForm(f => ({ ...f, zip: e.target.value.replace(/\D/g, '').slice(0, 5) }))} placeholder="ZIP" style={{ width: '90px', padding: '8px 11px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontFamily: 'var(--mono)', fontSize: '12px', outline: 'none' }} />
+                    <input value={mpForm.address} onChange={e => setMpForm(f => ({ ...f, address: e.target.value }))} placeholder="Street address" style={{ flex: 2, minWidth: '180px', padding: '8px 11px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '12px', outline: 'none' }} />
+                    <TblBtn variant="primary" onClick={() => {
+                      if (!mpForm.name || mpForm.zip.length !== 5) { toast('A transfer station needs a name and 5-digit ZIP'); return }
+                      meetPointsApi.create(mpForm).then(() => { setMpForm({ name: '', zip: '', address: '' }); toast('Transfer station added'); refetchMeetPoints() })
+                        .catch(e => toast(e instanceof Error ? e.message : 'Could not add'))
+                    }}>Add Transfer Station</TblBtn>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -3234,6 +3369,9 @@ export default function AdminPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(340px,1fr))', gap: '14px' }}>
                 {sellerList.map(sl => {
                   const owned = depotList.filter(d => (d.sellerId || 'sel_mvp') === sl.id)
+                  const zonesText = zoneDrafts[sl.id] ?? sl.territoryZips ?? ''
+                  const prefixCount = parseZones(zonesText).reduce((n, [lo, hi]) => n + (hi - lo + 1), 0)
+                  const admins = userListAll.filter(u => u.role === 'admin' && u.sellerId === sl.id && u.active !== false)
                   return (
                     <div key={sl.id} style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', padding: '16px 18px', opacity: sl.active === false ? 0.55 : 1 }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', marginBottom: '8px' }}>
@@ -3251,7 +3389,33 @@ export default function AdminPage() {
                         <div>
                           <b>{owned.length}</b> depot{owned.length === 1 ? '' : 's'}: {owned.map(d => d.name).join(', ') || 'none assigned'}
                         </div>
+                        <div>
+                          <b>{admins.length || 'No'}</b> admin{admins.length === 1 ? '' : 's'}: {admins.map(a => a.name || a.email).join(', ') || 'add one under Users & Access'}
+                        </div>
                         {sl.tos && <div style={{ fontSize: '11px', color: 'var(--ink3)', lineHeight: 1.5 }}>{sl.tos.slice(0, 120)}{sl.tos.length > 120 ? '…' : ''}</div>}
+                      </div>
+                      {/* ── Territory — the coverage this reseller owns ── */}
+                      <div style={{ marginTop: '12px', paddingTop: '11px', borderTop: '1px solid var(--div)' }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', color: 'var(--ink3)' }}>Territory — ZIP prefix zones</span>
+                          <span style={{ fontSize: '11px', color: 'var(--ink3)', marginLeft: 'auto' }}>{prefixCount} prefixes</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '7px' }}>
+                          <input
+                            value={zonesText}
+                            onChange={e => setZoneDrafts(pz => ({ ...pz, [sl.id]: e.target.value }))}
+                            placeholder="700-705, 770-778"
+                            style={{ flex: 1, minWidth: 0, padding: '8px 11px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontFamily: 'var(--mono)', fontSize: '12px', outline: 'none' }}
+                          />
+                          <TblBtn variant="primary" onClick={() => {
+                            sellersApi.update(sl.id, { territoryZips: zonesText.trim() })
+                              .then(() => { toast(`${sl.name} territory saved`); refetchSellers() })
+                              .catch(e => toast(e instanceof Error ? e.message : 'Save failed'))
+                          }}>Save</TblBtn>
+                        </div>
+                        <div style={{ fontSize: '10px', color: 'var(--ink3)', marginTop: '5px', lineHeight: 1.5 }}>
+                          3-digit prefixes or ranges, comma-separated. Drives the marketplace ZIP search, delivery fees, and cross-territory relays.
+                        </div>
                       </div>
                     </div>
                   )
@@ -3259,100 +3423,23 @@ export default function AdminPage() {
                 {sellerList.length === 0 && <div style={{ fontSize: '13px', color: 'var(--ink3)', padding: '20px' }}>No sellers yet.</div>}
               </div>
 
-              {/* ── Territories — each reseller owns ZIP-prefix zones ── */}
+              {/* ── Coverage map — the territories drawn on real US geography ── */}
               <div style={{ marginTop: '22px', background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', padding: '16px 18px' }}>
-                <div style={{ fontSize: '15px', fontWeight: 700 }}>Territories</div>
+                <div style={{ fontSize: '15px', fontWeight: 700 }}>Territory Coverage</div>
                 <div style={{ fontSize: '12px', color: 'var(--ink3)', margin: '2px 0 12px' }}>
-                  Each reseller owns 3-digit ZIP-prefix zones (e.g. <span style={{ fontFamily: 'var(--mono)' }}>700-705, 770-778</span>).
-                  The marketplace ZIP search resolves the buyer's territory from these, and a delivery into another reseller's
-                  territory relays through a SteelBox Co. meet point with a mileage-based fee.
+                  Each reseller's ZIP-prefix zones plotted on the map, with their pickup depots and the SteelBox Co.
+                  transfer stations where cross-territory relays hand off. Zone edits above preview here before you save.
+                  Transfer stations are managed under <b>Depots</b>.
                 </div>
-                {sellerList.map(sl => (
-                  <div key={sl.id} style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--div)', flexWrap: 'wrap' }}>
-                    <span style={{ width: '18px', height: '18px', borderRadius: '5px', flexShrink: 0, background: sl.brandPrimary || 'var(--primary)' }} />
-                    <span style={{ fontSize: '13px', fontWeight: 700, width: '190px' }}>{sl.name}</span>
-                    <input
-                      value={zoneDrafts[sl.id] ?? sl.territoryZips ?? ''}
-                      onChange={e => setZoneDrafts(pz => ({ ...pz, [sl.id]: e.target.value }))}
-                      placeholder="700-705, 770-778"
-                      style={{ flex: 1, minWidth: '220px', padding: '8px 11px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontFamily: 'var(--mono)', fontSize: '12px', outline: 'none' }}
-                    />
-                    <span style={{ fontSize: '11px', color: 'var(--ink3)', width: '86px' }}>{parseZones(zoneDrafts[sl.id] ?? sl.territoryZips).reduce((n, [lo, hi]) => n + (hi - lo + 1), 0)} prefixes</span>
-                    <TblBtn variant="primary" onClick={() => {
-                      sellersApi.update(sl.id, { territoryZips: (zoneDrafts[sl.id] ?? sl.territoryZips ?? '').trim() })
-                        .then(() => { toast(`${sl.name} territory saved`); refetchSellers() })
-                        .catch(e => toast(e instanceof Error ? e.message : 'Save failed'))
-                    }}>Save</TblBtn>
-                  </div>
-                ))}
                 {(() => {
                   const overlaps = zoneOverlaps(sellerList.map(sl => ({ ...sl, territoryZips: zoneDrafts[sl.id] ?? sl.territoryZips })))
                   return overlaps.length > 0 && (
-                    <div style={{ marginTop: '10px', background: 'var(--warning-cont)', border: '1px solid var(--warning)', borderRadius: 'var(--r8)', padding: '8px 12px', fontSize: '12px', color: '#7B4F00' }}>
+                    <div style={{ margin: '0 0 12px', background: 'var(--warning-cont)', border: '1px solid var(--warning)', borderRadius: 'var(--r8)', padding: '8px 12px', fontSize: '12px', color: '#7B4F00' }}>
                       ⚠ Overlapping prefixes: {overlaps.slice(0, 8).map(o => `${o.prefix} (${o.names.join(' + ')})`).join(', ')}{overlaps.length > 8 ? ` +${overlaps.length - 8} more` : ''} — first match wins on the marketplace.
                     </div>
                   )
                 })()}
-                {/* ZIP-space map: 10×10 grid of 2-digit blocks, colored by owner */}
-                <div style={{ marginTop: '14px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.6px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '8px' }}>Coverage map — ZIP prefix space (00–99 blocks, west→east by first digit 9→0)</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '2px', maxWidth: '560px' }}>
-                    {Array.from({ length: 100 }, (_, cell) => {
-                      const row = Math.floor(cell / 10), col = cell % 10
-                      // Render west (9xx) on the left → east (0xx) on the right, so it reads like a US map.
-                      const firstDigit = 9 - col, secondDigit = row
-                      const block = firstDigit * 100 + secondDigit * 10
-                      const owners = sellerList.filter(sl => {
-                        const zones = parseZones(zoneDrafts[sl.id] ?? sl.territoryZips)
-                        return Array.from({ length: 10 }, (_, k) => block + k).some(pfx => zones.some(([lo, hi]) => pfx >= lo && pfx <= hi))
-                      })
-                      const bg = owners.length === 0 ? 'var(--surf1)' : owners.length > 1 ? 'repeating-linear-gradient(45deg,#F9A825 0 4px,#B3261E 4px 8px)' : (owners[0].brandPrimary || 'var(--primary)')
-                      return (
-                        <div key={cell} title={`ZIP ${String(block).padStart(3, '0')}–${String(block + 9).padStart(3, '0')}${owners.length ? ` · ${owners.map(o => o.name).join(' + ')}` : ' · unclaimed'}`}
-                          style={{ aspectRatio: '1', borderRadius: '3px', background: bg, border: '1px solid var(--div)', cursor: 'default' }} />
-                      )
-                    })}
-                  </div>
-                  <div style={{ display: 'flex', gap: '12px', marginTop: '8px', flexWrap: 'wrap', fontSize: '11px', color: 'var(--ink2)' }}>
-                    {sellerList.map(sl => (
-                      <span key={sl.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                        <span style={{ width: '11px', height: '11px', borderRadius: '3px', background: sl.brandPrimary || 'var(--primary)' }} />{sl.name}
-                      </span>
-                    ))}
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><span style={{ width: '11px', height: '11px', borderRadius: '3px', background: 'var(--surf1)', border: '1px solid var(--div)' }} />Unclaimed</span>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><span style={{ width: '11px', height: '11px', borderRadius: '3px', background: 'repeating-linear-gradient(45deg,#F9A825 0 3px,#B3261E 3px 6px)' }} />Overlap</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── SteelBox Co. meet points — cross-territory handoff yards ── */}
-              <div style={{ marginTop: '16px', background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', padding: '16px 18px' }}>
-                <div style={{ fontSize: '15px', fontWeight: 700 }}>SteelBox Co. Meet Points</div>
-                <div style={{ fontSize: '12px', color: 'var(--ink3)', margin: '2px 0 12px' }}>
-                  Platform-run handoff yards near territory borders. Cross-territory orders auto-pick the meet point that
-                  minimizes total relay miles; drivers swap the container there (leg 1 transfer + leg 2 delivery).
-                </div>
-                {mpList.map(mp2 => (
-                  <div key={mp2.id} style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--div)', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 700, minWidth: '190px' }}>🔁 {mp2.name}</span>
-                    <span style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: 'var(--ink2)' }}>{mp2.zip}</span>
-                    <span style={{ fontSize: '12px', color: 'var(--ink3)', flex: 1, minWidth: '160px' }}>{mp2.address || '—'}</span>
-                    <TblBtn onClick={() => meetPointsApi.update(mp2.id, { active: mp2.active === false }).then(refetchMeetPoints)}>{mp2.active === false ? 'Activate' : 'Deactivate'}</TblBtn>
-                    <TblBtn onClick={() => meetPointsApi.remove(mp2.id).then(refetchMeetPoints)}>Delete</TblBtn>
-                    {mp2.active === false && <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--ink3)', textTransform: 'uppercase' }}>inactive</span>}
-                  </div>
-                ))}
-                {mpList.length === 0 && <div style={{ fontSize: '12px', color: 'var(--ink3)', padding: '8px 0' }}>No meet points yet — add one near a territory border.</div>}
-                <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
-                  <input value={mpForm.name} onChange={e => setMpForm(f => ({ ...f, name: e.target.value }))} placeholder="Name (e.g. I-10 Baton Rouge Relay Yard)" style={{ flex: 2, minWidth: '220px', padding: '8px 11px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '12px', outline: 'none' }} />
-                  <input value={mpForm.zip} onChange={e => setMpForm(f => ({ ...f, zip: e.target.value.replace(/\D/g, '').slice(0, 5) }))} placeholder="ZIP" style={{ width: '90px', padding: '8px 11px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontFamily: 'var(--mono)', fontSize: '12px', outline: 'none' }} />
-                  <input value={mpForm.address} onChange={e => setMpForm(f => ({ ...f, address: e.target.value }))} placeholder="Street address" style={{ flex: 2, minWidth: '180px', padding: '8px 11px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '12px', outline: 'none' }} />
-                  <TblBtn variant="primary" onClick={() => {
-                    if (!mpForm.name || mpForm.zip.length !== 5) { toast('Meet point needs a name and 5-digit ZIP'); return }
-                    meetPointsApi.create(mpForm).then(() => { setMpForm({ name: '', zip: '', address: '' }); toast('Meet point added'); refetchMeetPoints() })
-                      .catch(e => toast(e instanceof Error ? e.message : 'Could not add'))
-                  }}>Add Meet Point</TblBtn>
-                </div>
+                <CoverageMap sellers={sellerList} zoneDrafts={zoneDrafts} depots={depotListAll} meetPoints={mpList} />
               </div>
             </div>
           )}
@@ -3443,14 +3530,19 @@ export default function AdminPage() {
                     {userList.filter(u => u.active !== false).length} active account{userList.filter(u => u.active !== false).length === 1 ? '' : 's'} · admin → portal, driver → field app, customer → marketplace
                   </div>
                 </div>
-                <Button variant="primary" size="md" onClick={() => setEditUser('new')} icon={<span>+</span>}>Add User</Button>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  {SellerFilterSelect}
+                  <Button variant="primary" size="md" onClick={() => setEditUser('new')} icon={<span>+</span>}>Add User</Button>
+                </div>
               </div>
               <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', overflow: 'hidden' }}>
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px' }}>
-                    <thead><tr><Th>User</Th><Th>Role</Th><Th>Phone</Th><Th>Linked To</Th><Th>2FA</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '820px' }}>
+                    <thead><tr><Th>User</Th><Th>Role</Th><Th>Reseller</Th><Th>Phone</Th><Th>Linked To</Th><Th>2FA</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
                     <tbody>
-                      {userList.map(u => {
+                      {userList
+                        .filter(u => scope !== 'global' || sellerFilter === 'all' || userSellerIds(u).includes(sellerFilter))
+                        .map(u => {
                         const roleMeta = u.role === 'admin' ? { bg: 'var(--primary-cont)', color: 'var(--primary)' }
                           : u.role === 'driver' ? { bg: 'var(--green-cont)', color: 'var(--green)' }
                           : { bg: 'var(--cta-cont)', color: 'var(--cta)' }
@@ -3463,6 +3555,16 @@ export default function AdminPage() {
                               <div style={{ fontSize: '11px', color: 'var(--ink3)', fontFamily: 'var(--mono)' }}>{u.email}</div>
                             </Td>
                             <Td><span style={{ display: 'inline-block', padding: '2px 9px', borderRadius: 'var(--r4)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', ...roleMeta, background: roleMeta.bg }}>{u.role}</span></Td>
+                            <Td>
+                              {u.role === 'admin' && !u.sellerId
+                                ? <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--primary)', whiteSpace: 'nowrap' }}>🌐 SteelBox Co. HQ</span>
+                                : (
+                                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                    {userSellerIds(u).map(id => <SellerChip key={id} id={id} />)}
+                                    {userSellerIds(u).length === 0 && <span style={{ color: 'var(--ink3)' }}>—</span>}
+                                  </div>
+                                )}
+                            </Td>
                             <Td mono>{u.phone || '—'}</Td>
                             <Td>{linked}</Td>
                             <Td>{u.phoneVerified
@@ -3491,7 +3593,7 @@ export default function AdminPage() {
                           </tr>
                         )
                       })}
-                      {userList.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: '20px', color: 'var(--ink3)', fontSize: '13px' }}>No accounts yet.</td></tr>}
+                      {userList.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', padding: '20px', color: 'var(--ink3)', fontSize: '13px' }}>No accounts yet.</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -3539,6 +3641,7 @@ export default function AdminPage() {
       <UserModal
         target={editUser}
         drivers={activeDrivers}
+        sellers={sellerList}
         sellerId={scope === 'global' ? undefined : scope}
         onClose={() => setEditUser(null)}
         onSaved={(msg) => { toast(msg); refetchUsers().catch(() => {}) }}

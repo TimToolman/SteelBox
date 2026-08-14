@@ -4470,7 +4470,7 @@
    "tos": "Service agreement — Demo Container Corporation. Deliveries are fulfilled by Demo Container Corp within 5 business days of confirmed payment. All units carry a 14-day defect guarantee from the day of delivery. Payment terms, scheduling, and post-sale support are handled directly by Demo Container Corp — Nationwide SteelBox Corp operates the marketplace only.",
    "active": true,
    "createdAt": "2026-08-06T02:49:06.257Z",
-   "territoryZips": "206-219,220-246,270-289,320-339"
+   "territoryZips": "206-219,220-246,270-289,320-339,350-374"
   }
  ],
  "drivers": [
@@ -5578,6 +5578,32 @@
    "active": true,
    "createdAt": "2026-08-07T14:00:00.000Z",
    "digestFreq": "daily"
+  },
+  {
+   "id": "usr_mvpadmin01",
+   "email": "admin@mvpcontainer.com",
+   "role": "admin",
+   "name": "Marie Landry",
+   "phone": "",
+   "driverId": "",
+   "customerId": "",
+   "phoneVerified": false,
+   "active": true,
+   "createdAt": "2026-07-03T18:36:22.696Z",
+   "sellerId": "sel_mvp"
+  },
+  {
+   "id": "usr_demoadmin01",
+   "email": "admin@democontainercorp.com",
+   "role": "admin",
+   "name": "Dana Whitfield",
+   "phone": "",
+   "driverId": "",
+   "customerId": "",
+   "phoneVerified": false,
+   "active": true,
+   "createdAt": "2026-07-03T18:36:22.696Z",
+   "sellerId": "sel_demo"
   }
  ],
  "outbox": [],
@@ -5789,6 +5815,14 @@
    "address": "880 Port Access Rd, Mobile, AL",
    "zip": "36602",
    "notes": "Border: Gulf Coast ↔ Southeast",
+   "active": true
+  },
+  {
+   "id": "mp_03",
+   "name": "I-24 Nashville Relay Yard",
+   "address": "788 Cowan St, Nashville, TN",
+   "zip": "37210",
+   "notes": "Corridor north end: middle Tennessee handoffs",
    "active": true
   }
  ]
