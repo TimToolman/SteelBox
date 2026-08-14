@@ -83,7 +83,7 @@ export default function MarketplacePage() {
     return new Set(wanted)
   })
   const [gradeFilters, setGradeFilters] = useState<Set<ContainerGrade>>(() => {
-    const all: ContainerGrade[] = ['A', 'B', 'C', 'R', 'X', 'D']
+    const all: ContainerGrade[] = ['A', 'B', 'C', 'R', 'D']
     const wanted = (qp('grade') ?? '').split(',').filter(g => (all as string[]).includes(g)) as ContainerGrade[]
     return new Set(wanted)
   })
@@ -220,8 +220,10 @@ export default function MarketplacePage() {
   // Only listed inventory is shown publicly. Drafts (awaiting photo
   // documentation), sold, and in-fulfilment units never reach the marketplace —
   // except admins, who additionally see draft units (badged "Draft") for preview.
+  // Grade X (custom-build conversions) is off the storefront for launch,
+  // matching the used-only lineup — the units stay in admin inventory.
   const listable = allContainers.map(withDemoPhotos).filter(
-    c => c.status === 'available' || c.status === 'sale_in_progress' || (isAdmin && c.status === 'draft')
+    c => (c.status === 'available' || c.status === 'sale_in_progress' || (isAdmin && c.status === 'draft')) && c.grade !== 'X'
   )
 
   // Respect each container's listingType for the active browse tab:
@@ -506,7 +508,7 @@ export default function MarketplacePage() {
                     <div style={{ marginBottom: '10px' }}>
                       <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--ink3)', display: 'block', marginBottom: '6px' }}>Condition Grade</span>
                       <ChipRow>
-                        {(['A','B','C','R','X','D'] as ContainerGrade[]).map(g => (
+                        {(['A','B','C','R','D'] as ContainerGrade[]).map(g => (
                           <Chip key={g} on={gradeFilters.has(g)} onClick={() => toggleGrade(g)}>
                             <span style={{ display: 'inline-block', width: '14px', height: '14px', lineHeight: '14px', textAlign: 'center', borderRadius: '3px', fontSize: '9px', background: GRADE_META[g].color, color: '#fff', marginRight: '5px', verticalAlign: '-2px' }}>{g}</span>
                             {GRADE_META[g].label}
