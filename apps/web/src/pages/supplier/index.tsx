@@ -15,8 +15,8 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../hooks'
 import {
   containers as containersApi, claims as claimsApi, suppliersApi, shippersApi, repairShops as repairShopsApi,
-  prefs as prefsApi, photoUrl, SIZE_LABEL, CLAIM_STAGES,
-  type Container, type DamageClaim, type Supplier, type Shipper, type RepairShop, type ClaimStatus, type AuthUser,
+  depots as depotsApi, prefs as prefsApi, photoUrl, SIZE_LABEL, CLAIM_STAGES,
+  type Container, type DamageClaim, type Supplier, type Shipper, type RepairShop, type ClaimStatus, type AuthUser, type Depot,
 } from '../../lib/api'
 import { GRADE_META, DAMAGE_DISCOUNT } from '../../lib/specs'
 import { ClaimTimeline, ClaimPacket } from './claimkit'
@@ -63,6 +63,7 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [shipperList, setShipperList] = useState<Shipper[]>([])
   const [shops, setShops] = useState<RepairShop[]>([])
+  const [depotList, setDepotList] = useState<Depot[]>([])
   // New-claim form
   const [newOpen, setNewOpen] = useState(false)
   const [newForm, setNewForm] = useState({ containerId: '', shipperId: '', vesselRef: '', notes: '' })
@@ -85,7 +86,16 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
     suppliersApi.list().then(setSuppliers).catch(() => {})
     shippersApi.list().then(setShipperList).catch(() => {})
     repairShopsApi.list().then(setShops).catch(() => {})
+    depotsApi.list().then(setDepotList).catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Shops assigned to the claim unit's site (admin-configured); a shop with
+  // no site assignments serves everywhere.
+  const shopsForClaim = (c: DamageClaim): RepairShop[] => {
+    const unit = fleet.find(x => x.id === c.containerId)
+    const depotId = depotList.find(d => d.name === unit?.depotLocation)?.id
+    return shops.filter(sh => sh.approved && (!sh.siteIds?.length || !depotId || sh.siteIds.includes(depotId)))
+  }
 
   const myClaims = useMemo(() =>
     claimList.filter(c => !supplierId || c.supplierId === supplierId), [claimList, supplierId])
@@ -287,7 +297,7 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
                         <>
                           <select value={rep[c.id]?.shopId ?? ''} onChange={e => setRep(p => ({ ...p, [c.id]: { shopId: e.target.value, date: p[c.id]?.date ?? '' } }))} style={{ ...inp, minWidth: '210px' }}>
                             <option value="">— Approved repair shop —</option>
-                            {shops.filter(sh => sh.approved).map(sh => <option key={sh.id} value={sh.id}>{sh.name} · {sh.city}, {sh.state}</option>)}
+                            {shopsForClaim(c).map(sh => <option key={sh.id} value={sh.id}>{sh.name} · {sh.city}, {sh.state}</option>)}
                           </select>
                           <input type="date" value={rep[c.id]?.date ?? ''} onChange={e => setRep(p => ({ ...p, [c.id]: { shopId: p[c.id]?.shopId ?? '', date: e.target.value } }))} style={inp} />
                           <button onClick={() => scheduleRepair(c)} style={btn(GREEN)}>Schedule repair — retail</button>
