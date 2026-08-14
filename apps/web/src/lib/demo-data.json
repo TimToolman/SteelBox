@@ -5583,7 +5583,7 @@
   },
   {
    "id": "usr_sup01",
-   "email": "supplier@oceanbox.co",
+   "email": "supplier@oceanbox.com",
    "role": "supplier",
    "name": "Dana Reyes",
    "phone": "",
@@ -5656,7 +5656,7 @@
    "id": "sup_01",
    "name": "OceanBox Supply Co",
    "contactName": "Dana Reyes",
-   "email": "supplier@oceanbox.co",
+   "email": "supplier@oceanbox.com",
    "phone": "(504) 555-0230",
    "active": true,
    "createdAt": "2026-08-07T14:00:00.000Z"

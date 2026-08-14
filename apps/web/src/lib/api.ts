@@ -106,8 +106,11 @@ export const auth = {
   // Step 2 of an admin sign-in: the emailed code + the pending token.
   loginVerify: (pendingToken: string, code: string) =>
     request<AuthPayload>('/auth/login/verify', { method: 'POST', body: JSON.stringify({ pendingToken, code }) }),
+  // Sign-ups require a profile (name + mobile) and answer with a
+  // verification-code step (AuthPending) — the session comes from
+  // loginVerify once the emailed code is entered.
   register: (data: { name: string; email: string; password: string; phone?: string }) =>
-    request<AuthPayload>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
+    request<AuthPayload | AuthPending>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   me: () => request<AuthUser>('/auth/me'),
   // Password reset: request an emailed code, then set the new password with it.
   forgot: (email: string) =>

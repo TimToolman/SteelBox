@@ -21,7 +21,7 @@ interface AuthContextValue {
   // Resolves to the signed-in user, or a PendingLogin when a code is needed.
   login: (email: string, password: string) => Promise<{ user?: AuthUser; pending?: PendingLogin }>
   verifyLogin: (pendingToken: string, code: string) => Promise<AuthUser>
-  register: (data: { name: string; email: string; password: string; phone?: string }) => Promise<AuthUser>
+  register: (data: { name: string; email: string; password: string; phone?: string }) => Promise<{ user?: AuthUser; pending?: PendingLogin }>
   changePassword: (current: string, next: string) => Promise<void>
   logout: () => void
   refresh: () => Promise<void>
@@ -59,12 +59,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return result.user
   }, [])
 
+  // Same shape as login: new accounts answer with a verification-code step
+  // (pending) — the session only exists after verifyLogin succeeds.
   const register = useCallback(async (data: { name: string; email: string; password: string; phone?: string }) => {
     const result = await authApi.register(data)
-    if ('twoFaRequired' in result && result.twoFaRequired) throw new Error('Unexpected verification step') // registration never 2FAs
+    if ('twoFaRequired' in result && result.twoFaRequired) {
+      return { pending: { pendingToken: result.pendingToken, devCode: result.devCode } }
+    }
     localStorage.setItem('sbx_token', result.token)
     setUser(result.user)
-    return result.user
+    return { user: result.user }
   }, [])
 
   const changePassword = useCallback(async (current: string, next: string) => {
@@ -153,12 +157,17 @@ export function LoginForm({ onDone, allowRegister = false, subtitle }: {
   const pw = (s: string) => s.replace(/\s+$/, '')
 
   const submitLogin = () => run(async () => {
+    // New accounts must arrive with a real profile: name + mobile number.
+    if (mode === 'register') {
+      if (!form.name.trim()) throw new Error('Please enter your name')
+      if (form.phone.replace(/\D/g, '').length < 10) throw new Error('A mobile number is required to create an account')
+    }
     const result = mode === 'login'
       ? await login(form.email.trim(), pw(form.password))
-      : { user: await register({ name: form.name.trim(), email: form.email.trim(), password: pw(form.password), phone: form.phone.trim() }) }
+      : await register({ name: form.name.trim(), email: form.email.trim(), password: pw(form.password), phone: form.phone.trim() })
     if (result.pending) {
       setPending(result.pending)
-      go('code', `We emailed a 6-digit sign-in code to ${form.email.trim()}. Enter it below.`)
+      go('code', `We emailed a 6-digit verification code to ${form.email.trim()}. Enter it below to continue.`)
       return
     }
     if (result.user) onDone?.(result.user)
@@ -240,7 +249,7 @@ export function LoginForm({ onDone, allowRegister = false, subtitle }: {
 
       {mode === 'register' && (
         <div>
-          <label style={label}>Mobile phone <span style={{ fontWeight: 400, textTransform: 'none' }}>(used to coordinate deliveries)</span></label>
+          <label style={label}>Mobile phone <span style={{ fontWeight: 400, textTransform: 'none' }}>(required — used to verify your account &amp; coordinate deliveries)</span></label>
           <input style={input} type="tel" placeholder="(504) 555-0000" value={form.phone} onChange={set('phone')} onKeyDown={onEnter} />
         </div>
       )}
