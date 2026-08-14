@@ -14,6 +14,7 @@ import { containers as containersApi, photoUrl, type AuthUser, type Container } 
 import { GRADE_META } from '../../lib/specs'
 import { damageLabel, gradeLabel } from '../../lib/grading'
 import { SIZE_LABELS } from './shared'
+import { FilterRail, FilterGroup, ChipRow, Chip, useSetFilter, railInput } from '../../components/filters'
 
 const INK = '#0D0E12', INK2 = '#44474F', INK3 = '#6B7280', DIV = '#E2E4E9', GREEN = '#1B7A5A'
 const card: React.CSSProperties = { background: '#fff', border: `1px solid ${DIV}`, borderRadius: '16px', boxShadow: '0 1px 3px rgba(0,0,0,.06)' }
@@ -67,6 +68,28 @@ export function SupplierFleet({ user, onToast }: { user: AuthUser; onToast: (m: 
     damaged: fleet.filter(c => c.grade === 'D').length,
   }), [fleet])
 
+  // ── Left filter rail (marketplace-style) ──────────────────
+  const fSize = useSetFilter<string>()
+  const fGrade = useSetFilter<string>()
+  const fStatus = useSetFilter<string>()
+  const fColor = useSetFilter<string>()
+  const [priceMin, setPriceMin] = useState('')
+  const [priceMax, setPriceMax] = useState('')
+  const [ageBand, setAgeBand] = useState<'all' | '30' | '90' | 'older'>('all')
+  const resetFilters = () => { fSize.clear(); fGrade.clear(); fStatus.clear(); fColor.clear(); setPriceMin(''); setPriceMax(''); setAgeBand('all') }
+
+  const sizesPresent = [...new Set(fleet.map(c => c.size))]
+  const gradesPresent = [...new Set(fleet.map(c => c.grade))]
+  const statusesPresent = [...new Set(fleet.map(c => c.status))]
+  const colorsPresent = [...new Set(fleet.map(c => c.color).filter(Boolean))] as string[]
+
+  const ageDays = (c: Container) => (Date.now() - new Date(c.createdAt).getTime()) / 86400000
+  const shown = fleet.filter(c =>
+    fSize.passes(c.size) && fGrade.passes(c.grade) && fStatus.passes(c.status) && (colorsPresent.length === 0 || fColor.passes(c.color || ''))
+    && (!priceMin || (c.buyPrice || 0) >= Number(priceMin))
+    && (!priceMax || (c.buyPrice || 0) <= Number(priceMax))
+    && (ageBand === 'all' || (ageBand === '30' ? ageDays(c) <= 30 : ageBand === '90' ? ageDays(c) > 30 && ageDays(c) <= 90 : ageDays(c) > 90)))
+
   if (!supplierId) {
     return <div style={{ ...card, padding: '22px', textAlign: 'center', color: INK3, fontSize: '13px' }}>
       This account has the supplier portal but no supplier company linked yet — ask your administrator to connect one under Users &amp; Access.
@@ -84,7 +107,40 @@ export function SupplierFleet({ user, onToast }: { user: AuthUser; onToast: (m: 
 
       {fleet.length === 0 && <div style={{ ...card, padding: '22px', textAlign: 'center', color: INK3, fontSize: '13px' }}>No containers on your account yet.</div>}
 
-      <div style={{ ...card, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      {fleet.length > 0 && (
+        <FilterRail count={shown.length} total={fleet.length} onReset={resetFilters}>
+          <FilterGroup label="Size">
+            <ChipRow>{sizesPresent.map(s => <Chip key={s} on={fSize.set.has(s)} onClick={() => fSize.toggle(s)}>{(SIZE_LABELS[s as keyof typeof SIZE_LABELS] ?? s).replace(' Container', '')}</Chip>)}</ChipRow>
+          </FilterGroup>
+          <FilterGroup label="Grade">
+            <ChipRow>{gradesPresent.map(g => <Chip key={g} on={fGrade.set.has(g)} onClick={() => fGrade.toggle(g)}>{g}</Chip>)}</ChipRow>
+          </FilterGroup>
+          <FilterGroup label="Status">
+            <ChipRow>{statusesPresent.map(s => <Chip key={s} on={fStatus.set.has(s)} onClick={() => fStatus.toggle(s)}>{STATUS_WORD[s] ?? s}</Chip>)}</ChipRow>
+          </FilterGroup>
+          {colorsPresent.length > 0 && (
+            <FilterGroup label="Color">
+              <ChipRow>{colorsPresent.map(cl => <Chip key={cl} on={fColor.set.has(cl)} onClick={() => fColor.toggle(cl)}>{cl}</Chip>)}</ChipRow>
+            </FilterGroup>
+          )}
+          <FilterGroup label="Buy price ($)">
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <input style={railInput} placeholder="Min" value={priceMin} onChange={e => setPriceMin(e.target.value.replace(/\D/g, ''))} />
+              <input style={railInput} placeholder="Max" value={priceMax} onChange={e => setPriceMax(e.target.value.replace(/\D/g, ''))} />
+            </div>
+          </FilterGroup>
+          <FilterGroup label="Listed age">
+            <ChipRow>
+              {([['all', 'All'], ['30', '≤ 30d'], ['90', '31–90d'], ['older', '> 90d']] as const).map(([k, label]) => (
+                <Chip key={k} on={ageBand === k} onClick={() => setAgeBand(k)}>{label}</Chip>
+              ))}
+            </ChipRow>
+          </FilterGroup>
+        </FilterRail>
+      )}
+
+      <div style={{ ...card, overflow: 'hidden', flex: 1, minWidth: '520px' }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '840px' }}>
             <thead>
@@ -95,7 +151,7 @@ export function SupplierFleet({ user, onToast }: { user: AuthUser; onToast: (m: 
               </tr>
             </thead>
             <tbody>
-              {fleet.map(c => {
+              {shown.map(c => {
                 const d = draftOf(c)
                 const gm = GRADE_META[c.grade]
                 const locked = c.status === 'sold' || c.status === 'sale_in_progress'
@@ -147,10 +203,14 @@ export function SupplierFleet({ user, onToast }: { user: AuthUser; onToast: (m: 
                   </tr>
                 )
               })}
+              {shown.length === 0 && fleet.length > 0 && (
+                <tr><td colSpan={7} style={{ textAlign: 'center', padding: '22px', color: INK3, fontSize: '13px' }}>No units match these filters.</td></tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
+      </div>{/* rail + table row */}
       <div style={{ fontSize: '11px', color: INK3 }}>
         Price changes go live on the marketplace immediately. Units in an active sale are locked until the order settles.
       </div>

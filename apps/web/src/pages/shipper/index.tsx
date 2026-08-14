@@ -15,6 +15,7 @@ import { claims as claimsApi, prefs as prefsApi, photoUrl, DAMAGE_SHOT_LABELS, t
 import { damageLabel, SEVERITY_WORD } from '../../lib/grading'
 import { Snackbar } from '../../components/ui'
 import { ClaimTimeline, ClaimPacket } from '../supplier/claimkit'
+import { FilterRail, FilterGroup, ChipRow, Chip, useSetFilter, railSelect, PeriodFilter, PERIOD_ALL, periodPasses, type Period } from '../../components/filters'
 
 const INK = '#0D0E12', INK2 = '#44474F', INK3 = '#6B7280', DIV = '#E2E4E9', RED = '#B3261E', GREEN = '#1B7A5A'
 const card: React.CSSProperties = { background: '#fff', border: `1px solid ${DIV}`, borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,.06)' }
@@ -52,9 +53,23 @@ export default function ShipperReviewPage({ embedded = false }: { embedded?: boo
     } finally { setBusy(null) }
   }
 
-  const queue = [...claimList.filter(c => c.status === 'awaiting_shipper')]
+  // ── Filters (left rail, marketplace-style) ────────────────
+  const fSeverity = useSetFilter<number>()
+  const [fSupplier, setFSupplier] = useState('')
+  const [period, setPeriod] = useState<Period>(PERIOD_ALL)
+  const resetFilters = () => { fSeverity.clear(); setFSupplier(''); setPeriod(PERIOD_ALL) }
+  const severitiesPresent = [...new Set(claimList.map(c => c.severity).filter(s => s > 0))].sort()
+  const suppliersPresent = [...new Map(claimList.map(c => [c.supplierId, c.supplierName])).entries()]
+  const claimYears = [...new Set(claimList.map(c => new Date(c.createdAt).getFullYear()))].sort()
+  const passes = (c: DamageClaim) =>
+    (fSeverity.set.size === 0 || fSeverity.set.has(c.severity))
+    && (!fSupplier || c.supplierId === fSupplier)
+    && periodPasses(c.createdAt, period)
+  const filtered = claimList.filter(passes)
+
+  const queue = [...filtered.filter(c => c.status === 'awaiting_shipper')]
     .sort((a, b) => (a.claimNumber === wanted ? -1 : b.claimNumber === wanted ? 1 : 0))
-  const decided = claimList.filter(c => !!c.shipperDecision)
+  const decided = filtered.filter(c => !!c.shipperDecision)
 
   return (
     <div style={{ fontFamily: 'var(--sans)', background: embedded ? 'transparent' : 'var(--pg)', minHeight: embedded ? undefined : '100vh', color: INK }}>
@@ -78,13 +93,31 @@ export default function ShipperReviewPage({ embedded = false }: { embedded?: boo
       </header>
       )}
 
-      <main style={{ maxWidth: '900px', margin: '0 auto', padding: '22px 16px 80px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <main style={{ maxWidth: '1080px', margin: '0 auto', padding: '22px 16px 80px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div>
           <h2 style={{ fontSize: '18px', fontWeight: 700 }}>Estimates awaiting your decision <span style={{ fontSize: '12px', color: INK3, fontWeight: 400 }}>· {queue.length}</span></h2>
           <p style={{ fontSize: '12px', color: INK3, marginTop: '3px' }}>Approve or reject each repair estimate. Your insurance carrier's own review happens off-platform.</p>
         </div>
 
-        {queue.length === 0 && <div style={{ ...card, textAlign: 'center', color: INK3, fontSize: '13px' }}>Nothing waiting on you.</div>}
+        {/* Left filter rail + review column, marketplace-style */}
+        <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <FilterRail count={filtered.length} total={claimList.length} onReset={resetFilters}>
+          {severitiesPresent.length > 0 && (
+            <FilterGroup label="Severity">
+              <ChipRow>{severitiesPresent.map(s => <Chip key={s} on={fSeverity.set.has(s)} onClick={() => fSeverity.toggle(s)}>{damageLabel(s)}</Chip>)}</ChipRow>
+            </FilterGroup>
+          )}
+          <FilterGroup label="Supplier">
+            <select value={fSupplier} onChange={e => setFSupplier(e.target.value)} style={railSelect}>
+              <option value="">All suppliers</option>
+              {suppliersPresent.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            </select>
+          </FilterGroup>
+          <PeriodFilter period={period} onChange={setPeriod} years={claimYears} />
+        </FilterRail>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1, minWidth: '440px' }}>
+        {queue.length === 0 && <div style={{ ...card, textAlign: 'center', color: INK3, fontSize: '13px' }}>Nothing waiting on you{filtered.length < claimList.length ? ' that matches these filters' : ''}.</div>}
         {queue.map(c => (
           <div key={c.id} style={{ ...card, ...(c.claimNumber === wanted ? { border: '2px solid #0E7490', boxShadow: '0 0 0 4px rgba(14,116,144,.12)' } : {}) }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -137,6 +170,8 @@ export default function ShipperReviewPage({ embedded = false }: { embedded?: boo
             ))}
           </div>
         )}
+        </div>{/* review column */}
+        </div>{/* rail + column row */}
       </main>
       {packet && <ClaimPacket claim={packet} onClose={() => setPacket(null)} />}
       <Snackbar message={message} open={snackOpen} onClose={snackClose} />
