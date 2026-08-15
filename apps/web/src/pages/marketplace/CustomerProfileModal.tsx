@@ -321,6 +321,28 @@ export function CustomerProfileModal({ open, initialTab, onClose, onMessageDrive
                         )
                       })()}
                       {o.deliveryAddress && <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '3px' }}>→ {o.deliveryAddress}</div>}
+                      {/* Delivered orders: rate the driver 1–5 stars (feeds
+                          the contractor's average in their portal). */}
+                      {o.status === 'delivered' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '5px' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--ink3)' }}>{(o.rating ?? 0) >= 1 ? 'Your rating:' : `Rate your delivery${o.driverName ? ` by ${o.driverName}` : ''}:`}</span>
+                          <span style={{ display: 'inline-flex', gap: '1px' }}>
+                            {[1, 2, 3, 4, 5].map(star => (
+                              <button key={star} disabled={(o.rating ?? 0) >= 1}
+                                title={`${star} star${star > 1 ? 's' : ''}`}
+                                onClick={() => orders.rate(o.id, star)
+                                  .then(() => { toast(`Thanks — rated ${star} star${star > 1 ? 's' : ''}!`); if (user) lookup(user) })
+                                  .catch(e => setError(e instanceof Error ? e.message : 'Could not save your rating'))}
+                                style={{ background: 'none', border: 'none', padding: '1px', cursor: (o.rating ?? 0) >= 1 ? 'default' : 'pointer', lineHeight: 0 }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24"
+                                  fill={(o.rating ?? 0) >= star ? '#F5A623' : 'none'} stroke="#F5A623" strokeWidth="1.6" strokeLinejoin="round">
+                                  <path d="M12 2.5l2.6 6.2 6.7.5-5.1 4.4 1.5 6.5L12 16.6 6.3 20.1l1.5-6.5-5.1-4.4 6.7-.5z" />
+                                </svg>
+                              </button>
+                            ))}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

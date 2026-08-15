@@ -9,6 +9,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { useSnackbar, useAuth, useFavicon, useLive } from '../../hooks'
 import { Snackbar, ProgressRing } from '../../components/ui'
 import { GradeScreen, FlowGradeCard, GradeReviewScreen } from './grade'
+import { DriverProfileScreen } from './Profile'
 import { gradeContainer, gradeLabel, ADJUSTER_QUESTIONS, type PhotoFeatures } from '../../lib/grading'
 import { activity, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, containers as containersApi, availability as availabilityApi, messages as messagesApi, customers as customersApi, orders as ordersApi, parseTrucks, parseWorkHours, encodeWorkHours, photoUrl, fileToDataUrl, cutoutContainer, type ActivityEvent, type Depot, type Driver, type SchedJob, type DayHours, type Availability, type Message, type Customer, type Container, type Order } from '../../lib/api'
 
@@ -139,7 +140,7 @@ const fmtTime = (iso: string) => { const d = new Date(iso); return d.toLocaleStr
 
 // ── Types ─────────────────────────────────────────────────
 
-type Screen = 'dashboard' | 'jobs' | 'flow' | 'camera' | 'review' | 'success' | 'schedule' | 'grade' | 'gradeReview' | 'inbox'
+type Screen = 'dashboard' | 'jobs' | 'flow' | 'camera' | 'review' | 'success' | 'schedule' | 'grade' | 'gradeReview' | 'inbox' | 'profile'
 
 interface PhotoShot {
   id: number
@@ -197,6 +198,7 @@ function BottomNav({ active, onNav, unread = 0 }: { active: Screen; onNav: (s: S
     { id: 'schedule',  label: 'Schedule', icon: 'calendar' },
     { id: 'grade',     label: 'AI Grade', icon: 'star' },
     { id: 'inbox',     label: 'Inbox', icon: 'inbox', badge: unread },
+    { id: 'profile',   label: 'Profile', icon: 'user' },
   ]
   return (
     // Pinned to the same 600px column as the app content, so on desktop and
@@ -349,7 +351,7 @@ export default function FieldAppPage() {
       .forEach(p => p.catch(() => {}))
   }
   useEffect(() => {
-    if (screen === 'jobs' || screen === 'schedule') syncFromServer()
+    if (screen === 'jobs' || screen === 'schedule' || screen === 'profile') syncFromServer()
     if (screen === 'inbox') fetchMessages().catch(() => {})
   }, [screen]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -1519,6 +1521,15 @@ export default function FieldAppPage() {
       />
     ),
     inbox:     renderInbox(),
+    // Contractor profile: stats, ratings, earnings, docs, availability.
+    profile: (
+      <DriverProfileScreen
+        me={me}
+        orders={orderList}
+        onUpdated={() => { loadMe().catch(() => {}); fetchOrders().catch(() => {}) }}
+        toast={toast}
+      />
+    ),
     // Grading verdict + approval — its own screen after the questions'
     // Finished button; Approve returns to the job's task list.
     gradeReview: (

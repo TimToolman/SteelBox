@@ -512,6 +512,7 @@ export interface Order {
   relayPlatform?: number     // fee share: SteelBox Co.
   relayLinehaulMiles?: number
   relayLastMiles?: number
+  rating?: number            // customer's 1–5 star delivery rating (0 = unrated)
 }
 
 export const orders = {
@@ -521,6 +522,9 @@ export const orders = {
     request<Order>('/orders', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<Order>) =>
     request<Order>(`/orders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  // Customer rates their delivered order's driver, 1–5 stars.
+  rate: (id: string, rating: number) =>
+    request<Order>(`/orders/${id}/rate`, { method: 'POST', body: JSON.stringify({ rating }) }),
   // Advance a custom build through the estimate → build pipeline (admin).
   // estimate_sent requires the settled amount; customer is notified each step.
   customStage: (id: string, stage: ContainerStatus, amount?: number) =>
@@ -564,6 +568,49 @@ export interface Driver {
   trucks: string             // encoded: "Name~size+size;Name2~size+size"
   workHours: string          // driver availability, encoded: "d:start-end|…" (d 0=Sun..6=Sat, 24h)
   sellerId?: string          // multi-tenant: which seller's fleet this driver belongs to
+  // Independent-contractor profile (Uber-style B2B onboarding)
+  cdl?: boolean
+  truckType?: string
+  haulCaps?: string[]        // container hauling capabilities ('20ft', '40ft', 'chassis', …)
+  serviceZips?: string       // 3-digit ZIP prefixes they cover, comma-separated
+  availableDays?: string[]   // 'Mon'…'Sun'
+  licenseDocUrl?: string     // uploaded CDL/license photo
+  insuranceDocUrl?: string   // uploaded insurance card photo
+  contractor?: boolean       // true = independent contractor (vs employee)
+}
+
+// Application from the public "drive for us" form; approving one mints
+// the driver record + login and emails the invite.
+export interface DriverApplication {
+  id: string
+  name: string
+  email: string
+  phone: string
+  city: string
+  state: string
+  zip: string
+  cdl: boolean
+  cdlClass: string
+  truckType: string
+  haulCaps: string[]
+  experienceYears: number
+  notes: string
+  status: 'new' | 'interviewing' | 'invited' | 'rejected'
+  createdAt: string
+  decidedAt: string | null
+  driverId: string
+}
+
+export const driverApps = {
+  // Public — the landing page form posts here with no session.
+  apply: (data: Partial<DriverApplication>) =>
+    request<{ received: true; id: string }>('/driver-apps', { method: 'POST', body: JSON.stringify(data) }),
+  list: () => request<DriverApplication[]>('/driver-apps'),
+  update: (id: string, data: Partial<DriverApplication>) =>
+    request<DriverApplication>(`/driver-apps/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  // One-click approve & invite: creates driver + login, emails the invite.
+  approve: (id: string, sellerId?: string) =>
+    request<{ application: DriverApplication; driver: Driver; tempPassword: string }>(`/driver-apps/${id}/approve`, { method: 'POST', body: JSON.stringify({ sellerId }) }),
 }
 
 export interface DayHours { start: number; end: number }  // hours 6..22, or null = off
@@ -602,6 +649,9 @@ export const drivers = {
     request<Driver>('/drivers', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<Driver>) =>
     request<Driver>(`/drivers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  // Contractor compliance docs — license / insurance photo upload.
+  uploadDoc: (id: string, kind: 'license' | 'insurance', dataUrl: string) =>
+    request<Driver>(`/drivers/${id}/docs`, { method: 'POST', body: JSON.stringify({ kind, dataUrl }) }),
   remove: (id: string) =>
     request<{ id: string; archived: true }>(`/drivers/${id}`, { method: 'DELETE' }),
 }

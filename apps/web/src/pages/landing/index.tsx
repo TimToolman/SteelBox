@@ -12,7 +12,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import '../../styles/landing.css'
-import { quotes, isZipCovered, type Seller } from '../../lib/api'
+import { quotes, isZipCovered, driverApps, type Seller } from '../../lib/api'
 import type { Tenant } from '../../tenant'
 import { attributionFields } from '../../lib/attribution'
 import {
@@ -430,6 +430,137 @@ export function EmailCaptureBand() {
   )
 }
 
+// ── Drive-for-us band — independent-contractor recruiting ──
+// Bottom-of-page call to action; the button reveals the application
+// form in place (no modal — plays nice with the SSG prerender).
+
+const HAUL_CAP_OPTIONS = ['20ft', '40ft', '45ft high cube', 'Chassis / drayage', 'Tilt-bed self-offload', 'Crane / HIAB']
+
+export function DriveBand() {
+  const [open, setOpen] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [form, setForm] = useState({ name: '', email: '', phone: '', city: '', state: '', zip: '', cdl: 'yes', cdlClass: 'A', truckType: '', experienceYears: '', notes: '' })
+  const [caps, setCaps] = useState<Set<string>>(new Set())
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    setForm(p => ({ ...p, [k]: e.target.value }))
+  const toggleCap = (c: string) => setCaps(prev => {
+    const next = new Set(prev)
+    if (next.has(c)) next.delete(c); else next.add(c)
+    return next
+  })
+  const submit = async () => {
+    setError('')
+    if (!form.name.trim()) { setError('Your name is required.'); return }
+    if (!form.email.includes('@')) { setError('A valid email is required.'); return }
+    if (form.phone.replace(/\D/g, '').length < 10) { setError('A valid mobile number is required.'); return }
+    setBusy(true)
+    try {
+      await driverApps.apply({
+        name: form.name, email: form.email, phone: form.phone,
+        city: form.city, state: form.state, zip: form.zip,
+        cdl: form.cdl === 'yes', cdlClass: form.cdl === 'yes' ? form.cdlClass : '',
+        truckType: form.truckType, haulCaps: [...caps],
+        experienceYears: Number(form.experienceYears) || 0, notes: form.notes,
+      })
+      setSent(true)
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not send your application — please call us.') } finally { setBusy(false) }
+  }
+
+  const inp: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '10px 12px', border: '1.5px solid rgba(255,255,255,.35)', borderRadius: '10px', fontSize: '14px', outline: 'none', background: 'rgba(255,255,255,.95)', fontFamily: 'inherit' }
+  const lbl: React.CSSProperties = { display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', color: 'rgba(255,255,255,.85)', margin: '0 0 5px' }
+
+  return (
+    <section id="drive-for-us" style={{ background: 'var(--ld-brand, #0057B8)', padding: '48px 0' }}>
+      <div className="ld-wrap">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '18px', flexWrap: 'wrap' }}>
+          <div>
+            <h2 style={{ color: '#fff', fontSize: '26px', fontWeight: 800, margin: 0 }}>Want to drive for Nationwide SteelBox?</h2>
+            <p style={{ color: 'rgba(255,255,255,.85)', fontSize: '15px', margin: '6px 0 0', maxWidth: '560px' }}>
+              We partner with independent contractor drivers across our markets — haul containers on your truck, your schedule, your service area. Contact us now!
+            </p>
+          </div>
+          {!open && !sent && (
+            <button onClick={() => setOpen(true)} className="ld-btn ld-btn--accent" style={{ fontSize: '15px', padding: '13px 26px', cursor: 'pointer', border: 'none' }}>
+              Apply to Drive
+            </button>
+          )}
+        </div>
+
+        {sent && (
+          <div style={{ marginTop: '22px', background: 'rgba(255,255,255,.12)', border: '1.5px solid rgba(255,255,255,.3)', borderRadius: '14px', padding: '18px 20px', color: '#fff', maxWidth: '640px' }}>
+            <div style={{ fontSize: '17px', fontWeight: 800, marginBottom: '4px' }}>✓ Application received!</div>
+            <div style={{ fontSize: '14px', lineHeight: 1.55, color: 'rgba(255,255,255,.9)' }}>
+              Thanks — our team reviews every application and will call you to set up a quick interview.
+              Once you're approved we'll email your Driver Portal invite to finish onboarding.
+            </div>
+          </div>
+        )}
+
+        {open && !sent && (
+          <div style={{ marginTop: '24px', maxWidth: '760px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px' }}>
+              <div><label style={lbl}>Full name *</label><input style={inp} value={form.name} onChange={set('name')} placeholder="Sam Carter" /></div>
+              <div><label style={lbl}>Email *</label><input style={inp} type="email" value={form.email} onChange={set('email')} placeholder="you@email.com" /></div>
+              <div><label style={lbl}>Mobile *</label><input style={inp} type="tel" value={form.phone} onChange={set('phone')} placeholder="(504) 555-0000" /></div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '12px', marginTop: '12px' }}>
+              <div><label style={lbl}>City</label><input style={inp} value={form.city} onChange={set('city')} /></div>
+              <div><label style={lbl}>State</label><input style={inp} value={form.state} onChange={set('state')} placeholder="LA" /></div>
+              <div><label style={lbl}>ZIP</label><input style={inp} inputMode="numeric" maxLength={5} value={form.zip} onChange={set('zip')} placeholder="70112" /></div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginTop: '12px' }}>
+              <div>
+                <label style={lbl}>CDL license?</label>
+                <select style={{ ...inp, cursor: 'pointer' }} value={form.cdl} onChange={set('cdl')}>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </div>
+              {form.cdl === 'yes' && (
+                <div>
+                  <label style={lbl}>CDL class</label>
+                  <select style={{ ...inp, cursor: 'pointer' }} value={form.cdlClass} onChange={set('cdlClass')}>
+                    <option value="A">Class A</option>
+                    <option value="B">Class B</option>
+                  </select>
+                </div>
+              )}
+              <div><label style={lbl}>Truck / equipment</label><input style={inp} value={form.truckType} onChange={set('truckType')} placeholder="Tilt-bed roll-off" /></div>
+              <div><label style={lbl}>Years hauling</label><input style={inp} inputMode="numeric" value={form.experienceYears} onChange={set('experienceYears')} placeholder="5" /></div>
+            </div>
+            <div style={{ marginTop: '12px' }}>
+              <label style={lbl}>Container hauling capabilities</label>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {HAUL_CAP_OPTIONS.map(c => (
+                  <button key={c} type="button" onClick={() => toggleCap(c)} style={{
+                    padding: '7px 14px', borderRadius: '999px', cursor: 'pointer', fontSize: '13px', fontWeight: 700, fontFamily: 'inherit',
+                    border: `1.5px solid ${caps.has(c) ? '#fff' : 'rgba(255,255,255,.4)'}`,
+                    background: caps.has(c) ? '#fff' : 'transparent',
+                    color: caps.has(c) ? 'var(--ld-brand, #0057B8)' : '#fff',
+                  }}>{c}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{ marginTop: '12px' }}>
+              <label style={lbl}>Anything else? (optional)</label>
+              <textarea style={{ ...inp, resize: 'vertical' }} rows={2} value={form.notes} onChange={set('notes')} placeholder="Routes you run, ports you know, references…" />
+            </div>
+            {error && <div style={{ marginTop: '10px', background: 'rgba(255,255,255,.95)', color: '#B3261E', borderRadius: '10px', padding: '9px 12px', fontSize: '13px', fontWeight: 600 }}>{error}</div>}
+            <div style={{ display: 'flex', gap: '10px', marginTop: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button onClick={submit} disabled={busy} className="ld-btn ld-btn--accent" style={{ fontSize: '15px', padding: '12px 26px', cursor: 'pointer', border: 'none' }}>
+                {busy ? 'Sending…' : 'Send My Application'}
+              </button>
+              <span style={{ color: 'rgba(255,255,255,.75)', fontSize: '12.5px' }}>We'll call you for a quick interview — approval invites you into the Driver Portal.</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 // ── Footer ────────────────────────────────────────────────
 
 export function SiteFooter({ tenant }: { tenant: Tenant }) {
@@ -461,6 +592,7 @@ export function SiteFooter({ tenant }: { tenant: Tenant }) {
               <li><a href={u('#how-it-works')}>How it works</a></li>
               <li><a href={u('#why-us')}>Why us</a></li>
               <li><a href={u('#faq')}>FAQ</a></li>
+              <li><a href={u('#drive-for-us')}>Drive for us</a></li>
             </ul>
           </div>
           <div>
@@ -522,6 +654,7 @@ export default function LandingPage({ tenant }: LandingPageProps) {
         <Teasers />
         <FaqSection tenant={tenant} />
         <EmailCaptureBand />
+        <DriveBand />
       </main>
       <SiteFooter tenant={tenant} />
       <CallBar tenant={tenant} />
