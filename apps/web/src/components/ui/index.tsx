@@ -36,7 +36,7 @@ const GRADE_COLORS: Record<GradeKey, string> = {
 }
 
 const GRADE_LABELS: Record<GradeKey, string> = {
-  A: 'One-Trip',
+  A: 'New / One-Trip',
   B: 'Cargo-Worthy',
   C: 'Wind & Watertight',
   R: 'Refurbished',

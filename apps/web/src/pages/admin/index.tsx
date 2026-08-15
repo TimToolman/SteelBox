@@ -337,7 +337,7 @@ function AddContainerModal({ open, onClose, onAdded }: { open: boolean; onClose:
       <div style={{ marginBottom: '12px' }}>
         <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '5px' }}>Grade</label>
         <select value={form.grade} onChange={e => setForm(p => ({ ...p, grade: e.target.value }))} style={{ width: '100%', padding: '10px 12px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '13px', outline: 'none', fontFamily: 'var(--sans)', marginBottom: '12px' }}>
-          <option value="A">A — One-Trip</option>
+          <option value="A">A — New / One-Trip</option>
           <option value="B">B — Cargo-Worthy</option>
           <option value="C">C — Wind & Watertight</option>
           <option value="R">R — Refurbished</option>
@@ -497,7 +497,7 @@ function EditContainerModal({ container, onClose, onSaved }: {
       <div style={{ marginBottom: '12px' }}>
         <label style={lblStyle}>Grade</label>
         <select value={form.grade} onChange={e => setForm(p => ({ ...p, grade: e.target.value }))} style={selStyle}>
-          <option value="A">A — One-Trip</option>
+          <option value="A">A — New / One-Trip</option>
           <option value="B">B — Cargo-Worthy</option>
           <option value="C">C — Wind & Watertight</option>
           <option value="R">R — Refurbished</option>

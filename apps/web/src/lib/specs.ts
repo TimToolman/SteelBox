@@ -85,7 +85,7 @@ export const DELIVERY_CLEARANCE = {
 // page, FAQ, and admin surfaces.
 
 export const GRADE_META: Record<ContainerGrade, { label: string; desc: string; color: string }> = {
-  A: { label: 'One-Trip', desc: 'Direct import, single use. Like new inside and out.', color: '#1B7A5A' },
+  A: { label: 'New / One-Trip', desc: 'Direct import, single use. Like new inside and out.', color: '#1B7A5A' },
   B: { label: 'Cargo-Worthy', desc: 'Used, structurally sound, wind and watertight.', color: '#2563EB' },
   C: { label: 'Wind & Watertight', desc: 'Older unit with visible rust. Structurally solid.', color: '#D97706' },
   R: { label: 'Refurbished', desc: 'Repainted, resealed, and reconditioned.', color: '#6D28D9' },
