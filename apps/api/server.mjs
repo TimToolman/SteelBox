@@ -778,7 +778,7 @@ function ensureSeedClaimTables() {
   if (readTable('driverapps').length === 0) {
     const now = new Date().toISOString()
     writeTable('driverapps', [
-      { id: 'app_01', name: 'Curtis Boyd', email: 'curtis.boyd@gmail.com', phone: '(985) 555-0455', city: 'Slidell', state: 'LA', zip: '70458', cdl: true, cdlClass: 'A', truckType: 'Tilt-bed roll-off', haulCaps: ['20ft', '40ft'], experienceYears: 9, notes: 'Hauled port drayage out of NOLA 2019–2024. Own truck, clean MVR.', status: 'new', createdAt: now, decidedAt: null, driverId: '' },
+      { id: 'app_01', name: 'Curtis Broussard', email: 'curtis.broussard@gmail.com', phone: '(985) 555-0455', city: 'Slidell', state: 'LA', zip: '70458', cdl: true, cdlClass: 'A', truckType: 'Tilt-bed roll-off', haulCaps: ['20ft', '40ft'], experienceYears: 9, notes: 'Hauled port drayage out of NOLA 2019–2024. Own truck, clean MVR.', status: 'new', createdAt: now, decidedAt: null, driverId: '' },
       { id: 'app_02', name: 'Yolanda Pierre', email: 'yolanda.pierre@outlook.com', phone: '(713) 555-0466', city: 'Baytown', state: 'TX', zip: '77520', cdl: false, cdlClass: '', truckType: 'Gooseneck + 40ft trailer', haulCaps: ['20ft'], experienceYears: 3, notes: '', status: 'interviewing', createdAt: now, decidedAt: null, driverId: '' },
     ])
     console.log('Seeded driver applications (2)')
