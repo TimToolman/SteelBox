@@ -141,7 +141,7 @@ export const users = {
 }
 
 // ── Sellers (multi-tenant marketplace) ────────────────────
-// The platform is Nationwide SteelBox Corp; each seller owns depots and
+// The platform is National SteelBox Corp; each seller owns depots and
 // everything (inventory, orders, drivers, service terms) rolls up from
 // depot ownership. Public list powers seller branding on listings.
 
@@ -1074,7 +1074,7 @@ export interface MarketingCampaign {
   unsubs: number
   sentAt: string | null
   createdAt: string
-  // 'hq' when Nationwide SteelBox ran this campaign on the reseller's
+  // 'hq' when National SteelBox ran this campaign on the reseller's
   // behalf; '' when the reseller ran it themselves.
   managedBy?: string
 }

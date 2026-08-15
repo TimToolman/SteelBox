@@ -158,7 +158,7 @@ export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onN
           )}
 
           {/* Multi-tenant: who sells, services, and delivers this unit.
-              The marketplace is Nationwide SteelBox; the sale itself — pricing,
+              The marketplace is National SteelBox; the sale itself — pricing,
               drivers, delivery, and the service agreement — is this seller's. */}
           {(seller || container.sellerName) && (
             <div style={{ background: 'var(--surf1)', borderRadius: 'var(--r12)', padding: '13px 14px', border: '1px solid var(--div)' }}>

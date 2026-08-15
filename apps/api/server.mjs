@@ -213,7 +213,7 @@ const SCHEMAS = {
     headers: ['id','name','tag','description','features','fromPrice','photo','sortOrder','active'],
     types: { fromPrice: 'number', sortOrder: 'number', active: 'boolean', features: 'array' },
   },
-  // Marketplace sellers (multi-tenant): the platform is Nationwide SteelBox
+  // Marketplace sellers (multi-tenant): the platform is National SteelBox
   // Corp; each seller owns depots (depots.sellerId) and everything rolls up
   // from there — a container's seller is its depot's seller, orders snapshot
   // the seller at sale time, and drivers belong to a seller's fleet.
@@ -236,7 +236,7 @@ const SCHEMAS = {
   // 3-digit ZIP zones ('' = whole list).
   mktcampaigns: {
     file: 'mktcampaigns.csv',
-    // managedBy 'hq' marks campaigns Nationwide SteelBox ran on the
+    // managedBy 'hq' marks campaigns National SteelBox ran on the
     // reseller's behalf; '' = the reseller ran it themselves.
     headers: ['id','sellerId','name','type','status','subject','content','platform','cta','audienceKind','zipPrefixes','audienceCount','budget','spend','delivered','opens','clicks','conversions','revenue','unsubs','sentAt','createdAt','managedBy'],
     types: { zipPrefixes: 'array', audienceCount: 'number', budget: 'number', spend: 'number', delivered: 'number', opens: 'number', clicks: 'number', conversions: 'number', revenue: 'number', unsubs: 'number', sentAt: 'stringOrNull' },
@@ -570,7 +570,7 @@ function ensureSeedSellers() {
         id: 'sel_demo', name: 'Demo Container Corp', legalName: 'Demo Container Corporation',
         brandPrimary: '#1B7A5A', brandAccent: '#7C3AED',
         phone: '(410) 555-0155', email: 'sales@democontainercorp.com',
-        tos: 'Service agreement — Demo Container Corporation. Deliveries are fulfilled by Demo Container Corp within 5 business days of confirmed payment. All units carry a 14-day defect guarantee from the day of delivery. Payment terms, scheduling, and post-sale support are handled directly by Demo Container Corp — Nationwide SteelBox Corp operates the marketplace only.',
+        tos: 'Service agreement — Demo Container Corporation. Deliveries are fulfilled by Demo Container Corp within 5 business days of confirmed payment. All units carry a 14-day defect guarantee from the day of delivery. Payment terms, scheduling, and post-sale support are handled directly by Demo Container Corp — National SteelBox Corp operates the marketplace only.',
         active: true, createdAt: new Date().toISOString(),
       },
     ]
@@ -2028,7 +2028,7 @@ async function handleRequest(req, res) {
         apps.push(record)
         writeTable('driverapps', apps)
         queueMessage('email', NOTIFY_EMAILS.join(','), `New driver application — ${record.name}`,
-          `${record.name} (${record.email}, ${record.phone}) wants to drive for Nationwide SteelBox.\nCDL: ${record.cdl ? record.cdlClass || 'yes' : 'no'} · Truck: ${record.truckType || '—'} · Hauls: ${record.haulCaps.join(', ') || '—'}\nReview in Admin → Driver Applications.`,
+          `${record.name} (${record.email}, ${record.phone}) wants to drive for National SteelBox.\nCDL: ${record.cdl ? record.cdlClass || 'yes' : 'no'} · Truck: ${record.truckType || '—'} · Hauls: ${record.haulCaps.join(', ') || '—'}\nReview in Admin → Driver Applications.`,
           'driverapp', record.id)
         return send(res, 201, { received: true, id: record.id })
       }
@@ -2085,7 +2085,7 @@ async function handleRequest(req, res) {
         writeTable('users', users)
         apps[ai] = { ...a, status: 'invited', decidedAt: new Date().toISOString(), driverId: driver.id }
         writeTable('driverapps', apps)
-        queueMessage('email', a.email, 'You\'re approved to drive for Nationwide SteelBox',
+        queueMessage('email', a.email, 'You\'re approved to drive for National SteelBox',
           `Welcome aboard, ${a.name}!\n\nYour contractor driver account is ready. Sign in to the Driver Portal to finish onboarding — upload your license and insurance, set your service area and available days, and see your schedule.\n\nSign in: ${(process.env.PUBLIC_ORIGIN || 'https://www.mvpcontainers.com')}/field\nEmail: ${a.email}\nTemporary password: ${tempPassword}\n\nQuestions? Call dispatch at (504) 555-0190.`,
           'driverapp', a.id)
         return send(res, 200, { application: apps[ai], driver, tempPassword })
