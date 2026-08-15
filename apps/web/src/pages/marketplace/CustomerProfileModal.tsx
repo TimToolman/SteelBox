@@ -6,7 +6,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { Button, Modal, Input, StatusBadge } from '../../components/ui'
 import { LoginForm } from '../../lib/auth'
 import { useAuth } from '../../hooks'
-import { customers as customersApi, orders, messages as messagesApi, CUSTOM_STAGES, type AuthUser, type Customer, type Message, type Order } from '../../lib/api'
+import { customers as customersApi, orders, messages as messagesApi, marketingApi, CUSTOM_STAGES, type AuthUser, type Customer, type Message, type Order } from '../../lib/api'
 
 // ── Customer Profile ───────────────────────────────────────
 // Email-identified profile (no password in the prototype — RBAC will bring
@@ -99,6 +99,20 @@ export function CustomerProfileModal({ open, initialTab, onClose, onMessageDrive
     if (user) lookup(user)
     else { setCustomer(null); setForm(null); setMyOrders([]); setMyMessages([]) }
   }, [open, user, initialTab, lookup])
+
+  // Marketing opt-out / opt-in — flips consent on every reseller list this
+  // email appears on (our resellers, and campaigns HQ runs on their behalf).
+  const [mktConsent, setMktConsent] = useState<boolean>(true)
+  useEffect(() => {
+    if (!open || !user) return
+    marketingApi.consent().then(r => setMktConsent(r.optedIn)).catch(() => {})
+  }, [open, user])
+  const toggleMktConsent = (optIn: boolean) => {
+    setMktConsent(optIn)
+    marketingApi.setConsent(optIn)
+      .then(() => toast(optIn ? 'Opted back in to marketing emails' : 'Opted out of marketing emails'))
+      .catch(() => {})
+  }
 
   const save = async () => {
     if (!customer || !form) return
@@ -220,9 +234,13 @@ export function CustomerProfileModal({ open, initialTab, onClose, onMessageDrive
                   <input type="checkbox" checked={form.notifySms} onChange={e => set('notifySms', e.target.checked)} style={{ width: '17px', height: '17px', accentColor: 'var(--primary)' }} />
                   <span style={{ fontSize: '13px' }}>Text me (SMS) about deliveries &amp; driver messages</span>
                 </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
                   <input type="checkbox" checked disabled style={{ width: '17px', height: '17px', accentColor: 'var(--green)' }} />
-                  <span style={{ fontSize: '13px', color: 'var(--ink2)' }}>Email updates <span style={{ color: 'var(--ink3)' }}>· required</span></span>
+                  <span style={{ fontSize: '13px', color: 'var(--ink2)' }}>Order &amp; delivery emails <span style={{ color: 'var(--ink3)' }}>· required</span></span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={mktConsent} onChange={e => toggleMktConsent(e.target.checked)} style={{ width: '17px', height: '17px', accentColor: 'var(--primary)' }} />
+                  <span style={{ fontSize: '13px' }}>Deals &amp; new-arrival emails from us and our resellers <span style={{ color: 'var(--ink3)' }}>· opt out anytime</span></span>
                 </label>
               </div>
 

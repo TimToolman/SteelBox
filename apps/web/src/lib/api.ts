@@ -51,7 +51,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 // ── Auth ──────────────────────────────────────────────────
 
-export type Role = 'customer' | 'driver' | 'adjuster' | 'supplier' | 'shipper' | 'admin'
+export type Role = 'customer' | 'driver' | 'adjuster' | 'supplier' | 'shipper' | 'marketing' | 'admin'
 
 export interface AuthUser {
   id: string
@@ -159,6 +159,8 @@ export interface Seller {
   // Reseller territory: 3-digit ZIP prefix zones, e.g. "700-705,770-778".
   // Drives the marketplace ZIP search and cross-territory relay fees.
   territoryZips?: string
+  // Marketing portal tier this reseller subscribes to.
+  marketingPlan?: MarketingPlanId
 }
 
 export const sellers = {
@@ -974,6 +976,103 @@ export const repairShops = {
   // Un-approves (soft delete) so claim history keeps its reference.
   remove: (id: string) =>
     request<{ id: string; archived: true }>(`/repairshops/${id}`, { method: 'DELETE' }),
+}
+
+// ── Marketing portal (reseller campaigns) ──────────────────
+// Contacts uploaded by a reseller, the campaigns they run over them, and
+// their connected send/ad providers. All strictly tenant-scoped server-side.
+
+export type MarketingPlanId = 'starter' | 'growth' | 'pro'
+export type CampaignType = 'email' | 'social' | 'ad'
+export type CampaignStatus = 'draft' | 'sent' | 'running'
+
+export interface MarketingContact {
+  id: string
+  sellerId: string
+  name: string
+  email: string
+  phone: string
+  zip: string
+  city: string
+  state: string
+  tags: string[]
+  source: string      // 'csv' | 'manual' | 'seed'
+  consent: boolean    // opted in to receive marketing
+  createdAt: string
+}
+
+export interface MarketingCampaign {
+  id: string
+  sellerId: string
+  name: string
+  type: CampaignType
+  status: CampaignStatus
+  subject: string     // email only
+  content: string     // body copy; {{firstName}} / {{zip}} merge tags
+  platform: string    // social/ad: 'facebook' | 'instagram' | 'google'
+  cta: string
+  audienceKind: 'all' | 'zip'
+  zipPrefixes: string[]   // 3-digit prefixes when audienceKind === 'zip'
+  audienceCount: number
+  budget: number
+  spend: number
+  delivered: number
+  opens: number       // ads: impressions viewed
+  clicks: number
+  conversions: number
+  revenue: number
+  unsubs: number
+  sentAt: string | null
+  createdAt: string
+  // 'hq' when Nationwide SteelBox ran this campaign on the reseller's
+  // behalf; '' when the reseller ran it themselves.
+  managedBy?: string
+}
+
+export interface MarketingConnection {
+  id: string
+  sellerId: string
+  provider: string
+  status: string
+  apiKeyMasked: string
+  connectedAt: string
+}
+
+export const marketingApi = {
+  contacts: () => request<MarketingContact[]>('/marketing/contacts'),
+  // Bulk CSV import (rows parsed client-side). Dedupes by email per tenant.
+  // sellerId lets HQ import on a reseller's behalf (ignored for tenants).
+  importContacts: (rows: Array<Partial<MarketingContact>>, source = 'csv', sellerId?: string) =>
+    request<{ imported: number; skipped: number; total: number }>('/marketing/contacts/import', { method: 'POST', body: JSON.stringify({ rows, source, sellerId }) }),
+  addContact: (data: Partial<MarketingContact>) =>
+    request<MarketingContact>('/marketing/contacts', { method: 'POST', body: JSON.stringify(data) }),
+  updateContact: (id: string, data: Partial<MarketingContact>) =>
+    request<MarketingContact>(`/marketing/contacts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  removeContact: (id: string) =>
+    request<{ deleted: true }>(`/marketing/contacts/${id}`, { method: 'DELETE' }),
+  campaigns: () => request<MarketingCampaign[]>('/marketing/campaigns'),
+  createCampaign: (data: Partial<MarketingCampaign>) =>
+    request<MarketingCampaign>('/marketing/campaigns', { method: 'POST', body: JSON.stringify(data) }),
+  updateCampaign: (id: string, data: Partial<MarketingCampaign>) =>
+    request<MarketingCampaign>(`/marketing/campaigns/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  removeCampaign: (id: string) =>
+    request<{ deleted: true }>(`/marketing/campaigns/${id}`, { method: 'DELETE' }),
+  // Freeze the audience, stamp sentAt, and fill the engagement funnel.
+  launchCampaign: (id: string) =>
+    request<MarketingCampaign>(`/marketing/campaigns/${id}/launch`, { method: 'POST' }),
+  connections: () => request<MarketingConnection[]>('/marketing/connections'),
+  connect: (provider: string, apiKey: string, sellerId?: string) =>
+    request<MarketingConnection>('/marketing/connections', { method: 'POST', body: JSON.stringify({ provider, apiKey, sellerId }) }),
+  disconnect: (id: string) =>
+    request<{ deleted: true }>(`/marketing/connections/${id}`, { method: 'DELETE' }),
+  plan: (sellerId?: string) =>
+    request<{ sellerId: string; plan: MarketingPlanId }>(`/marketing/plan${sellerId ? `?sellerId=${sellerId}` : ''}`),
+  setPlan: (plan: MarketingPlanId, sellerId?: string) =>
+    request<{ sellerId: string; plan: MarketingPlanId }>(`/marketing/plan${sellerId ? `?sellerId=${sellerId}` : ''}`, { method: 'POST', body: JSON.stringify({ plan }) }),
+  // The signed-in customer's own marketing opt-out / opt-in (profile dialog).
+  consent: () => request<{ optedIn: boolean; listed: boolean }>('/marketing/consent'),
+  setConsent: (optIn: boolean) =>
+    request<{ optedIn: boolean; changed: number }>('/marketing/consent', { method: 'POST', body: JSON.stringify({ optIn }) }),
 }
 
 export const claims = {

@@ -4375,7 +4375,7 @@
    "tag": "POPULAR",
    "description": "Single or double roll-up doors for easy forklift access.",
    "features": [
-    "8×7 roll-up",
+    "8\u00d77 roll-up",
     "Galvanized steel",
     "Lockable"
    ],
@@ -4454,10 +4454,11 @@
    "brandAccent": "#E65100",
    "phone": "(504) 555-0190",
    "email": "sales@mvpcontainers.com",
-   "tos": "Service agreement — MVP Container LLC. Delivery within 3–5 business days of confirmed payment, performed by MVP Container drivers and equipment. Payment is authorized at checkout and captured only after the container is set and inspected on site. 30-day wind-and-watertight guarantee on all graded units. Rentals bill monthly in advance; pickup is scheduled within 5 business days of the end of term. Site must provide the clearances published on the listing.",
+   "tos": "Service agreement \u2014 MVP Container LLC. Delivery within 3\u20135 business days of confirmed payment, performed by MVP Container drivers and equipment. Payment is authorized at checkout and captured only after the container is set and inspected on site. 30-day wind-and-watertight guarantee on all graded units. Rentals bill monthly in advance; pickup is scheduled within 5 business days of the end of term. Site must provide the clearances published on the listing.",
    "active": true,
    "createdAt": "2026-08-06T02:49:06.256Z",
-   "territoryZips": "700-716,770-778,300-312,398-399"
+   "territoryZips": "700-716,770-778,300-312,398-399",
+   "marketingPlan": "growth"
   },
   {
    "id": "sel_demo",
@@ -4467,10 +4468,11 @@
    "brandAccent": "#7C3AED",
    "phone": "(410) 555-0155",
    "email": "sales@democontainercorp.com",
-   "tos": "Service agreement — Demo Container Corporation. Deliveries are fulfilled by Demo Container Corp within 5 business days of confirmed payment. All units carry a 14-day defect guarantee from the day of delivery. Payment terms, scheduling, and post-sale support are handled directly by Demo Container Corp — Nationwide SteelBox Corp operates the marketplace only.",
+   "tos": "Service agreement \u2014 Demo Container Corporation. Deliveries are fulfilled by Demo Container Corp within 5 business days of confirmed payment. All units carry a 14-day defect guarantee from the day of delivery. Payment terms, scheduling, and post-sale support are handled directly by Demo Container Corp \u2014 Nationwide SteelBox Corp operates the marketplace only.",
    "active": true,
    "createdAt": "2026-08-06T02:49:06.257Z",
-   "territoryZips": "206-219,220-246,270-289,320-339,350-374"
+   "territoryZips": "206-219,220-246,270-289,320-339,350-374",
+   "marketingPlan": "starter"
   }
  ],
  "drivers": [
@@ -4661,7 +4663,7 @@
    "city": "Katy",
    "state": "TX",
    "zip": "77494",
-   "notes": "Repeat buyer — 20ft units",
+   "notes": "Repeat buyer \u2014 20ft units",
    "active": true,
    "createdAt": "2026-05-02T09:00:00.000Z",
    "notifySms": true,
@@ -5320,7 +5322,7 @@
    "sku": "NOLA-20-0004",
    "containerId": "ctr_0067",
    "actor": "Mike Torres",
-   "location": "NOLA Depot · Bay 4",
+   "location": "NOLA Depot \u00b7 Bay 4",
    "note": "12/12 photos uploaded"
   },
   {
@@ -5331,7 +5333,7 @@
    "sku": "NOLA-20-0004",
    "containerId": "ctr_0067",
    "actor": "Mike Torres",
-   "location": "NOLA Depot · Bay 4",
+   "location": "NOLA Depot \u00b7 Bay 4",
    "note": "Arrived on site"
   }
  ],
@@ -5353,8 +5355,8 @@
    "toRole": "driver",
    "toName": "Marcus Lee",
    "toEmail": "",
-   "subject": "New delivery — CDI-20-0003 on 2026-08-07",
-   "body": "You've been assigned CDI-20-0003 on 2026-08-07.\n\nDeliver to: 7200 Washington Blvd, Elkridge, MD 21075\nCustomer: Patapsco Farm Supply · (410) 555-0456\nOrder: ORD-0095 ($2,525 purchase)",
+   "subject": "New delivery \u2014 CDI-20-0003 on 2026-08-07",
+   "body": "You've been assigned CDI-20-0003 on 2026-08-07.\n\nDeliver to: 7200 Washington Blvd, Elkridge, MD 21075\nCustomer: Patapsco Farm Supply \u00b7 (410) 555-0456\nOrder: ORD-0095 ($2,525 purchase)",
    "createdAt": "2026-08-06T03:31:09.729Z",
    "read": false,
    "trashed": false
@@ -5368,8 +5370,8 @@
    "toRole": "driver",
    "toName": "Denise Walker",
    "toEmail": "",
-   "subject": "New delivery — CDI-20-0002 on 2026-08-07",
-   "body": "You've been assigned CDI-20-0002 on 2026-08-07.\n\nDeliver to: 801 Key Hwy, Baltimore, MD 21230\nCustomer: Chesapeake Event Rentals · (443) 555-0187\nOrder: ORD-0094 ($570 rental)",
+   "subject": "New delivery \u2014 CDI-20-0002 on 2026-08-07",
+   "body": "You've been assigned CDI-20-0002 on 2026-08-07.\n\nDeliver to: 801 Key Hwy, Baltimore, MD 21230\nCustomer: Chesapeake Event Rentals \u00b7 (443) 555-0187\nOrder: ORD-0094 ($570 rental)",
    "createdAt": "2026-08-06T03:31:09.724Z",
    "read": false,
    "trashed": false
@@ -5384,7 +5386,7 @@
    "toName": "Mike Torres",
    "toEmail": "",
    "subject": "Gate code for delivery",
-   "body": "Hi — the yard gate code is 4821. Forklift is on site if you need it. Ask for Manny.",
+   "body": "Hi \u2014 the yard gate code is 4821. Forklift is on site if you need it. Ask for Manny.",
    "createdAt": "2026-06-30T18:05:00.000Z",
    "read": true,
    "trashed": false
@@ -5398,7 +5400,7 @@
    "toRole": "driver",
    "toName": "Mike Torres",
    "toEmail": "",
-   "subject": "Route change — HOU-40-0001",
+   "subject": "Route change \u2014 HOU-40-0001",
    "body": "Customer moved the Katy delivery to the afternoon. Please start the run after 1 PM and call ahead. Thanks.",
    "createdAt": "2026-06-30T15:30:00.000Z",
    "read": true,
@@ -5630,7 +5632,8 @@
    "createdAt": "2026-07-03T18:36:22.696Z",
    "sellerId": "sel_mvp",
    "roles": [
-    "marketplace"
+    "marketplace",
+    "marketing"
    ]
   },
   {
@@ -5646,7 +5649,25 @@
    "createdAt": "2026-07-03T18:36:22.696Z",
    "sellerId": "sel_demo",
    "roles": [
-    "marketplace"
+    "marketplace",
+    "marketing"
+   ]
+  },
+  {
+   "id": "usr_mvpmkt01",
+   "email": "marketing@mvpcontainer.com",
+   "role": "customer",
+   "name": "Josie Trahan",
+   "phone": "",
+   "driverId": "",
+   "customerId": "",
+   "phoneVerified": false,
+   "active": true,
+   "createdAt": "2026-08-15T00:00:00.000Z",
+   "sellerId": "sel_mvp",
+   "roles": [
+    "marketplace",
+    "marketing"
    ]
   }
  ],
@@ -5757,7 +5778,7 @@
    "status": "awaiting_inspection",
    "severity": 0,
    "photos": [],
-   "notes": "Stack shift in heavy weather — port-side panels",
+   "notes": "Stack shift in heavy weather \u2014 port-side panels",
    "estimateAmount": 0,
    "estimateNotes": "",
    "shipperDecision": "",
@@ -5801,7 +5822,7 @@
    "inspectorName": "J. Alvarez",
    "inspectedAt": "2026-08-05T15:10:00.000Z",
    "createdAt": "2026-08-04T12:00:00.000Z",
-   "events": "[{\"t\":\"2026-08-04T12:00:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Claim filed against Meridian Lines (MV KESTREL 221E)\"},{\"t\":\"2026-08-05T15:10:00Z\",\"actor\":\"J. Alvarez\",\"text\":\"Damage inspected — severity D·3\"}]"
+   "events": "[{\"t\":\"2026-08-04T12:00:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Claim filed against Meridian Lines (MV KESTREL 221E)\"},{\"t\":\"2026-08-05T15:10:00Z\",\"actor\":\"J. Alvarez\",\"text\":\"Damage inspected \u2014 severity D\u00b73\"}]"
   },
   {
    "id": "clm_demo3",
@@ -5832,7 +5853,7 @@
    "inspectorName": "J. Alvarez",
    "inspectedAt": "2026-08-03T10:30:00.000Z",
    "createdAt": "2026-08-02T09:00:00.000Z",
-   "events": "[{\"t\":\"2026-08-02T09:00:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Claim filed against Meridian Lines (MV PELICAN 087W)\"},{\"t\":\"2026-08-03T10:30:00Z\",\"actor\":\"J. Alvarez\",\"text\":\"Damage inspected — severity D·4\"},{\"t\":\"2026-08-04T08:15:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Repair estimate $2,400 submitted to Meridian Lines\"},{\"t\":\"2026-08-04T08:16:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Estimate shared with Meridian Lines by email (login link)\"}]",
+   "events": "[{\"t\":\"2026-08-02T09:00:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Claim filed against Meridian Lines (MV PELICAN 087W)\"},{\"t\":\"2026-08-03T10:30:00Z\",\"actor\":\"J. Alvarez\",\"text\":\"Damage inspected \u2014 severity D\u00b74\"},{\"t\":\"2026-08-04T08:15:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Repair estimate $2,400 submitted to Meridian Lines\"},{\"t\":\"2026-08-04T08:16:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Estimate shared with Meridian Lines by email (login link)\"}]",
    "sharedAt": "2026-08-04T08:16:00Z"
   },
   {
@@ -5863,7 +5884,7 @@
    "inspectorName": "M. Torres",
    "inspectedAt": "2026-08-05T09:00:00.000Z",
    "createdAt": "2026-08-01T08:00:00.000Z",
-   "events": "[{\"t\":\"2026-08-01T08:00:00Z\",\"actor\":\"Marcus Webb\",\"text\":\"Claim filed against Austral Shipping (MV IBIS 314N)\"},{\"t\":\"2026-08-05T09:00:00Z\",\"actor\":\"M. Torres\",\"text\":\"Damage inspected — severity D·2\"},{\"t\":\"2026-08-05T14:00:00Z\",\"actor\":\"Marcus Webb\",\"text\":\"Repair estimate $1,150 submitted to Austral Shipping\"},{\"t\":\"2026-08-06T19:45:00Z\",\"actor\":\"Austral Shipping\",\"text\":\"Shipper signed in and viewed the claim\"},{\"t\":\"2026-08-06T20:00:00Z\",\"actor\":\"Austral Shipping\",\"text\":\"Shipper approved the estimate — “Approved at quoted amount”\"}]",
+   "events": "[{\"t\":\"2026-08-01T08:00:00Z\",\"actor\":\"Marcus Webb\",\"text\":\"Claim filed against Austral Shipping (MV IBIS 314N)\"},{\"t\":\"2026-08-05T09:00:00Z\",\"actor\":\"M. Torres\",\"text\":\"Damage inspected \u2014 severity D\u00b72\"},{\"t\":\"2026-08-05T14:00:00Z\",\"actor\":\"Marcus Webb\",\"text\":\"Repair estimate $1,150 submitted to Austral Shipping\"},{\"t\":\"2026-08-06T19:45:00Z\",\"actor\":\"Austral Shipping\",\"text\":\"Shipper signed in and viewed the claim\"},{\"t\":\"2026-08-06T20:00:00Z\",\"actor\":\"Austral Shipping\",\"text\":\"Shipper approved the estimate \u2014 \u201cApproved at quoted amount\u201d\"}]",
    "shipperViewedAt": "2026-08-06T19:45:00Z"
   }
  ],
@@ -5873,7 +5894,7 @@
    "name": "I-85 Charlotte Relay Yard",
    "address": "4200 Freight Ln, Charlotte, NC",
    "zip": "28208",
-   "notes": "Border: Southeast ↔ Mid-Atlantic",
+   "notes": "Border: Southeast \u2194 Mid-Atlantic",
    "active": true
   },
   {
@@ -5881,7 +5902,7 @@
    "name": "I-10 Mobile Relay Yard",
    "address": "880 Port Access Rd, Mobile, AL",
    "zip": "36602",
-   "notes": "Border: Gulf Coast ↔ Southeast",
+   "notes": "Border: Gulf Coast \u2194 Southeast",
    "active": true
   },
   {
@@ -5891,6 +5912,297 @@
    "zip": "37210",
    "notes": "Corridor north end: middle Tennessee handoffs",
    "active": true
+  }
+ ],
+ "mktcontacts": [
+  {
+   "id": "mc_albertfontenot",
+   "sellerId": "sel_mvp",
+   "name": "Albert Fontenot",
+   "email": "albert.fontenot@gmail.com",
+   "phone": "(504) 555-0311",
+   "zip": "70119",
+   "city": "New Orleans",
+   "state": "LA",
+   "tags": [
+    "buyer"
+   ],
+   "source": "seed",
+   "consent": true,
+   "createdAt": "2026-08-15T00:00:00.000Z"
+  },
+  {
+   "id": "mc_reneeb",
+   "sellerId": "sel_mvp",
+   "name": "Renee Boudreaux",
+   "email": "renee.b@yahoo.com",
+   "phone": "(504) 555-0322",
+   "zip": "70115",
+   "city": "New Orleans",
+   "state": "LA",
+   "tags": [
+    "lead"
+   ],
+   "source": "seed",
+   "consent": true,
+   "createdAt": "2026-08-15T00:00:00.000Z"
+  },
+  {
+   "id": "mc_samokafor",
+   "sellerId": "sel_mvp",
+   "name": "Sam Okafor",
+   "email": "sam.okafor@outlook.com",
+   "phone": "(713) 555-0333",
+   "zip": "77003",
+   "city": "Houston",
+   "state": "TX",
+   "tags": [
+    "buyer",
+    "b2b"
+   ],
+   "source": "seed",
+   "consent": true,
+   "createdAt": "2026-08-15T00:00:00.000Z"
+  },
+  {
+   "id": "mc_dotguidry",
+   "sellerId": "sel_mvp",
+   "name": "Dot Guidry",
+   "email": "dot.guidry@gmail.com",
+   "phone": "(225) 555-0344",
+   "zip": "70806",
+   "city": "Baton Rouge",
+   "state": "LA",
+   "tags": [
+    "lead"
+   ],
+   "source": "seed",
+   "consent": true,
+   "createdAt": "2026-08-15T00:00:00.000Z"
+  },
+  {
+   "id": "mc_hramirez",
+   "sellerId": "sel_mvp",
+   "name": "Hector Ramirez",
+   "email": "hramirez@construxtx.com",
+   "phone": "(713) 555-0355",
+   "zip": "77041",
+   "city": "Houston",
+   "state": "TX",
+   "tags": [
+    "b2b"
+   ],
+   "source": "seed",
+   "consent": true,
+   "createdAt": "2026-08-15T00:00:00.000Z"
+  },
+  {
+   "id": "mc_junecallahan",
+   "sellerId": "sel_mvp",
+   "name": "June Callahan",
+   "email": "june.callahan@gmail.com",
+   "phone": "(985) 555-0366",
+   "zip": "70401",
+   "city": "Hammond",
+   "state": "LA",
+   "tags": [
+    "lead"
+   ],
+   "source": "seed",
+   "consent": true,
+   "createdAt": "2026-08-15T00:00:00.000Z"
+  },
+  {
+   "id": "mc_ops",
+   "sellerId": "sel_mvp",
+   "name": "Farmers Co-op of Acadiana",
+   "email": "ops@acadianacoop.com",
+   "phone": "(337) 555-0377",
+   "zip": "70501",
+   "city": "Lafayette",
+   "state": "LA",
+   "tags": [
+    "b2b",
+    "buyer"
+   ],
+   "source": "seed",
+   "consent": true,
+   "createdAt": "2026-08-15T00:00:00.000Z"
+  },
+  {
+   "id": "mc_tricianguyen",
+   "sellerId": "sel_mvp",
+   "name": "Tricia Nguyen",
+   "email": "tricia.nguyen@gmail.com",
+   "phone": "(832) 555-0388",
+   "zip": "77584",
+   "city": "Pearland",
+   "state": "TX",
+   "tags": [
+    "buyer"
+   ],
+   "source": "seed",
+   "consent": true,
+   "createdAt": "2026-08-15T00:00:00.000Z"
+  },
+  {
+   "id": "mc_waltpruitt",
+   "sellerId": "sel_demo",
+   "name": "Walt Pruitt",
+   "email": "walt.pruitt@gmail.com",
+   "phone": "(410) 555-0399",
+   "zip": "21224",
+   "city": "Baltimore",
+   "state": "MD",
+   "tags": [
+    "lead"
+   ],
+   "source": "seed",
+   "consent": true,
+   "createdAt": "2026-08-15T00:00:00.000Z"
+  },
+  {
+   "id": "mc_mgr",
+   "sellerId": "sel_demo",
+   "name": "Harbor East Storage",
+   "email": "mgr@harboreaststorage.com",
+   "phone": "(410) 555-0401",
+   "zip": "21231",
+   "city": "Baltimore",
+   "state": "MD",
+   "tags": [
+    "b2b"
+   ],
+   "source": "seed",
+   "consent": true,
+   "createdAt": "2026-08-15T00:00:00.000Z"
+  }
+ ],
+ "mktcampaigns": [
+  {
+   "id": "camp_01",
+   "sellerId": "sel_mvp",
+   "name": "Spring Yard Clearance",
+   "type": "email",
+   "status": "sent",
+   "subject": "20ft one-trip specials \u2014 this week only",
+   "content": "Hi {{firstName}}, graded 20ft units from $2,150 delivered to {{zip}}. Every unit photographed and AI-graded.",
+   "platform": "",
+   "cta": "Shop Inventory",
+   "audienceKind": "all",
+   "zipPrefixes": [],
+   "audienceCount": 2140,
+   "budget": 0,
+   "spend": 43,
+   "delivered": 2088,
+   "opens": 861,
+   "clicks": 118,
+   "conversions": 9,
+   "revenue": 24030,
+   "unsubs": 6,
+   "sentAt": "2026-07-25T15:00:00.000Z",
+   "createdAt": "2026-07-22T15:00:00.000Z"
+  },
+  {
+   "id": "camp_02",
+   "sellerId": "sel_mvp",
+   "name": "Houston Metro Search Ads",
+   "type": "ad",
+   "status": "running",
+   "subject": "",
+   "content": "Shipping containers delivered in 3-5 days. Photos + AI condition grade on every unit.",
+   "platform": "google",
+   "cta": "Get My Price",
+   "audienceKind": "zip",
+   "zipPrefixes": [
+    "770",
+    "775"
+   ],
+   "audienceCount": 96400,
+   "budget": 450,
+   "spend": 297,
+   "delivered": 96400,
+   "opens": 41230,
+   "clicks": 1512,
+   "conversions": 11,
+   "revenue": 31460,
+   "unsubs": 0,
+   "sentAt": "2026-08-06T15:00:00.000Z",
+   "createdAt": "2026-08-05T15:00:00.000Z"
+  },
+  {
+   "id": "camp_03",
+   "sellerId": "sel_mvp",
+   "name": "New Arrivals Reel",
+   "type": "social",
+   "status": "draft",
+   "subject": "",
+   "content": "Fresh drop: 12 one-trip 40HCs just hit the NOLA yard. Tap to see every unit in photos.",
+   "platform": "instagram",
+   "cta": "See the Yard",
+   "audienceKind": "all",
+   "zipPrefixes": [],
+   "audienceCount": 0,
+   "budget": 0,
+   "spend": 0,
+   "delivered": 0,
+   "opens": 0,
+   "clicks": 0,
+   "conversions": 0,
+   "revenue": 0,
+   "unsubs": 0,
+   "sentAt": null,
+   "createdAt": "2026-08-13T15:00:00.000Z"
+  },
+  {
+   "id": "camp_04",
+   "sellerId": "sel_demo",
+   "name": "Mid-Atlantic Intro Offer",
+   "type": "email",
+   "status": "sent",
+   "subject": "Containers now delivering in the DMV",
+   "content": "Demo Container Corp now serves {{zip}} \u2014 graded used units with all-in delivered pricing.",
+   "platform": "",
+   "cta": "Browse Local Stock",
+   "audienceKind": "all",
+   "zipPrefixes": [],
+   "audienceCount": 830,
+   "budget": 0,
+   "spend": 25,
+   "delivered": 811,
+   "opens": 302,
+   "clicks": 41,
+   "conversions": 3,
+   "revenue": 8460,
+   "unsubs": 2,
+   "sentAt": "2026-08-01T15:00:00.000Z",
+   "createdAt": "2026-07-31T15:00:00.000Z"
+  }
+ ],
+ "mktconnections": [
+  {
+   "id": "conn_01",
+   "sellerId": "sel_mvp",
+   "provider": "sendgrid",
+   "status": "connected",
+   "apiKeyMasked": "SG.****hV2q",
+   "connectedAt": "2026-08-15T00:00:00.000Z"
+  },
+  {
+   "id": "conn_02",
+   "sellerId": "sel_mvp",
+   "provider": "meta",
+   "status": "connected",
+   "apiKeyMasked": "EAAB****9dZC",
+   "connectedAt": "2026-08-15T00:00:00.000Z"
+  },
+  {
+   "id": "conn_03",
+   "sellerId": "sel_demo",
+   "provider": "mailchimp",
+   "status": "connected",
+   "apiKeyMasked": "mc-****41a8",
+   "connectedAt": "2026-08-15T00:00:00.000Z"
   }
  ]
 }

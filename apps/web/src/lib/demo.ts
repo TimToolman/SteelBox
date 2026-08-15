@@ -42,6 +42,9 @@ const db: Record<string, Row[]> = Object.fromEntries([
   ['repairshops', snapshot.repairshops],
   ['claims', snapshot.claims],
   ['meetpoints', snapshot.meetpoints],
+  ['mktcontacts', snapshot.mktcontacts],
+  ['mktcampaigns', snapshot.mktcampaigns],
+  ['mktconnections', snapshot.mktconnections],
 ].map(([k, v]) => [k as string, JSON.parse(JSON.stringify(v ?? []))]))
 
 const uid = (p: string) => `${p}_demo_${Math.random().toString(36).slice(2, 10)}`
@@ -302,6 +305,164 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
       if (c.status === 'closed') claimEvent(c, actor, 'Claim closed — unit stays retail')
     }
     return ok(c)
+  }
+
+  // ── Marketing portal (mirrors the API server) ──
+  // Any account with sellerId is locked to that reseller's contacts,
+  // campaigns and connections; blank-sellerId HQ admins see across.
+  if (route.startsWith('/marketing/')) {
+    const u = storedUser()
+    const seg = route.split('/').slice(2) // after /marketing/
+    // Every signed-in customer's own opt-out/opt-in switch (profile dialog).
+    if (seg[0] === 'consent') {
+      if (!u) throw new Error('Sign in required')
+      const email = String(u.email || '').toLowerCase()
+      const mine = db.mktcontacts.filter(c => String(c.email || '').toLowerCase() === email)
+      if (method === 'GET') return ok({ optedIn: !mine.some(c => c.consent === false), listed: mine.length > 0 })
+      const optIn = body.optIn !== false
+      mine.forEach(c => { c.consent = optIn })
+      return ok({ optedIn: optIn, changed: mine.length })
+    }
+    const canMarket = !!u && (u.role === 'admin' || (u.roles || []).includes('marketing'))
+    if (!canMarket) throw new Error('Marketing access required')
+    const tenant = u?.sellerId || null
+    const scope = (rows: Row[]) => tenant ? rows.filter(r => String(r.sellerId || 'sel_mvp') === tenant) : rows
+    // HQ (blank sellerId) may act on behalf of any reseller via body.sellerId.
+    const own = tenant || String(body.sellerId || '') || 'sel_mvp'
+    // Deterministic funnel simulator — same numbers for the same campaign id.
+    const rngFor = (key: string) => {
+      let h = 1779033703 ^ key.length
+      for (let i = 0; i < key.length; i++) { h = Math.imul(h ^ key.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19) }
+      return () => { h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296 }
+    }
+
+    if (seg[0] === 'contacts') {
+      const all = db.mktcontacts
+      if (method === 'GET' && seg.length === 1) return ok([...scope(all)])
+      if (method === 'POST' && seg[1] === 'import') {
+        const rows = Array.isArray(body.rows) ? body.rows as Row[] : []
+        const have = new Set(scope(all).map(c => String(c.email || '').toLowerCase()))
+        let imported = 0, skipped = 0
+        for (const r of rows.slice(0, 5000)) {
+          const email = String(r.email || '').trim().toLowerCase()
+          if (!email || !email.includes('@') || have.has(email)) { skipped++; continue }
+          have.add(email)
+          all.push({ id: uid('mc'), sellerId: own, name: String(r.name || ''), email, phone: String(r.phone || ''), zip: String(r.zip || '').replace(/\D/g, '').slice(0, 5), city: String(r.city || ''), state: String(r.state || ''), tags: Array.isArray(r.tags) ? r.tags : [], source: String(body.source || 'csv'), consent: r.consent !== false, createdAt: new Date().toISOString() })
+          imported++
+        }
+        return ok({ imported, skipped, total: scope(all).length })
+      }
+      if (method === 'POST' && seg.length === 1) {
+        const email = String(body.email || '').trim().toLowerCase()
+        if (!email || !email.includes('@')) throw new Error('A valid email is required')
+        if (scope(all).some(c => String(c.email || '').toLowerCase() === email)) throw new Error('Contact already exists')
+        const record = { id: uid('mc'), sellerId: own, name: String(body.name || ''), email, phone: String(body.phone || ''), zip: String(body.zip || '').replace(/\D/g, '').slice(0, 5), city: String(body.city || ''), state: String(body.state || ''), tags: [], source: 'manual', consent: true, createdAt: new Date().toISOString() }
+        all.push(record)
+        return ok(record)
+      }
+      if (method === 'PATCH' && seg[1]) {
+        const i = all.findIndex(c => c.id === seg[1] && (!tenant || String(c.sellerId || 'sel_mvp') === tenant))
+        if (i === -1) throw new Error('Contact not found')
+        for (const k of ['name', 'phone', 'zip', 'city', 'state', 'tags', 'consent'] as const) {
+          if (k in body) all[i][k] = k === 'consent' ? body[k] !== false : body[k]
+        }
+        return ok(all[i])
+      }
+      if (method === 'DELETE' && seg[1]) {
+        const i = all.findIndex(c => c.id === seg[1] && (!tenant || String(c.sellerId || 'sel_mvp') === tenant))
+        if (i === -1) throw new Error('Contact not found')
+        all.splice(i, 1)
+        return ok({ deleted: true })
+      }
+    }
+
+    if (seg[0] === 'campaigns') {
+      const all = db.mktcampaigns
+      if (method === 'GET' && seg.length === 1) return ok([...scope(all)])
+      if (method === 'POST' && seg.length === 1) {
+        const record = {
+          id: uid('camp'), sellerId: own, name: String(body.name || 'Untitled'), type: ['email', 'social', 'ad'].includes(String(body.type)) ? body.type : 'email',
+          status: 'draft', managedBy: tenant ? '' : 'hq', subject: String(body.subject || ''), content: String(body.content || ''),
+          platform: String(body.platform || ''), cta: String(body.cta || ''),
+          audienceKind: body.audienceKind === 'zip' ? 'zip' : 'all',
+          zipPrefixes: Array.isArray(body.zipPrefixes) ? body.zipPrefixes : [],
+          audienceCount: 0, budget: Number(body.budget) || 0, spend: 0,
+          delivered: 0, opens: 0, clicks: 0, conversions: 0, revenue: 0, unsubs: 0,
+          sentAt: null, createdAt: new Date().toISOString(),
+        } as Row
+        all.push(record)
+        return ok(record)
+      }
+      const i = all.findIndex(c => c.id === seg[1] && (!tenant || String(c.sellerId || 'sel_mvp') === tenant))
+      if (i === -1) throw new Error('Campaign not found')
+      if (method === 'PATCH' && seg.length === 2) {
+        const { id: _i, sellerId: _s, ...rest } = body
+        all[i] = { ...all[i], ...rest }
+        return ok(all[i])
+      }
+      if (method === 'DELETE' && seg.length === 2) {
+        all.splice(i, 1)
+        return ok({ deleted: true })
+      }
+      if (method === 'POST' && seg[2] === 'launch') {
+        const c = all[i] as Row & { type: string; budget: number; audienceKind: string; zipPrefixes: string[] }
+        if (c.status !== 'draft') throw new Error('Only draft campaigns can launch')
+        const contacts = db.mktcontacts.filter(x => String(x.sellerId || 'sel_mvp') === String(c.sellerId || 'sel_mvp'))
+        const matched = c.audienceKind === 'zip' && c.zipPrefixes.length
+          ? contacts.filter(x => c.zipPrefixes.some(p => String(x.zip || '').startsWith(p)))
+          : contacts
+        const r = rngFor(String(c.id))
+        const audienceCount = c.type === 'ad' ? Math.round((c.budget || 100) * (180 + r() * 140)) : matched.filter(x => x.consent !== false).length
+        const delivered = c.type === 'email' ? Math.round(audienceCount * (0.955 + r() * 0.04)) : audienceCount
+        const opens = Math.round(delivered * (c.type === 'ad' ? 0.34 + r() * 0.14 : 0.30 + r() * 0.22))
+        const clicks = Math.round(opens * (0.09 + r() * 0.13))
+        const conversions = Math.round(clicks * (0.05 + r() * 0.09))
+        const revenue = Math.round(conversions * (2400 + r() * 1400))
+        const unsubs = c.type === 'email' ? Math.round(delivered * (0.002 + r() * 0.004)) : 0
+        const spend = c.type === 'email' ? Math.max(25, Math.round(audienceCount * 0.02)) : c.type === 'social' ? 15 : (c.budget || 100)
+        all[i] = { ...c, status: c.type === 'ad' ? 'running' : 'sent', audienceCount, delivered, opens, clicks, conversions, revenue, unsubs, spend, sentAt: new Date().toISOString() }
+        return ok(all[i])
+      }
+    }
+
+    if (seg[0] === 'connections') {
+      const all = db.mktconnections
+      if (method === 'GET' && seg.length === 1) return ok([...scope(all)])
+      if (method === 'POST' && seg.length === 1) {
+        const provider = String(body.provider || '').toLowerCase()
+        const key = String(body.apiKey || '')
+        const masked = key ? `${key.slice(0, 3)}****${key.slice(-4)}` : ''
+        const existing = scope(all).find(c => c.provider === provider)
+        if (existing) {
+          const i = all.findIndex(c => c.id === existing.id)
+          all[i] = { ...all[i], status: 'connected', apiKeyMasked: masked || all[i].apiKeyMasked, connectedAt: new Date().toISOString() }
+          return ok(all[i])
+        }
+        const record = { id: uid('conn'), sellerId: own, provider, status: 'connected', apiKeyMasked: masked, connectedAt: new Date().toISOString() }
+        all.push(record)
+        return ok(record)
+      }
+      if (method === 'DELETE' && seg[1]) {
+        const i = all.findIndex(c => c.id === seg[1] && (!tenant || String(c.sellerId || 'sel_mvp') === tenant))
+        if (i === -1) throw new Error('Connection not found')
+        all.splice(i, 1)
+        return ok({ deleted: true })
+      }
+    }
+
+    if (seg[0] === 'plan') {
+      const qsSeller = new URLSearchParams(path.split('?')[1] || '').get('sellerId')
+      const sid = tenant || qsSeller || 'sel_mvp'
+      const seller = db.sellers.find(s => s.id === sid)
+      if (!seller) throw new Error('Seller not found')
+      if (method === 'GET') return ok({ sellerId: sid, plan: seller.marketingPlan || 'starter' })
+      if (method === 'POST') {
+        if (!['starter', 'growth', 'pro'].includes(String(body.plan))) throw new Error('plan must be starter, growth or pro')
+        seller.marketingPlan = body.plan
+        return ok({ sellerId: sid, plan: body.plan })
+      }
+    }
+    throw new Error('Not found')
   }
 
   // Reseller-admin tenancy (mirrors the API server): an admin signed in with

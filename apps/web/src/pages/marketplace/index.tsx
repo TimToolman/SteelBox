@@ -22,6 +22,7 @@ import { Chip, ChipRow } from '../../components/filters'
 import { depotsServingZip, type DepotInRange } from '../../lib/geo'
 import { QuoteDialog } from './QuoteDialog'
 import { ContainerCard } from './ContainerCard'
+import { MarketingPortal } from './Marketing'
 import { DetailModal } from './DetailModal'
 import { CartModal } from './CartModal'
 import { OrderBuildModal } from './OrderBuildModal'
@@ -139,13 +140,18 @@ export default function MarketplacePage() {
   // supplier → My Containers + Damage Claims, shipper → Claims Review.
   // 'shop' is the regular marketplace; its state is kept (display:none)
   // while another portal is open so filters/cart survive the switch.
-  const [portal, setPortal] = useState<'shop' | 'fleet' | 'supplier' | 'shipper'>('shop')
+  const [portal, setPortal] = useState<'shop' | 'fleet' | 'supplier' | 'shipper' | 'marketing'>('shop')
+  // Marketing is open to the grant AND to admins — SteelBox Co. HQ manages
+  // campaigns on the resellers' behalf from the same tab.
+  const canMarketing = hasGrant(user, 'marketing') || user?.role === 'admin'
   // Signing out (or losing the grant) drops any open portal back to the shop.
   useEffect(() => {
     if (portal === 'shop') return
-    const needed = portal === 'shipper' ? 'shipper' : 'supplier'
-    if (!hasGrant(user, needed)) setPortal('shop')
-  }, [user, portal])
+    const okay = portal === 'shipper' ? hasGrant(user, 'shipper')
+      : portal === 'marketing' ? canMarketing
+      : hasGrant(user, 'supplier')
+    if (!okay) setPortal('shop')
+  }, [user, portal, canMarketing])
   // Signing in from the profile sheet closes it and lands on the marketplace
   // (with any granted portal tabs now visible) instead of showing the
   // account menu.
@@ -155,7 +161,7 @@ export default function MarketplacePage() {
     prevUserRef.current = user
     if (signedIn && profileOpen) {
       setProfileOpen(false)
-      const portals = ['supplier', 'shipper'].filter(g => hasGrant(user, g as 'supplier' | 'shipper'))
+      const portals = ['supplier', 'shipper', 'marketing'].filter(g => hasGrant(user, g as 'supplier' | 'shipper' | 'marketing'))
       toast(`Signed in as ${user!.name || user!.email}${portals.length ? ' — your portal tabs are below the menu' : ''}`)
     }
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -442,13 +448,14 @@ export default function MarketplacePage() {
       {/* ── Portal strip — one sign-in, every granted portal as a tab.
              Light-blue band so it reads as its own layer, not part of the
              page; text-only labels per the 2D-simple iconography rule. ── */}
-      {(hasGrant(user, 'supplier') || hasGrant(user, 'shipper')) && (
+      {(hasGrant(user, 'supplier') || hasGrant(user, 'shipper') || canMarketing) && (
         <div style={{ background: 'var(--primary-cont, #E3F0FF)', borderBottom: '2px solid var(--primary)', padding: '0 16px', display: 'flex', gap: '6px', overflowX: 'auto', position: 'sticky', top: 0, zIndex: 40 }}>
           {([
             { key: 'shop' as const, label: 'Marketplace', show: true },
             { key: 'fleet' as const, label: 'My Containers', show: hasGrant(user, 'supplier') },
             { key: 'supplier' as const, label: 'Damage Claims', show: hasGrant(user, 'supplier') },
             { key: 'shipper' as const, label: 'Claims Review', show: hasGrant(user, 'shipper') },
+            { key: 'marketing' as const, label: 'Marketing', show: canMarketing },
           ]).filter(t => t.show).map(t => (
             <button key={t.key} onClick={() => setPortal(t.key)} style={{
               padding: '11px 18px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700, fontFamily: 'inherit',
@@ -469,6 +476,11 @@ export default function MarketplacePage() {
       )}
       {portal === 'supplier' && <SupplierPortalPage embedded />}
       {portal === 'shipper' && <ShipperReviewPage embedded />}
+      {portal === 'marketing' && user && (
+        <main style={{ maxWidth: '1080px', margin: '0 auto', padding: '22px 16px 80px' }}>
+          <MarketingPortal user={user} onToast={toast} />
+        </main>
+      )}
 
       {/* ── The shop itself — kept mounted (hidden) while a portal is open,
              so filters, scroll and cart state survive tab switches ── */}

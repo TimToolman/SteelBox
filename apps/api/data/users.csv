@@ -1,13 +1,14 @@
-id,email,passwordHash,role,name,phone,driverId,customerId,phoneVerified,active,createdAt,sellerId
-usr_mr59yc5s3od,tgmoore@gmail.com,f5ae8b93638b268b$6e554e6b8ca331c8f7e5912593baa6d4a4ab74371448234ac60f7d6dfe89e59a,admin,Tim Moore,,,,false,true,2026-07-03T18:36:22.696Z,
-usr_mr59yc6h70l,mike@mvpcontainer.com,a1434d35b69d65bc$9a49bd305315224492c160e92b6eda2dd322357ae38213c877398766eff29ce4,driver,Mike Torres,(504) 555-0110,drv_01,,false,true,2026-07-03T18:36:22.720Z,
-usr_mr59yc74xp,dan@mvpcontainer.com,f2ae6cfbdc26a2a3$7666439599d7400b0f7ab918e1d447e36bee2e21f77cfc9a08439de5885e2839,driver,Dan Park,(504) 555-0121,drv_02,,false,true,2026-07-03T18:36:22.742Z,
-usr_mr59yc7q123,luis@mvpcontainer.com,353424f31e0cd9b5$6072e8321da2d07a40d894ff50524bffade84b47bb9b71b7b8c3f99e45abf9eb,driver,Luis Mendez,(504) 555-0132,drv_03,,false,true,2026-07-03T18:36:22.764Z,
-usr_mr59yc8c7lp,sara@steelbox.co,d1b8508663150937$2f8c5f1a06cc932bb46a8ebadd19d86fe039eeae58b8fcad10c33956764f0716,driver,Sara Kim,(504) 555-0143,drv_04,,false,true,2026-07-03T18:36:22.785Z,
-usr_mr59yc8y2j4,justin@steelbox.co,f38e3607c3ab49da$cd9eb072eb1d4e810a57412584de9dea5edf5124e2f9211d7c2e941727df364c,driver,Justin Martin,(504) 555-0154,drv_mr2w07ddh2,,false,true,2026-07-03T18:36:22.807Z,
-usr_mrdvccx5e03465ab8f,justin@mvpcontainer.com,a78d5dcbb1f0ce91$d015c9255edd127a6ea33fae0c122cfc2a549467a351b6818380b005717f83b8,driver,Justin Martin,(504) 555-0154,drv_mr2w07ddh2,,false,true,2026-07-09T18:57:18.210Z,
-usr_mrjlpzx3db89287de3,sara@mvpcontainer.com,1639aff079c24c64$a16b532e3f60ea16dbd9fa53b3b9419469aa0d667f9f183f4a28ccb7327c3ecc,driver,Sara Kim,(504) 555-0143,drv_04,,false,true,2026-07-13T19:14:35.439Z,
-usr_msgyxy492e15352f4b,denise@mvpcontainer.com,cb737430f9386216$bd7d2e27b09ac5aee3d77779f8089e3a4b0ab2e70ce77a689819d14b9f6ad424,driver,Denise Walker,(410) 555-0171,drv_msgyl6o704b0133545,,false,true,2026-08-06T03:41:05.170Z,
-usr_msgyxy4z99d16cc20f,marcus@mvpcontainer.com,ef5e804c11855a09$12936d1bf968558cdb91c4060d49253c32862c32581c5087afecbcd19795fb74,driver,Marcus Lee,(410) 555-0184,drv_msgyl6o8d7226acdbc,,false,true,2026-08-06T03:41:05.194Z,
-usr_mvpadmin01,admin@mvpcontainer.com,7669008ed2783661$58101da336a9da5811acf6e3a61d3261c4364351a3ebd8155b5217de53cc2af8,admin,Marie Landry,,,,false,true,2026-08-14T00:00:00.000Z,sel_mvp
-usr_demoadmin01,admin@democontainercorp.com,b6c43257b63c985c$604fe223a303ab3d3193aebdf138f10ff8309661bb038f6d2dc06d9aecf720c8,admin,Dana Whitfield,,,,false,true,2026-08-14T00:00:00.000Z,sel_demo
+id,email,passwordHash,role,name,phone,driverId,customerId,phoneVerified,active,createdAt,sellerId,supplierId,shipperId,digestFreq,lastDigestAt,lastLoginAt,roles,signupPendingAt
+usr_mr59yc5s3od,tgmoore@gmail.com,f5ae8b93638b268b$6e554e6b8ca331c8f7e5912593baa6d4a4ab74371448234ac60f7d6dfe89e59a,admin,Tim Moore,,,,false,true,2026-07-03T18:36:22.696Z,,,,,,,,
+usr_mr59yc6h70l,mike@mvpcontainer.com,a1434d35b69d65bc$9a49bd305315224492c160e92b6eda2dd322357ae38213c877398766eff29ce4,driver,Mike Torres,(504) 555-0110,drv_01,,false,true,2026-07-03T18:36:22.720Z,,,,,,,,
+usr_mr59yc74xp,dan@mvpcontainer.com,f2ae6cfbdc26a2a3$7666439599d7400b0f7ab918e1d447e36bee2e21f77cfc9a08439de5885e2839,driver,Dan Park,(504) 555-0121,drv_02,,false,true,2026-07-03T18:36:22.742Z,,,,,,,,
+usr_mr59yc7q123,luis@mvpcontainer.com,353424f31e0cd9b5$6072e8321da2d07a40d894ff50524bffade84b47bb9b71b7b8c3f99e45abf9eb,driver,Luis Mendez,(504) 555-0132,drv_03,,false,true,2026-07-03T18:36:22.764Z,,,,,,,,
+usr_mr59yc8c7lp,sara@steelbox.co,d1b8508663150937$2f8c5f1a06cc932bb46a8ebadd19d86fe039eeae58b8fcad10c33956764f0716,driver,Sara Kim,(504) 555-0143,drv_04,,false,true,2026-07-03T18:36:22.785Z,,,,,,,,
+usr_mr59yc8y2j4,justin@steelbox.co,f38e3607c3ab49da$cd9eb072eb1d4e810a57412584de9dea5edf5124e2f9211d7c2e941727df364c,driver,Justin Martin,(504) 555-0154,drv_mr2w07ddh2,,false,true,2026-07-03T18:36:22.807Z,,,,,,,,
+usr_mrdvccx5e03465ab8f,justin@mvpcontainer.com,a78d5dcbb1f0ce91$d015c9255edd127a6ea33fae0c122cfc2a549467a351b6818380b005717f83b8,driver,Justin Martin,(504) 555-0154,drv_mr2w07ddh2,,false,true,2026-07-09T18:57:18.210Z,,,,,,,,
+usr_mrjlpzx3db89287de3,sara@mvpcontainer.com,1639aff079c24c64$a16b532e3f60ea16dbd9fa53b3b9419469aa0d667f9f183f4a28ccb7327c3ecc,driver,Sara Kim,(504) 555-0143,drv_04,,false,true,2026-07-13T19:14:35.439Z,,,,,,,,
+usr_msgyxy492e15352f4b,denise@mvpcontainer.com,cb737430f9386216$bd7d2e27b09ac5aee3d77779f8089e3a4b0ab2e70ce77a689819d14b9f6ad424,driver,Denise Walker,(410) 555-0171,drv_msgyl6o704b0133545,,false,true,2026-08-06T03:41:05.170Z,,,,,,,,
+usr_msgyxy4z99d16cc20f,marcus@mvpcontainer.com,ef5e804c11855a09$12936d1bf968558cdb91c4060d49253c32862c32581c5087afecbcd19795fb74,driver,Marcus Lee,(410) 555-0184,drv_msgyl6o8d7226acdbc,,false,true,2026-08-06T03:41:05.194Z,,,,,,,,
+usr_mvpadmin01,admin@mvpcontainer.com,7669008ed2783661$58101da336a9da5811acf6e3a61d3261c4364351a3ebd8155b5217de53cc2af8,admin,Marie Landry,,,,false,true,2026-08-14T00:00:00.000Z,sel_mvp,,,,,,marketplace|marketing,
+usr_demoadmin01,admin@democontainercorp.com,b6c43257b63c985c$604fe223a303ab3d3193aebdf138f10ff8309661bb038f6d2dc06d9aecf720c8,admin,Dana Whitfield,,,,false,true,2026-08-14T00:00:00.000Z,sel_demo,,,,,,marketplace|marketing,
+usr_mvpmkt01,marketing@mvpcontainer.com,7669008ed2783661$58101da336a9da5811acf6e3a61d3261c4364351a3ebd8155b5217de53cc2af8,customer,Josie Trahan,,,,false,true,2026-08-15T00:00:00.000Z,sel_mvp,,,,,,marketplace|marketing,
