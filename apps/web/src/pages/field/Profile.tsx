@@ -53,7 +53,12 @@ export function DriverProfileScreen({ me, orders, onUpdated, toast }: {
   const [days, setDays] = useState<Set<string>>(new Set())
   const licRef = useRef<HTMLInputElement>(null)
   const insRef = useRef<HTMLInputElement>(null)
+  const plateRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState('')
+  // Plate number next to the plate photo — pre-filled by the server's OCR
+  // read; the driver can correct it before saving.
+  const [plateEdit, setPlateEdit] = useState<string | null>(null)
+  const [plateSaving, setPlateSaving] = useState(false)
 
   if (!me) return <div style={{ padding: '40px', textAlign: 'center', color: INK2 }}>Loading your profile…</div>
 
@@ -99,24 +104,39 @@ export function DriverProfileScreen({ me, orders, onUpdated, toast }: {
     } catch (e) { toast(e instanceof Error ? e.message : 'Could not save — try again') } finally { setSaving(false) }
   }
 
-  const uploadDoc = async (kind: 'license' | 'insurance', file: File | undefined) => {
+  const uploadDoc = async (kind: 'license' | 'insurance' | 'plate', file: File | undefined) => {
     if (!file) return
     setUploading(kind)
     try {
       const dataUrl = await fileToDataUrl(file)
-      await driversApi.uploadDoc(me.id, kind, dataUrl)
+      const res = await driversApi.uploadDoc(me.id, kind, dataUrl)
       onUpdated()
-      toast(`${kind === 'license' ? 'License' : 'Insurance'} uploaded — on file`)
+      if (kind === 'plate') {
+        if (res.plateText) { setPlateEdit(res.plateText); toast(`Plate photo saved — read as “${res.plateText}”. Correct it below if needed.`) }
+        else { toast('Plate photo saved — auto-read unavailable, type the plate number below.') }
+      } else {
+        toast(`${kind === 'license' ? 'License' : 'Insurance'} uploaded — on file`)
+      }
     } catch (e) { toast(e instanceof Error ? e.message : 'Upload failed — try a JPG or PNG') } finally { setUploading('') }
   }
+  const plateVal = plateEdit ?? (me.licensePlate || '')
+  const savePlate = async () => {
+    setPlateSaving(true)
+    try {
+      await driversApi.update(me.id, { licensePlate: plateVal.trim().toUpperCase() })
+      setPlateEdit(null)
+      onUpdated()
+      toast('Plate number saved')
+    } catch (e) { toast(e instanceof Error ? e.message : 'Could not save — try again') } finally { setPlateSaving(false) }
+  }
 
-  const DocRow = ({ kind, url, refEl }: { kind: 'license' | 'insurance'; url?: string; refEl: React.RefObject<HTMLInputElement> }) => (
+  const DocRow = ({ kind, title, url, refEl }: { kind: 'license' | 'insurance' | 'plate'; title: string; url?: string; refEl: React.RefObject<HTMLInputElement> }) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 0', borderTop: `1px solid ${DIV}` }}>
       <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: url ? '#B7F0DA' : '#FFF8E1', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={url ? GREEN : '#B45309'} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="8.5" cy="11" r="2" /><path d="M13 9h5M13 12.5h5M5 17c.8-1.6 2.1-2.4 3.5-2.4S11.2 15.4 12 17" /></svg>
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '13px', fontWeight: 700 }}>{kind === 'license' ? 'Driver’s license / CDL' : 'Insurance card'}</div>
+        <div style={{ fontSize: '13px', fontWeight: 700 }}>{title}</div>
         <div style={{ fontSize: '11px', color: url ? GREEN : '#B45309', fontWeight: 600 }}>
           {url ? '✓ On file' : 'Required before your first dispatch'}
           {url && <a href={photoUrl(url)} target="_blank" rel="noopener noreferrer" style={{ marginLeft: '8px', color: BLUE, fontWeight: 600 }}>View</a>}
@@ -174,8 +194,22 @@ export function DriverProfileScreen({ me, orders, onUpdated, toast }: {
       {/* Compliance documents */}
       <div style={card}>
         <div style={cardTitle}>Documents</div>
-        <DocRow kind="license" url={me.licenseDocUrl} refEl={licRef} />
-        <DocRow kind="insurance" url={me.insuranceDocUrl} refEl={insRef} />
+        <DocRow kind="license" title="Driver’s license / CDL" url={me.licenseDocUrl} refEl={licRef} />
+        <DocRow kind="insurance" title="Insurance card" url={me.insuranceDocUrl} refEl={insRef} />
+        <DocRow kind="plate" title="License plate photo" url={me.plateDocUrl} refEl={plateRef} />
+        {/* Plate number — OCR fills it from the photo; driver confirms/corrects */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', paddingTop: '4px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <label style={{ ...lbl, marginTop: 0 }}>Plate # {me.plateDocUrl ? '· auto-read from your photo' : '· photo required'}</label>
+            <input style={{ ...inp, fontFamily: 'monospace', letterSpacing: '1px', textTransform: 'uppercase' }}
+              value={plateVal} placeholder="Upload the plate photo above"
+              onChange={e => setPlateEdit(e.target.value)} />
+          </div>
+          <button onClick={savePlate} disabled={plateSaving || plateEdit === null || !plateVal.trim()}
+            style={{ padding: '10px 16px', borderRadius: '999px', border: 'none', background: plateEdit !== null && plateVal.trim() ? BLUE : '#E9EBF3', color: plateEdit !== null && plateVal.trim() ? '#fff' : INK2, fontSize: '12.5px', fontWeight: 700, cursor: plateEdit !== null ? 'pointer' : 'default', fontFamily: 'inherit', flexShrink: 0 }}>
+            {plateSaving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
       </div>
 
       {/* Contractor profile */}

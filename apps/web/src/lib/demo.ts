@@ -371,11 +371,21 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
     }
   }
   // Contractor compliance docs — the dataUrl itself is the stored "file".
+  // Plate photos get a simulated OCR read (there's no vision model in the
+  // static demo): a stable plate derived from the driver id.
   const docMatch = route.match(/^\/drivers\/([^/]+)\/docs$/)
   if (method === 'POST' && docMatch) {
     const d = db.drivers.find(x => x.id === docMatch[1])
     if (!d) throw new Error('Driver not found')
-    d[body.kind === 'insurance' ? 'insuranceDocUrl' : 'licenseDocUrl'] = String(body.dataUrl || '')
+    const kind = ['insurance', 'plate'].includes(String(body.kind)) ? String(body.kind) : 'license'
+    d[kind === 'license' ? 'licenseDocUrl' : kind === 'insurance' ? 'insuranceDocUrl' : 'plateDocUrl'] = String(body.dataUrl || '')
+    if (kind === 'plate') {
+      let h = 0
+      for (const ch of String(d.id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+      const plateText = String(d.licensePlate || '') || `LA ${1000 + (h % 9000)}-TX`
+      d.licensePlate = plateText
+      return ok({ ...d, plateText, ocrSource: 'demo' })
+    }
     return ok({ ...d })
   }
   // Customer rates a delivered order; the driver's headline average follows.

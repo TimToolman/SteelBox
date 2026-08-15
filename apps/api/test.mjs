@@ -418,6 +418,10 @@ try {
   check('license doc uploads onto the driver record', doc.status === 200 && String(doc.body?.licenseDocUrl || '').startsWith('/photos/'))
   const docOther = await api(`/drivers/${drivers[0].id}/docs`, { method: 'POST', token: dTok, body: { kind: 'insurance', dataUrl: png } })
   check("cannot upload docs to someone else's record", docOther.status === 403)
+  const plateDoc = await api(`/drivers/${approve.body.driver.id}/docs`, { method: 'POST', token: dTok, body: { kind: 'plate', dataUrl: png } })
+  check('plate photo stores + reports OCR availability', plateDoc.status === 200 && String(plateDoc.body?.plateDocUrl || '').startsWith('/photos/') && plateDoc.body?.ocrSource === 'unavailable')
+  const plateSet = await api(`/drivers/${approve.body.driver.id}`, { method: 'PATCH', token: dTok, body: { licensePlate: 'LA 4471-TX' } })
+  check('driver confirms/corrects the plate number', plateSet.status === 200 && plateSet.body?.licensePlate === 'LA 4471-TX')
   const dup = await api(`/driver-apps/${myApp.id}/approve`, { method: 'POST', token: admin })
   check('re-approving an invited application is blocked', dup.status === 400)
 

@@ -576,6 +576,7 @@ export interface Driver {
   availableDays?: string[]   // 'Mon'…'Sun'
   licenseDocUrl?: string     // uploaded CDL/license photo
   insuranceDocUrl?: string   // uploaded insurance card photo
+  plateDocUrl?: string       // uploaded license-plate photo (OCR fills licensePlate)
   contractor?: boolean       // true = independent contractor (vs employee)
 }
 
@@ -649,9 +650,10 @@ export const drivers = {
     request<Driver>('/drivers', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<Driver>) =>
     request<Driver>(`/drivers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  // Contractor compliance docs — license / insurance photo upload.
-  uploadDoc: (id: string, kind: 'license' | 'insurance', dataUrl: string) =>
-    request<Driver>(`/drivers/${id}/docs`, { method: 'POST', body: JSON.stringify({ kind, dataUrl }) }),
+  // Contractor compliance docs — license / insurance / plate photo upload.
+  // A plate photo is OCR'd server-side; the read comes back as plateText.
+  uploadDoc: (id: string, kind: 'license' | 'insurance' | 'plate', dataUrl: string) =>
+    request<Driver & { plateText?: string; ocrSource?: string }>(`/drivers/${id}/docs`, { method: 'POST', body: JSON.stringify({ kind, dataUrl }) }),
   remove: (id: string) =>
     request<{ id: string; archived: true }>(`/drivers/${id}`, { method: 'DELETE' }),
 }
