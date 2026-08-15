@@ -654,6 +654,21 @@ export default function MarketplacePage() {
             <div style={{ marginTop: '14px', paddingTop: '10px', borderTop: '1px solid var(--div)', fontSize: '10.5px', color: 'var(--ink3)', lineHeight: 1.55 }}>
               <strong style={{ color: 'var(--ink2)' }}>New / One-Trip</strong> — a brand-new container built overseas that has made a single cargo voyage from its factory country to the U.S. This is the industry's "new": it arrives essentially new inside and out.
             </div>
+
+            {/* Mobile: the drawer ends with an explicit Apply — closes the
+                filters and lands the shopper on the (live-counted) results. */}
+            {isMobile && (
+              <div style={{ position: 'sticky', bottom: 0, background: 'var(--surf-w)', padding: '10px 0 6px', borderTop: '1px solid var(--div)', marginTop: '14px' }}>
+                <button
+                  onClick={() => { setFiltersOpen(false); browseRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
+                  style={{ width: '100%', padding: '13px 0', borderRadius: 'var(--pill)', border: 'none', background: 'var(--cta)', color: '#fff', fontSize: '14px', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 2px 10px rgba(230,81,0,.3)' }}
+                >
+                  {filtered.length > 0
+                    ? `Apply — Show ${filtered.length} Container${filtered.length === 1 ? '' : 's'}`
+                    : 'Apply — No Matches (adjust filters)'}
+                </button>
+              </div>
+            )}
           </aside>
 
           {/* Grid area */}
