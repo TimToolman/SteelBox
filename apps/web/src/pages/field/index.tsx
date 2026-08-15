@@ -1176,7 +1176,7 @@ export default function FieldAppPage() {
     goTo('success')
   }
 
-  const GRADE_LABELS: Record<string, string> = { A: 'One-Trip', B: 'Cargo-Worthy', C: 'Wind & Watertight', R: 'Refurbished', X: 'Custom Build' }
+  const GRADE_LABELS: Record<string, string> = { A: 'New / One-Trip', B: 'Cargo-Worthy', C: 'Wind & Watertight', R: 'Refurbished', X: 'Custom Build' }
 
   const renderReview = () => {
     const cont = activeJob ? containerList.find(c => c.sku === activeJob.sku) : undefined

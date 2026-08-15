@@ -610,6 +610,10 @@ export default function MarketplacePage() {
               </>
             )}
 
+            {/* Footnote — industry term the grade filter leans on */}
+            <div style={{ marginTop: '14px', paddingTop: '10px', borderTop: '1px solid var(--div)', fontSize: '10.5px', color: 'var(--ink3)', lineHeight: 1.55 }}>
+              <strong style={{ color: 'var(--ink2)' }}>New / One-Trip</strong> — a brand-new container built overseas that has made a single cargo voyage from its factory country to the U.S. This is the industry's "new": it arrives essentially new inside and out.
+            </div>
           </aside>
 
           {/* Grid area */}
