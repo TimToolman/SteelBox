@@ -78,6 +78,14 @@ export function ContainerCard({ container, onSelect, mode = 'buy', inCart = fals
             <path d="M12 20.6S3.5 15.4 3.5 9.9c0-2.9 2.2-4.9 4.6-4.9 1.6 0 3 .8 3.9 2.1.9-1.3 2.3-2.1 3.9-2.1 2.4 0 4.6 2 4.6 4.9 0 5.5-8.5 10.7-8.5 10.7z" />
           </svg>
         </button>
+        {/* In the shopper's cart — diagonal corner ribbon across the top
+            right, over the heart (clicks pass through to it). The photo
+            box's overflow:hidden clips the band into a corner sash. */}
+        {inCart && !isLocked && (
+          <span style={{ position: 'absolute', top: '22px', right: '-38px', width: '150px', transform: 'rotate(45deg)', background: 'var(--cta)', color: '#fff', textAlign: 'center', padding: '4px 0', fontSize: '9.5px', fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase', boxShadow: '0 2px 8px rgba(0,0,0,.28)', zIndex: 8, pointerEvents: 'none' }}>
+            In Progress
+          </span>
+        )}
         {/* Sell-as-damaged units carry an explicit ribbon so buyers can't miss it */}
         {grade === 'D' && (
           <span style={{ position: 'absolute', bottom: '8px', right: '8px', background: '#B3261E', color: '#fff', borderRadius: 'var(--pill)', padding: '3px 9px', fontSize: '9px', fontWeight: 700, letterSpacing: '0.5px' }}>DAMAGED · AS-IS</span>
