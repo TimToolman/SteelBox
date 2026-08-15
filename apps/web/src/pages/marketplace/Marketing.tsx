@@ -149,7 +149,7 @@ export function MarketingPortal({ user, onToast }: { user: AuthUser; onToast: (m
   const visContacts = forActing(contacts)
   const visCampaigns = forActing(campaigns)
   const visConnections = forActing(connections)
-  const sellerName = sellerList.find(s => s.id === (isHq ? actingFor : user.sellerId))?.name || 'Nationwide SteelBox'
+  const sellerName = sellerList.find(s => s.id === (isHq ? actingFor : user.sellerId))?.name || 'National SteelBox'
 
   const [builderOpen, setBuilderOpen] = useState(false)
   const [reportFor, setReportFor] = useState<MarketingCampaign | null>(null)
@@ -177,7 +177,7 @@ export function MarketingPortal({ user, onToast }: { user: AuthUser; onToast: (m
           <div style={{ fontSize: '12.5px', color: 'var(--ink3)', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
             {isHq ? (
               <>
-                <span style={{ fontWeight: 700, color: 'var(--ink2)' }}>Nationwide SteelBox HQ</span>
+                <span style={{ fontWeight: 700, color: 'var(--ink2)' }}>National SteelBox HQ</span>
                 <span>managing on behalf of</span>
                 <select value={actingFor} onChange={e => setActingFor(e.target.value)}
                   style={{ padding: '4px 8px', borderRadius: 'var(--r8)', border: '1.5px solid var(--div)', fontSize: '12px', fontFamily: 'inherit', fontWeight: 700, cursor: 'pointer', outline: 'none', background: 'var(--surf-w)' }}>
@@ -369,7 +369,7 @@ function Campaigns({ campaigns, onChanged, onToast, onReport, onNew }: {
               <span style={{ fontSize: '14px', fontWeight: 700 }}>{c.name}</span>
               <StatusPill status={c.status} />
               <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--ink3)' }}>{TYPE_LABEL[c.type]}{c.platform ? ` · ${c.platform}` : ''}</span>
-              {c.managedBy === 'hq' && <span title="Run by Nationwide SteelBox on this reseller's behalf" style={{ padding: '2px 8px', borderRadius: 'var(--pill)', fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.5px', background: '#FCE7F3', color: '#9D174D' }}>HQ-MANAGED</span>}
+              {c.managedBy === 'hq' && <span title="Run by National SteelBox on this reseller's behalf" style={{ padding: '2px 8px', borderRadius: 'var(--pill)', fontSize: '9.5px', fontWeight: 700, letterSpacing: '0.5px', background: '#FCE7F3', color: '#9D174D' }}>HQ-MANAGED</span>}
             </div>
             <div style={{ fontSize: '11.5px', color: 'var(--ink3)', marginTop: '3px' }}>
               {c.audienceKind === 'zip' ? `ZIP zones ${c.zipPrefixes.map(p => `${p}xx`).join(', ')}` : 'Whole list'}

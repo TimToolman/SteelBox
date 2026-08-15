@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="National SteelBox">
+  <defs>
+    <linearGradient id="m-steel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F4F6F9"/>
+      <stop offset=".5" stop-color="#C2CCD7"/>
+      <stop offset="1" stop-color="#E6EAEF"/>
+    </linearGradient>
+    <linearGradient id="m-blue" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2E7BD6"/>
+      <stop offset="1" stop-color="#0D4FA6"/>
+    </linearGradient>
+  </defs>
+  <rect x="1.5" y="1.5" width="61" height="61" rx="13" fill="#1B2E57"/>
+  <rect x="4.5" y="4.5" width="55" height="55" rx="10.5" fill="url(#m-steel)"/>
+  <!-- container trio -->
+  <g stroke="#12203F" stroke-width="1.6">
+    <rect x="9" y="14" width="13" height="17" rx="1.2" fill="#C22B33"/>
+    <path d="M13.3 14v17M17.6 14v17" stroke="#7E1620" stroke-width="2"/>
+    <rect x="42" y="14" width="13" height="17" rx="1.2" fill="#CDB68C"/>
+    <path d="M46.3 14v17M50.6 14v17" stroke="#8A7348" stroke-width="2"/>
+    <rect x="21" y="10" width="22" height="21" rx="1.5" fill="url(#m-blue)"/>
+    <path d="M26.5 10v21M32 10v21M37.5 10v21" stroke="#0A3A7A" stroke-width="2.4"/>
+    <rect x="21" y="10" width="22" height="21" rx="1.5" fill="none"/>
+  </g>
+  <!-- NSB plate -->
+  <rect x="8" y="34" width="48" height="15" rx="3" fill="#FDFEFF" stroke="#1B2E57" stroke-width="1.6"/>
+  <text x="32" y="46" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="12" letter-spacing="1.5" fill="#243B6B">N<tspan fill="#C22B33">S</tspan>B</text>
+  <!-- banner -->
+  <path d="M14 51.5h36l-3 6H17z" fill="#C22B33"/>
+  <path d="M32 52.6l1.1 2.2 2.5.4-1.8 1.7.4 2.5-2.2-1.2-2.2 1.2.4-2.5-1.8-1.7 2.5-.4z" fill="#fff"/>
+</svg>

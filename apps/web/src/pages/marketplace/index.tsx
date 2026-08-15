@@ -421,7 +421,7 @@ export default function MarketplacePage() {
         tenant={tenant}
         active={activeTab}
         // Reseller positioning: a delivery ZIP inside a reseller's territory
-        // rebrands the nav to that reseller ("powered by Nationwide
+        // rebrands the nav to that reseller ("powered by National
         // SteelBox"); outside every territory the platform brand shows.
         brand={areaZip.length === 5 ? sellerForZip(areaZip, sellerList) ?? undefined : undefined}
         onSelect={t => { setActiveTab(t); setSelectedContainer(null) }}

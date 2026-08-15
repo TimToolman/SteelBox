@@ -103,9 +103,15 @@ export function SiteNav({ tenant, active, onSelect, right, brand }: {
         <div className="ld-nav-row">
           <button className="ld-nav-burger" aria-expanded={open} aria-label="Menu" onClick={() => setOpen(o => !o)}>☰</button>
           <a className="ld-logo" href={u('')} aria-label={`${tenant.name} home`}>
-            <span className="ld-logo-badge" aria-hidden="true" style={brand ? { background: `linear-gradient(135deg, ${brand.brandPrimary || '#0057B8'} 50%, ${brand.brandAccent || '#E65100'} 50%)` } : undefined}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><rect x="1" y="6" width="22" height="14" rx="2" /><line x1="6" y1="6" x2="6" y2="20" /><line x1="11" y1="6" x2="11" y2="20" /><line x1="16" y1="6" x2="16" y2="20" /></svg>
-            </span>
+            {/* Platform pages wear the National SteelBox mark; a ZIP-resolved
+                reseller keeps its two-tone badge identity. */}
+            {brand ? (
+              <span className="ld-logo-badge" aria-hidden="true" style={{ background: `linear-gradient(135deg, ${brand.brandPrimary || '#0057B8'} 50%, ${brand.brandAccent || '#E65100'} 50%)` }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><rect x="1" y="6" width="22" height="14" rx="2" /><line x1="6" y1="6" x2="6" y2="20" /><line x1="11" y1="6" x2="11" y2="20" /><line x1="16" y1="6" x2="16" y2="20" /></svg>
+              </span>
+            ) : (
+              <img className="ld-logo-mark" src={u('logo-nsb-mark.svg')} alt="" aria-hidden="true" width="36" height="36" />
+            )}
             <span className="ld-logo-word" style={brand ? { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.15 } : undefined}>
               <span>
                 <span className="ld-logo-brand">{brandWord}</span>
@@ -114,7 +120,7 @@ export function SiteNav({ tenant, active, onSelect, right, brand }: {
               {/* Reseller storefronts always credit the platform */}
               {brand && (
                 <span style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.4px', color: 'var(--ld-ink)', opacity: 0.62, whiteSpace: 'nowrap' }}>
-                  powered by Nationwide SteelBox
+                  powered by National SteelBox
                 </span>
               )}
             </span>
@@ -476,7 +482,7 @@ export function DriveBand() {
       <div className="ld-wrap">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '18px', flexWrap: 'wrap' }}>
           <div>
-            <h2 style={{ color: '#fff', fontSize: '26px', fontWeight: 800, margin: 0 }}>Want to drive for Nationwide SteelBox?</h2>
+            <h2 style={{ color: '#fff', fontSize: '26px', fontWeight: 800, margin: 0 }}>Want to drive for National SteelBox?</h2>
             <p style={{ color: 'rgba(255,255,255,.85)', fontSize: '15px', margin: '6px 0 0', maxWidth: '560px' }}>
               We partner with independent contractor drivers across our markets — haul containers on your truck, your schedule, your service area. Contact us now!
             </p>
@@ -569,6 +575,7 @@ export function SiteFooter({ tenant }: { tenant: Tenant }) {
       <div className="ld-wrap">
         <div className="ld-footer-grid">
           <div>
+            <img src={u('logo-nsb.svg')} alt={`${tenant.name} — Buy, Ship, Deliver`} style={{ width: '190px', maxWidth: '100%', height: 'auto', marginBottom: '10px' }} />
             <h4>{tenant.name}</h4>
             <p>{tenant.address.street}<br />{tenant.address.city}, {tenant.address.state} {tenant.address.zip}</p>
             <p style={{ marginTop: 8 }}>{tenant.hours}</p>

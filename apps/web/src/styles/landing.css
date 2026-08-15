@@ -42,6 +42,7 @@
 .ld-nav-row { display: flex; align-items: center; gap: 12px; height: 60px; }
 .ld-logo { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 18px; text-decoration: none; letter-spacing: -0.4px; white-space: nowrap; flex-shrink: 0; }
 .ld-logo-badge { width: 32px; height: 32px; border-radius: 8px; background: var(--ld-brand); display: grid; place-items: center; flex-shrink: 0; }
+.ld-logo-mark { display: block; flex-shrink: 0; border-radius: 8px; }
 .ld-logo-brand { color: var(--ld-brand); }
 .ld-logo-accent { color: var(--ld-accent); }
 .ld-nav-main { min-width: 0; }
@@ -287,10 +288,16 @@
   .ld-callbar { display: flex; }
   .ld-nav-phone { display: none; }
 }
-/* Small phones: the Contact pill (still in the burger) and wordmark
-   yield to page-specific controls (cart/profile on the shop). */
+/* Small phones: the Contact pill (still in the burger) yields to
+   page-specific controls (cart/profile on the shop). The company name
+   always stays visible — it just shrinks to fit. */
 @media (max-width: 600px) { .ld-nav-contact { display: none; } }
-@media (max-width: 440px) { .ld-logo-word { display: none; } }
+@media (max-width: 480px) {
+  .ld-logo { font-size: 15px; gap: 7px; min-width: 0; }
+  .ld-logo-word { overflow: hidden; text-overflow: ellipsis; }
+  .ld-logo-mark { width: 32px; height: 32px; }
+}
+@media (max-width: 360px) { .ld-logo { font-size: 13.5px; } }
 @media (max-width: 520px) {
   .ld-footer-grid { grid-template-columns: 1fr; }
   .ld-zip-form .ld-btn { flex: 1; }

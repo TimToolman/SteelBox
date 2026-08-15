@@ -116,7 +116,7 @@ export function ClaimPacket({ claim, onClose }: { claim: DamageClaim; onClose: (
         )}
 
         <div style={{ marginTop: '18px', fontSize: '10px', color: INK3, borderTop: `1px solid ${DIV}`, paddingTop: '8px' }}>
-          Generated {new Date().toLocaleString()} · Nationwide SteelBox damage-claim system · severity scored by the AI grading model from the evidence photos and the adjuster's five-question walk-around.
+          Generated {new Date().toLocaleString()} · National SteelBox damage-claim system · severity scored by the AI grading model from the evidence photos and the adjuster's five-question walk-around.
         </div>
       </div>
     </div>

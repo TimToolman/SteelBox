@@ -1145,7 +1145,7 @@ function DepotModal({ target, sellers, isGlobal, onClose, onSaved }: { target: D
         </div>
         <div style={{ flex: 1 }}>
           <label style={lbl}>Service radius (mi) <span style={{ textTransform: 'none', fontWeight: 400, color: 'var(--ink3)' }}>· set by Global admin</span></label>
-          <input value={form.serviceRadiusMiles} disabled={!isGlobal} inputMode="numeric" onChange={e => setForm(p => ({ ...p, serviceRadiusMiles: e.target.value.replace(/\D/g, '').slice(0, 4) }))} style={{ ...inp, fontFamily: 'var(--mono)', opacity: isGlobal ? 1 : 0.6, cursor: isGlobal ? 'text' : 'not-allowed' }} title={isGlobal ? '' : "Only the Nationwide (Global) admin can change a service radius"} />
+          <input value={form.serviceRadiusMiles} disabled={!isGlobal} inputMode="numeric" onChange={e => setForm(p => ({ ...p, serviceRadiusMiles: e.target.value.replace(/\D/g, '').slice(0, 4) }))} style={{ ...inp, fontFamily: 'var(--mono)', opacity: isGlobal ? 1 : 0.6, cursor: isGlobal ? 'text' : 'not-allowed' }} title={isGlobal ? '' : "Only the National (Global) admin can change a service radius"} />
         </div>
       </div>
       <div style={{ marginBottom: '12px' }}>
@@ -1678,7 +1678,7 @@ function NavItem({ icon, label, badge, active, onClick }: { icon: React.ReactNod
 }
 
 export default function AdminPage() {
-  useFavicon('favicon-admin.svg', 'Nationwide SteelBox — Admin')
+  useFavicon('favicon-admin.svg', 'National SteelBox — Admin')
   const { user: adminUser, logout } = useAuth()
   const [view, setView] = useState<AdminView>('dashboard')
   const isMobile = useIsMobile()
@@ -1759,7 +1759,7 @@ export default function AdminPage() {
   useLive(['depots'], () => refetchDepots().catch(() => {}))
 
   // ── Tenant scope ──────────────────────────────────────────
-  // The admin is hierarchical: "Global" is the Nationwide SteelBox home
+  // The admin is hierarchical: "Global" is the National SteelBox home
   // office (every seller's data, for helping tenants); picking a seller
   // scopes the ENTIRE portal — dashboard, orders, inventory, schedule,
   // activity, inbox, drivers, customers, users, depots — to that tenant.
@@ -2290,12 +2290,12 @@ export default function AdminPage() {
           <div style={{ width: '32px', height: '32px', borderRadius: 'var(--r8)', background: 'var(--primary)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><rect x="1" y="6" width="22" height="14" rx="2" /><line x1="6" y1="6" x2="6" y2="20" /><line x1="11" y1="6" x2="11" y2="20" /><line x1="16" y1="6" x2="16" y2="20" /></svg>
           </div>
-          <span style={{ fontSize: '15px', fontWeight: 700, letterSpacing: '-0.3px', color: '#2B7FD4', whiteSpace: 'nowrap' }}>Nationwide&nbsp;<span style={{ color: 'var(--cta)' }}>SteelBox</span></span>
+          <span style={{ fontSize: '15px', fontWeight: 700, letterSpacing: '-0.3px', color: '#2B7FD4', whiteSpace: 'nowrap' }}>National&nbsp;<span style={{ color: 'var(--cta)' }}>SteelBox</span></span>
           <span style={{ marginLeft: 'auto', background: 'var(--primary-cont)', color: 'var(--primary)', borderRadius: 'var(--r4)', padding: '2px 8px', fontSize: '9px', fontWeight: 700, letterSpacing: '0.8px' }}>ADMIN</span>
         </div>
 
         {/* ── Tenant switcher — the admin hierarchy's top node ──
-            Global = Nationwide home office over every seller; picking a
+            Global = National SteelBox home office over every seller; picking a
             seller scopes the whole portal to that tenant. Seller-scoped
             staff accounts are pinned to their own company. */}
         <div style={{ padding: '12px 14px 4px', flexShrink: 0 }}>
@@ -2381,7 +2381,7 @@ export default function AdminPage() {
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: '16px', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{VIEW_TITLES[view]}</div>
             <div style={{ fontSize: '11px', color: 'var(--ink3)', fontFamily: 'var(--mono)' }}>
-              {view === 'dashboard' ? `Overview · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : scope === 'global' ? `Nationwide SteelBox · Global` : `${sellerName(scope)} · Tenant admin`}
+              {view === 'dashboard' ? `Overview · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : scope === 'global' ? `National SteelBox · Global` : `${sellerName(scope)} · Tenant admin`}
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto', alignItems: 'center' }}>
@@ -3537,7 +3537,7 @@ export default function AdminPage() {
                 <div>
                   <div style={{ fontSize: '15px', fontWeight: 700 }}>Marketplace Sellers</div>
                   <div style={{ fontSize: '12px', color: 'var(--ink3)', marginTop: '2px' }}>
-                    Each seller owns depots and fulfills its own orders with its own drivers, pricing, and service agreement — Nationwide SteelBox runs the marketplace. Assign a depot to a seller from Depots → Edit.
+                    Each seller owns depots and fulfills its own orders with its own drivers, pricing, and service agreement — National SteelBox runs the marketplace. Assign a depot to a seller from Depots → Edit.
                   </div>
                 </div>
                 <Button variant="primary" size="md" onClick={() => setEditSeller('new')} icon={<span>+</span>}>Add Seller</Button>
