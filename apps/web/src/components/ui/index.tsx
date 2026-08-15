@@ -229,7 +229,9 @@ export function Modal({ open, onClose, children, maxWidth = 500, noPadding = fal
         display: 'flex',
         alignItems: 'flex-start',
         justifyContent: 'center',
-        padding: '20px',
+        // Phones: nearly full-bleed so modal content gets the whole screen;
+        // desktop keeps the comfortable 20px gutter.
+        padding: 'clamp(4px, 2.5vw, 20px)',
         overflowY: 'auto',
       }}
     >
