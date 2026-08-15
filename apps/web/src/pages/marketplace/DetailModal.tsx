@@ -39,12 +39,19 @@ export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onN
   // browse tab, constrained to what this unit's listingType allows).
   const [txn, setTxn] = useState<CartMode>(mode)
 
-  // Reset the gallery (and ZIP result) whenever the viewed container changes.
+  // Reset the gallery (and ZIP result) whenever the viewed container changes,
+  // and snap the modal back to the top — Prev/Next live at the bottom, so
+  // without this the next unit opens scrolled to its price section.
+  const topRef = React.useRef<HTMLDivElement>(null)
   useEffect(() => {
     setDelivery('Enter your ZIP above'); setZip('')
     if (container) {
       const allow = allowedModes(container)
       setTxn(mode === 'rent' ? (allow.rent ? 'rent' : 'buy') : (allow.buy ? 'buy' : 'rent'))
+      // The Modal overlay is the scroll container; walk up to it from the panel.
+      let el: HTMLElement | null = topRef.current
+      while (el && el.scrollTop === 0) el = el.parentElement
+      el?.scrollTo({ top: 0, behavior: 'auto' })
     }
   }, [container?.id, mode]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -78,6 +85,7 @@ export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onN
 
   return (
     <Modal open={!!container} onClose={onClose} maxWidth={940} noPadding closeVariant="dark">
+      <div ref={topRef} />
       {/* Gallery — the 8 field photos + the AI-stitched 3D render (image 9) */}
       <PhotoGallery container={container} />
 
