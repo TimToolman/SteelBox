@@ -510,13 +510,8 @@ export default function MarketplacePage() {
                 style={{ width: '100%', padding: '9px 11px', border: `1.5px solid ${geoHits ? 'var(--primary)' : 'var(--div)'}`, borderRadius: 'var(--r8)', fontSize: '14px', fontFamily: 'var(--mono)', letterSpacing: '2px', fontWeight: 700, outline: 'none', boxSizing: 'border-box', background: 'var(--surf-w)' }}
               />
               {geoHits && (
-                <div style={{ fontSize: '11px', color: 'var(--green)', fontWeight: 600, marginTop: '6px', lineHeight: 1.5 }}>
-                  ✓ Serviced by {areaSellers.join(' & ')}
-                  {geoHits.map(h => (
-                    <div key={h.depot.id} style={{ color: 'var(--ink3)', fontWeight: 400 }}>
-                      {h.depot.name} · {h.miles} mi away
-                    </div>
-                  ))}
+                <div style={{ fontSize: '11px', color: 'var(--green)', fontWeight: 600, marginTop: '6px', lineHeight: 1.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  ✓ {areaSellers.join(' & ')}
                 </div>
               )}
               {geoMiss && (
