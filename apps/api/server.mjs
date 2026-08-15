@@ -106,19 +106,20 @@ const SCHEMAS = {
     // validatedAt/calledAt/paidAt timestamp the phone-payment pipeline:
     // staff validate availability → call the customer → collect payment
     // (status becomes 'confirmed') → assign a driver.
-    headers: ['id','orderNumber','containerId','containerSku','customerId','customerName','customerEmail','customerPhone','deliveryAddress','deliveryZip','amount','status','driverId','driverName','scheduledDate','completedAt','createdAt','saleType','unitCost','deposit','driverHours','validatedAt','calledAt','paidAt','sellerId','sellerName','crossTerritory','sellerToId','sellerToName','meetPointId','meetPointName','relayFee','relayLinehaul','relayLastMile','relayPlatform','relayLinehaulMiles','relayLastMiles'],
+    headers: ['id','orderNumber','containerId','containerSku','customerId','customerName','customerEmail','customerPhone','deliveryAddress','deliveryZip','amount','status','driverId','driverName','scheduledDate','completedAt','createdAt','saleType','unitCost','deposit','driverHours','validatedAt','calledAt','paidAt','sellerId','sellerName','crossTerritory','sellerToId','sellerToName','meetPointId','meetPointName','relayFee','relayLinehaul','relayLastMile','relayPlatform','relayLinehaulMiles','relayLastMiles','rating'],
     types: {
-      amount: 'number', unitCost: 'number', deposit: 'number', driverHours: 'number',
+      amount: 'number', unitCost: 'number', deposit: 'number', driverHours: 'number', rating: 'number',
       driverId: 'stringOrNull', driverName: 'stringOrNull',
       scheduledDate: 'stringOrNull', completedAt: 'stringOrNull',
       validatedAt: 'stringOrNull', calledAt: 'stringOrNull', paidAt: 'stringOrNull', crossTerritory: 'boolean', relayFee: 'number', relayLinehaul: 'number', relayLastMile: 'number', relayPlatform: 'number', relayLinehaulMiles: 'number', relayLastMiles: 'number', },
   },
   drivers: {
     file: 'drivers.csv',
-    headers: ['id','driverCode','name','initials','cdlClass','vehicle','licensePlate','status','rating','deliveriesMonth','deliveriesTotal','onTimePercent','activeOrderId','activeOrderSku','nextShift','colorHex','active','address','cellPhone','hourlyWage','trucks','workHours','sellerId'],
+    headers: ['id','driverCode','name','initials','cdlClass','vehicle','licensePlate','status','rating','deliveriesMonth','deliveriesTotal','onTimePercent','activeOrderId','activeOrderSku','nextShift','colorHex','active','address','cellPhone','hourlyWage','trucks','workHours','sellerId','cdl','truckType','haulCaps','serviceZips','availableDays','licenseDocUrl','insuranceDocUrl','contractor'],
     types: {
       rating: 'number', deliveriesMonth: 'number', deliveriesTotal: 'number', onTimePercent: 'number', hourlyWage: 'number',
-      active: 'boolean',
+      active: 'boolean', cdl: 'boolean', contractor: 'boolean',
+      haulCaps: 'array', availableDays: 'array',
       activeOrderId: 'stringOrNull', activeOrderSku: 'stringOrNull', nextShift: 'stringOrNull',
     },
   },
@@ -239,6 +240,13 @@ const SCHEMAS = {
     // reseller's behalf; '' = the reseller ran it themselves.
     headers: ['id','sellerId','name','type','status','subject','content','platform','cta','audienceKind','zipPrefixes','audienceCount','budget','spend','delivered','opens','clicks','conversions','revenue','unsubs','sentAt','createdAt','managedBy'],
     types: { zipPrefixes: 'array', audienceCount: 'number', budget: 'number', spend: 'number', delivered: 'number', opens: 'number', clicks: 'number', conversions: 'number', revenue: 'number', unsubs: 'number', sentAt: 'stringOrNull' },
+  },
+  // Independent-contractor driver applications from the public site's
+  // "drive for us" form. Approving one mints the driver record + login.
+  driverapps: {
+    file: 'driverapps.csv',
+    headers: ['id','name','email','phone','city','state','zip','cdl','cdlClass','truckType','haulCaps','experienceYears','notes','status','createdAt','decidedAt','driverId'],
+    types: { cdl: 'boolean', haulCaps: 'array', experienceYears: 'number', decidedAt: 'stringOrNull' },
   },
   // Outbound marketing integrations (SendGrid, Meta, Google Ads, …).
   // Keys are stored masked — this is a directory of connections, not a vault.
@@ -764,6 +772,16 @@ function ensureSeedClaimTables() {
       { id: 'shop_03', name: 'Coastal Refinishing', city: 'Mobile', state: 'AL', phone: '(251) 555-0296', specialty: 'Blast & repaint', approved: true, contactName: 'Miles Turner', email: 'miles@coastalrefinish.com', siteIds: ['mp_02', 'dep_cdi'] },
     ])
     console.log('Seeded repair shops (3)')
+  }
+  // Contractor recruiting seeds — a couple of driver applications in
+  // different review stages so the admin queue demos end to end.
+  if (readTable('driverapps').length === 0) {
+    const now = new Date().toISOString()
+    writeTable('driverapps', [
+      { id: 'app_01', name: 'Curtis Boyd', email: 'curtis.boyd@gmail.com', phone: '(985) 555-0455', city: 'Slidell', state: 'LA', zip: '70458', cdl: true, cdlClass: 'A', truckType: 'Tilt-bed roll-off', haulCaps: ['20ft', '40ft'], experienceYears: 9, notes: 'Hauled port drayage out of NOLA 2019–2024. Own truck, clean MVR.', status: 'new', createdAt: now, decidedAt: null, driverId: '' },
+      { id: 'app_02', name: 'Yolanda Pierre', email: 'yolanda.pierre@outlook.com', phone: '(713) 555-0466', city: 'Baytown', state: 'TX', zip: '77520', cdl: false, cdlClass: '', truckType: 'Gooseneck + 40ft trailer', haulCaps: ['20ft'], experienceYears: 3, notes: '', status: 'interviewing', createdAt: now, decidedAt: null, driverId: '' },
+    ])
+    console.log('Seeded driver applications (2)')
   }
   // Marketing portal seeds — a starter audience, campaign history and
   // connected providers per reseller so the portal demos with real numbers.
@@ -1845,6 +1863,34 @@ async function handleRequest(req, res) {
           'order', o.id)
         return send(res, 200, orders[idx])
       }
+
+      // Customer rates their delivered order's driver, 1–5 stars. One shot —
+      // ratings feed the contractor's average in the driver portal.
+      if (seg.length === 3 && seg[2] === 'rate' && method === 'POST') {
+        if (!user) return denied(401, 'Sign in to rate your delivery')
+        if (idx === -1) return send(res, 404, { message: 'Order not found' })
+        const o = orders[idx]
+        const own = (o.customerEmail || '').toLowerCase() === user.email.toLowerCase()
+        if (!own && !hasRole('admin')) return denied(403, 'Not your order')
+        if (o.status !== 'delivered') return send(res, 400, { message: 'You can rate once the delivery is complete' })
+        const body = await readBody(req)
+        const rating = Math.round(Number(body.rating))
+        if (!(rating >= 1 && rating <= 5)) return send(res, 400, { message: 'Rating must be 1–5 stars' })
+        orders[idx] = { ...o, rating }
+        writeTable('orders', orders)
+        // Keep the driver's headline rating in step: average of rated orders.
+        if (o.driverId) {
+          const drivers = readTable('drivers')
+          const di = drivers.findIndex(d => d.id === o.driverId)
+          if (di !== -1) {
+            const rated = orders.filter(x => x.driverId === o.driverId && Number(x.rating) >= 1)
+            const avg = rated.reduce((a2, x) => a2 + Number(x.rating), 0) / rated.length
+            drivers[di] = { ...drivers[di], rating: Math.round(avg * 10) / 10 }
+            writeTable('drivers', drivers)
+          }
+        }
+        return send(res, 200, orders[idx])
+      }
     }
 
     // ── Drivers ──
@@ -1927,6 +1973,21 @@ async function handleRequest(req, res) {
         }
         return send(res, 200, drivers[idx])
       }
+      // Contractor compliance docs (license / insurance) — image upload,
+      // stored alongside container photos. Admin or the driver themself.
+      if (seg.length === 3 && seg[2] === 'docs' && method === 'POST') {
+        if (!hasRole('admin') && !(hasRole('driver') && user.driverId === seg[1])) {
+          return denied(user ? 403 : 401, 'Not allowed')
+        }
+        if (idx === -1) return send(res, 404, { message: 'Driver not found' })
+        const body = await readBody(req)
+        const kind = body.kind === 'insurance' ? 'insurance' : 'license'
+        const saved = savePhoto(`DOC-${drivers[idx].driverCode}-${kind}`, 0, body.dataUrl)
+        if (saved.error) return send(res, 400, { message: saved.error })
+        drivers[idx] = { ...drivers[idx], [kind === 'license' ? 'licenseDocUrl' : 'insuranceDocUrl']: saved.url }
+        writeTable('drivers', drivers)
+        return send(res, 200, drivers[idx])
+      }
       // Soft delete — keep the row (activity/order history intact), just deactivate.
       if (seg.length === 2 && method === 'DELETE') {
         if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
@@ -1934,6 +1995,100 @@ async function handleRequest(req, res) {
         drivers[idx] = { ...drivers[idx], active: false, status: 'off_duty' }
         writeTable('drivers', drivers)
         return send(res, 200, { id: drivers[idx].id, archived: true })
+      }
+    }
+
+    // ── Independent-contractor driver applications ────────────
+    // The public "drive for us" form posts here with no auth; admins
+    // review (new → interviewing → approved/rejected) and a one-click
+    // approve mints the driver record + login and emails the invite.
+    if (seg[0] === 'driver-apps') {
+      const apps = readTable('driverapps')
+      if (seg.length === 1 && method === 'POST') {
+        const body = await readBody(req)
+        const email = String(body.email || '').trim().toLowerCase()
+        const phone = String(body.phone || '').replace(/\D/g, '')
+        if (!String(body.name || '').trim()) return send(res, 400, { message: 'Name is required' })
+        if (!email.includes('@')) return send(res, 400, { message: 'A valid email is required' })
+        if (phone.length < 10) return send(res, 400, { message: 'A valid mobile number is required' })
+        if (apps.some(a => a.email === email && a.status !== 'rejected')) {
+          return send(res, 409, { message: 'An application with this email is already in review — we\'ll be in touch!' })
+        }
+        const record = {
+          id: uid('app'), name: String(body.name).trim().slice(0, 80), email, phone: String(body.phone).slice(0, 24),
+          city: String(body.city || '').slice(0, 60), state: String(body.state || '').slice(0, 20),
+          zip: String(body.zip || '').replace(/\D/g, '').slice(0, 5),
+          cdl: body.cdl === true, cdlClass: String(body.cdlClass || '').slice(0, 4),
+          truckType: String(body.truckType || '').slice(0, 60),
+          haulCaps: Array.isArray(body.haulCaps) ? body.haulCaps.slice(0, 10) : [],
+          experienceYears: Number(body.experienceYears) || 0,
+          notes: String(body.notes || '').slice(0, 1000),
+          status: 'new', createdAt: new Date().toISOString(), decidedAt: null, driverId: '',
+        }
+        apps.push(record)
+        writeTable('driverapps', apps)
+        queueMessage('email', NOTIFY_EMAILS.join(','), `New driver application — ${record.name}`,
+          `${record.name} (${record.email}, ${record.phone}) wants to drive for Nationwide SteelBox.\nCDL: ${record.cdl ? record.cdlClass || 'yes' : 'no'} · Truck: ${record.truckType || '—'} · Hauls: ${record.haulCaps.join(', ') || '—'}\nReview in Admin → Driver Applications.`,
+          'driverapp', record.id)
+        return send(res, 201, { received: true, id: record.id })
+      }
+      if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
+      if (seg.length === 1 && method === 'GET') return send(res, 200, apps)
+      const ai = apps.findIndex(a => a.id === seg[1])
+      if (ai === -1) return send(res, 404, { message: 'Application not found' })
+      if (seg.length === 2 && method === 'PATCH') {
+        const body = await readBody(req)
+        const patch = {}
+        if (['new', 'interviewing', 'rejected'].includes(body.status)) {
+          patch.status = body.status
+          patch.decidedAt = body.status === 'rejected' ? new Date().toISOString() : null
+        }
+        if ('notes' in body) patch.notes = String(body.notes || '').slice(0, 1000)
+        apps[ai] = { ...apps[ai], ...patch }
+        writeTable('driverapps', apps)
+        return send(res, 200, apps[ai])
+      }
+      // One-click approve & invite: driver record + login + emailed invite.
+      if (seg.length === 3 && seg[2] === 'approve' && method === 'POST') {
+        const a = apps[ai]
+        if (a.status === 'invited') return send(res, 400, { message: 'Already invited' })
+        const users = readTable('users')
+        if (users.some(u2 => (u2.email || '').toLowerCase() === a.email)) {
+          return send(res, 409, { message: 'An account with this email already exists' })
+        }
+        const body = await readBody(req)
+        const drivers = readTable('drivers')
+        const nums = drivers.map(d => Number(String(d.driverCode).replace('DRV-', ''))).filter(n => !Number.isNaN(n))
+        const palette = ['#0057B8', '#00A86B', '#F5A623', '#9013FE', '#E65100', '#0EA5E9', '#DB2777']
+        const driver = {
+          id: uid('drv'), driverCode: `DRV-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(2, '0')}`,
+          name: a.name, initials: a.name.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase(),
+          cdlClass: a.cdl ? (a.cdlClass || 'A') : '', vehicle: a.truckType || '', licensePlate: '',
+          status: 'off_duty', rating: 5, deliveriesMonth: 0, deliveriesTotal: 0, onTimePercent: 100,
+          activeOrderId: null, activeOrderSku: null, nextShift: null,
+          colorHex: palette[drivers.length % palette.length], active: true,
+          address: [a.city, a.state].filter(Boolean).join(', '), cellPhone: a.phone,
+          hourlyWage: 0, trucks: a.truckType || '', workHours: '1:6-18|2:6-18|3:6-18|4:6-18|5:6-18',
+          sellerId: tenantOf(user) || body.sellerId || 'sel_mvp',
+          cdl: a.cdl, truckType: a.truckType, haulCaps: a.haulCaps,
+          serviceZips: a.zip ? a.zip.slice(0, 3) : '', availableDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+          licenseDocUrl: '', insuranceDocUrl: '', contractor: true,
+        }
+        drivers.push(driver)
+        writeTable('drivers', drivers)
+        const tempPassword = randomBytes(5).toString('hex')
+        users.push({
+          id: uid('usr'), email: a.email, passwordHash: hashPassword(tempPassword), role: 'driver',
+          name: a.name, phone: a.phone, driverId: driver.id, customerId: '', phoneVerified: false,
+          active: true, createdAt: new Date().toISOString(),
+        })
+        writeTable('users', users)
+        apps[ai] = { ...a, status: 'invited', decidedAt: new Date().toISOString(), driverId: driver.id }
+        writeTable('driverapps', apps)
+        queueMessage('email', a.email, 'You\'re approved to drive for Nationwide SteelBox',
+          `Welcome aboard, ${a.name}!\n\nYour contractor driver account is ready. Sign in to the Driver Portal to finish onboarding — upload your license and insurance, set your service area and available days, and see your schedule.\n\nSign in: ${(process.env.PUBLIC_ORIGIN || 'https://www.mvpcontainers.com')}/field\nEmail: ${a.email}\nTemporary password: ${tempPassword}\n\nQuestions? Call dispatch at (504) 555-0190.`,
+          'driverapp', a.id)
+        return send(res, 200, { application: apps[ai], driver, tempPassword })
       }
     }
 

@@ -391,6 +391,48 @@ try {
   const afterIn = (await api('/marketing/contacts', { token: mkt })).body.find(c => c.email === 'buyer@test.dev')
   check('opt back in restores consent', optIn.status === 200 && afterIn?.consent === true)
 
+  // ── Independent-contractor drivers: apply → approve → portal ──
+  console.log('Contractor drivers')
+  const appRes = await api('/driver-apps', { method: 'POST', body: { name: 'Test Hauler', email: 'hauler@test.dev', phone: '(504) 555-0777', city: 'Metairie', state: 'LA', zip: '70001', cdl: true, cdlClass: 'A', truckType: 'Tilt-bed roll-off', haulCaps: ['20ft', '40ft'], experienceYears: 6, notes: 'Own truck.' } })
+  check('public application accepted without auth', appRes.status === 201 && appRes.body?.received === true)
+  const appBad = await api('/driver-apps', { method: 'POST', body: { name: 'No Phone', email: 'nope@test.dev' } })
+  check('application validates the phone number', appBad.status === 400)
+  check('staff notified of the new application', (await api('/outbox', { token: admin })).body.some(m => m.subject.startsWith('New driver application')))
+  const appList = await api('/driver-apps', { token: admin })
+  const myApp = appList.body.find(a => a.email === 'hauler@test.dev')
+  check('admin sees the queue incl. seeded applications', appList.status === 200 && appList.body.length >= 3 && !!myApp)
+  check('public cannot read the queue', (await api('/driver-apps')).status === 401)
+  const toInterview = await api(`/driver-apps/${myApp.id}`, { method: 'PATCH', token: admin, body: { status: 'interviewing' } })
+  check('application moves to interviewing', toInterview.status === 200 && toInterview.body?.status === 'interviewing')
+  const approve = await api(`/driver-apps/${myApp.id}/approve`, { method: 'POST', token: admin, body: {} })
+  check('approve mints a contractor driver + login', approve.status === 200 && approve.body?.driver?.contractor === true && !!approve.body?.tempPassword && approve.body?.application?.status === 'invited')
+  const inviteMail = (await api('/outbox', { token: admin })).body.find(m => m.to === 'hauler@test.dev' && m.subject.includes('approved to drive'))
+  check('invite email queued with portal instructions', !!inviteMail && inviteMail.body.includes('Temporary password'))
+  const dLogin = await api('/auth/login', { method: 'POST', body: { email: 'hauler@test.dev', password: approve.body.tempPassword } })
+  check('new contractor signs in with the temp password', dLogin.status === 200 && dLogin.body?.user?.role === 'driver' && dLogin.body?.user?.driverId === approve.body.driver.id)
+  const dTok = dLogin.body.token
+  const avail = await api(`/drivers/${approve.body.driver.id}`, { method: 'PATCH', token: dTok, body: { serviceZips: '700,701,704', availableDays: ['Mon', 'Wed', 'Fri'], truckType: 'Tilt-bed roll-off', haulCaps: ['20ft', '40ft', 'chassis'] } })
+  check('driver self-serves service area + days', avail.status === 200 && avail.body?.availableDays?.length === 3 && avail.body?.serviceZips === '700,701,704')
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+  const doc = await api(`/drivers/${approve.body.driver.id}/docs`, { method: 'POST', token: dTok, body: { kind: 'license', dataUrl: png } })
+  check('license doc uploads onto the driver record', doc.status === 200 && String(doc.body?.licenseDocUrl || '').startsWith('/photos/'))
+  const docOther = await api(`/drivers/${drivers[0].id}/docs`, { method: 'POST', token: dTok, body: { kind: 'insurance', dataUrl: png } })
+  check("cannot upload docs to someone else's record", docOther.status === 403)
+  const dup = await api(`/driver-apps/${myApp.id}/approve`, { method: 'POST', token: admin })
+  check('re-approving an invited application is blocked', dup.status === 400)
+
+  // Ratings: deliver the pipeline order, buyer rates it, driver average moves
+  const del = await api(`/orders/${orderId}/delivered`, { method: 'POST', token: admin })
+  check('pipeline order marked delivered', del.status === 200 && del.body?.status === 'delivered')
+  const foreign = await api(`/orders/${orderId}/rate`, { method: 'POST', token: mkt, body: { rating: 1 } })
+  check('only the buyer can rate an order', foreign.status === 403)
+  const rated = await api(`/orders/${orderId}/rate`, { method: 'POST', token: customer, body: { rating: 5 } })
+  check('buyer rates the delivered order 5 stars', rated.status === 200 && rated.body?.rating === 5)
+  const badRate = await api(`/orders/${orderId}/rate`, { method: 'POST', token: customer, body: { rating: 9 } })
+  check('out-of-range ratings rejected', badRate.status === 400)
+  const drvAfter = (await api(`/drivers/${drivers[0].id}`, { token: admin })).body
+  check("driver's headline rating tracks order ratings", drvAfter?.rating >= 1 && drvAfter?.rating <= 5)
+
   // ── Reject path frees the container ──
   console.log('Reject path')
   const unit2 = containers.find(c => c.status === 'available' && c.id !== unit.id)

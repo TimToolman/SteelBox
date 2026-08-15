@@ -45,6 +45,7 @@ const db: Record<string, Row[]> = Object.fromEntries([
   ['mktcontacts', snapshot.mktcontacts],
   ['mktcampaigns', snapshot.mktcampaigns],
   ['mktconnections', snapshot.mktconnections],
+  ['driverapps', snapshot.driverapps],
 ].map(([k, v]) => [k as string, JSON.parse(JSON.stringify(v ?? []))]))
 
 const uid = (p: string) => `${p}_demo_${Math.random().toString(36).slice(2, 10)}`
@@ -305,6 +306,94 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
       if (c.status === 'closed') claimEvent(c, actor, 'Claim closed — unit stays retail')
     }
     return ok(c)
+  }
+
+  // ── Contractor recruiting + driver portal (mirrors the API) ──
+  // Public application from the landing "drive for us" form — no session.
+  if (route === '/driver-apps' && method === 'POST') {
+    const email = String(body.email || '').trim().toLowerCase()
+    if (!String(body.name || '').trim()) throw new Error('Name is required')
+    if (!email.includes('@')) throw new Error('A valid email is required')
+    if (String(body.phone || '').replace(/\D/g, '').length < 10) throw new Error('A valid mobile number is required')
+    if (db.driverapps.some(a => a.email === email && a.status !== 'rejected')) throw new Error("An application with this email is already in review — we'll be in touch!")
+    const record = {
+      id: uid('app'), name: String(body.name).trim(), email, phone: String(body.phone || ''),
+      city: String(body.city || ''), state: String(body.state || ''), zip: String(body.zip || ''),
+      cdl: body.cdl === true, cdlClass: String(body.cdlClass || ''), truckType: String(body.truckType || ''),
+      haulCaps: Array.isArray(body.haulCaps) ? body.haulCaps : [], experienceYears: Number(body.experienceYears) || 0,
+      notes: String(body.notes || ''), status: 'new', createdAt: new Date().toISOString(), decidedAt: null, driverId: '',
+    } as Row
+    db.driverapps.push(record)
+    return ok({ received: true, id: record.id })
+  }
+  if (route.startsWith('/driver-apps')) {
+    const u = storedUser()
+    if (!u || u.role !== 'admin') throw new Error('Admin access required')
+    const segA = route.split('/').slice(2)
+    if (method === 'GET' && !segA[0]) return ok([...db.driverapps])
+    const ai = db.driverapps.findIndex(a => a.id === segA[0])
+    if (ai === -1) throw new Error('Application not found')
+    if (method === 'PATCH' && segA.length === 1) {
+      const a = db.driverapps[ai]
+      if (['new', 'interviewing', 'rejected'].includes(String(body.status))) {
+        a.status = body.status
+        a.decidedAt = body.status === 'rejected' ? new Date().toISOString() : null
+      }
+      if ('notes' in body) a.notes = body.notes
+      return ok({ ...a })
+    }
+    if (method === 'POST' && segA[1] === 'approve') {
+      const a = db.driverapps[ai] as Row & { name: string; email: string; phone: string; city: string; state: string; zip: string; cdl: boolean; cdlClass: string; truckType: string; haulCaps: string[]; status: string }
+      if (a.status === 'invited') throw new Error('Already invited')
+      const nums = db.drivers.map(d => Number(String(d.driverCode).replace('DRV-', ''))).filter(n => !Number.isNaN(n))
+      const palette = ['#0057B8', '#00A86B', '#F5A623', '#9013FE', '#E65100', '#0EA5E9', '#DB2777']
+      const driver = {
+        id: uid('drv'), driverCode: `DRV-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(2, '0')}`,
+        name: a.name, initials: a.name.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase(),
+        cdlClass: a.cdl ? (a.cdlClass || 'A') : '', vehicle: a.truckType || '', licensePlate: '',
+        status: 'off_duty', rating: 5, deliveriesMonth: 0, deliveriesTotal: 0, onTimePercent: 100,
+        activeOrderId: null, activeOrderSku: null, nextShift: null,
+        colorHex: palette[db.drivers.length % palette.length], active: true,
+        address: [a.city, a.state].filter(Boolean).join(', '), cellPhone: a.phone,
+        hourlyWage: 0, trucks: a.truckType || '', workHours: '1:6-18|2:6-18|3:6-18|4:6-18|5:6-18',
+        sellerId: (u.sellerId as string) || String(body.sellerId || '') || 'sel_mvp',
+        cdl: a.cdl, truckType: a.truckType, haulCaps: a.haulCaps,
+        serviceZips: a.zip ? String(a.zip).slice(0, 3) : '', availableDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+        licenseDocUrl: '', insuranceDocUrl: '', contractor: true,
+      } as Row
+      db.drivers.push(driver)
+      db.users.push({ id: uid('usr'), email: a.email, role: 'driver', name: a.name, phone: a.phone, driverId: driver.id, customerId: '', phoneVerified: false, active: true, createdAt: new Date().toISOString() } as Row)
+      a.status = 'invited'
+      a.decidedAt = new Date().toISOString()
+      a.driverId = driver.id
+      // Demo has no mail server — any password signs the new account in.
+      return ok({ application: { ...a }, driver: { ...driver }, tempPassword: 'drive1234' })
+    }
+  }
+  // Contractor compliance docs — the dataUrl itself is the stored "file".
+  const docMatch = route.match(/^\/drivers\/([^/]+)\/docs$/)
+  if (method === 'POST' && docMatch) {
+    const d = db.drivers.find(x => x.id === docMatch[1])
+    if (!d) throw new Error('Driver not found')
+    d[body.kind === 'insurance' ? 'insuranceDocUrl' : 'licenseDocUrl'] = String(body.dataUrl || '')
+    return ok({ ...d })
+  }
+  // Customer rates a delivered order; the driver's headline average follows.
+  const rateMatch = route.match(/^\/orders\/([^/]+)\/rate$/)
+  if (method === 'POST' && rateMatch) {
+    const o = db.orders.find(x => x.id === rateMatch[1])
+    if (!o) throw new Error('Order not found')
+    if (o.status !== 'delivered') throw new Error('You can rate once the delivery is complete')
+    const rating = Math.round(Number(body.rating))
+    if (!(rating >= 1 && rating <= 5)) throw new Error('Rating must be 1–5 stars')
+    if (Number(o.rating) >= 1) throw new Error('This delivery is already rated')
+    o.rating = rating
+    const d = db.drivers.find(x => x.id === o.driverId)
+    if (d) {
+      const rated = db.orders.filter(x => x.driverId === o.driverId && Number(x.rating) >= 1)
+      d.rating = Math.round((rated.reduce((a, x) => a + Number(x.rating), 0) / rated.length) * 10) / 10
+    }
+    return ok({ ...o })
   }
 
   // ── Marketing portal (mirrors the API server) ──

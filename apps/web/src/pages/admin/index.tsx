@@ -13,6 +13,7 @@ import { meetPoints as meetPointsApi, shippersApi, suppliersApi, type MeetPoint,
 import { parseZones, zoneOverlaps } from '../../lib/territory'
 import { CoverageMap } from './CoverageMap'
 import { RepairShopsView } from './RepairShops'
+import { DriverApplicationsView } from './DriverApplications'
 import { AnalyticsView } from './Analytics'
 import { claims as claimsAdminApi } from '../../lib/api'
 
@@ -30,7 +31,7 @@ const TRUCK_SIZES: { value: ContainerSize; label: string }[] = [
 
 // ── Types ─────────────────────────────────────────────────
 
-type AdminView = 'dashboard' | 'analytics' | 'orders' | 'inventory' | 'schedule' | 'activity' | 'inbox' | 'drivers' | 'customers' | 'users' | 'notifications' | 'depots' | 'repairshops' | 'sellers' | 'shippinglines' | 'builds'
+type AdminView = 'dashboard' | 'analytics' | 'orders' | 'inventory' | 'schedule' | 'activity' | 'inbox' | 'drivers' | 'driverapps' | 'customers' | 'users' | 'notifications' | 'depots' | 'repairshops' | 'sellers' | 'shippinglines' | 'builds'
 
 const VIEW_TITLES: Record<AdminView, string> = {
   dashboard:     'Dashboard',
@@ -40,6 +41,7 @@ const VIEW_TITLES: Record<AdminView, string> = {
   activity:      'Activity Log',
   inbox:         'Inbox',
   drivers:       'Drivers',
+  driverapps:    'Driver Applications',
   customers:     'Customers',
   users:         'Users & Access',
   notifications: 'Alerts',
@@ -2339,6 +2341,7 @@ export default function AdminPage() {
           <NavItem active={view === 'inbox'} onClick={() => go('inbox')} label="Inbox" badge={inboxUnread} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 5.5A1.5 1.5 0 0 1 4 4h12a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5z" /><polyline points="3 5.5 10 11 17 5.5" /></svg>} />
           <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', padding: '16px 18px 3px' }}>People</div>
           <NavItem active={view === 'drivers'} onClick={() => go('drivers')} label="Drivers" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="10" cy="6.5" r="3" /><path d="M3 18A7 7 0 0 1 17 18" /></svg>} />
+          <NavItem active={view === 'driverapps'} onClick={() => go('driverapps')} label="Driver Applications" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="7.5" cy="6.5" r="2.6" /><path d="M2.5 16.5a5 5 0 0 1 10 0" /><path d="M13 7h5M15.5 4.5v5" /></svg>} />
           <NavItem active={view === 'customers'} onClick={() => go('customers')} label="Customers" badge={customerList.filter(c => c.active !== false).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="7" cy="7" r="2.6" /><path d="M2 16.5A5 5 0 0 1 12 16.5" /><path d="M13 4.6a2.6 2.6 0 0 1 0 4.8" /><path d="M14.5 16.5a5 5 0 0 0-2.2-4.1" /></svg>} />
           <NavItem active={view === 'users'} onClick={() => go('users')} label="Users & Access" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6" r="2.6" /><path d="M4.5 17a5.5 5.5 0 0 1 11 0" /><path d="M14.5 8.5l1 1 2-2" /></svg>} />
           <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', padding: '16px 18px 3px' }}>System</div>
@@ -3161,6 +3164,11 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* ── Driver Applications (contractor recruiting queue) ── */}
+          {view === 'driverapps' && (
+            <DriverApplicationsView sellers={sellerList.filter(s => s.active !== false)} scope={scope === 'global' ? 'global' : 'tenant'} onToast={toast} />
           )}
 
           {/* ── Drivers ── */}
