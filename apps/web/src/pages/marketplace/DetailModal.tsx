@@ -127,16 +127,17 @@ export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onN
               <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '2px', lineHeight: 1.5 }}>{gradeMeta.desc}</div>
             </div>
           </div>
-          {/* Specs */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px', marginBottom: '16px' }}>
+          {/* Specs — auto-fit so long depot names wrap to a new row on
+              phones instead of forcing the grid past the modal edge. */}
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(auto-fit, minmax(150px, 1fr))' : 'repeat(3,1fr)', gap: '8px', marginBottom: '16px' }}>
             {[
               { label: 'Size', val: SIZE_LABELS[size] },
               { label: 'SKU', val: sku },
               { label: 'Depot', val: container.depotLocation || 'NOLA' },
             ].map(s => (
-              <div key={s.label} style={{ background: 'var(--surf1)', borderRadius: 'var(--r12)', padding: '11px 12px', border: '1px solid var(--div)' }}>
+              <div key={s.label} style={{ background: 'var(--surf1)', borderRadius: 'var(--r12)', padding: '11px 12px', border: '1px solid var(--div)', minWidth: 0 }}>
                 <div style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--ink3)', fontWeight: 700, marginBottom: '3px' }}>{s.label}</div>
-                <div style={{ fontSize: '14px', fontWeight: 700, fontFamily: 'var(--mono)' }}>{s.val}</div>
+                <div style={{ fontSize: '14px', fontWeight: 700, fontFamily: 'var(--mono)', overflowWrap: 'anywhere' }}>{s.val}</div>
               </div>
             ))}
           </div>
