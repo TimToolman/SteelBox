@@ -340,6 +340,25 @@ export default function MarketplacePage() {
     })
   }
 
+  // Active-filter chips — visible proof the list is narrowed, with one-tap
+  // removal per criterion. On phones the rail collapses behind the toggle
+  // bar, so without these it's easy to miss that a filter is even applied.
+  const sizeLabelOf = new Map(SIZE_OPTIONS)
+  const activeFilters: Array<{ key: string; label: string; clear: () => void }> = [
+    ...(areaZip.length === 5 ? [{ key: 'zip', label: `ZIP ${areaZip}`, clear: () => setAreaZip('') }] : []),
+    ...[...sizeFilters].map(s => ({ key: `size-${s}`, label: sizeLabelOf.get(s) ?? s, clear: () => toggleSize(s) })),
+    ...[...gradeFilters].map(g => ({ key: `grade-${g}`, label: GRADE_META[g].label, clear: () => toggleGrade(g) })),
+    ...(condFilter === 'new' && colorSel ? [...colorSel].map(c => ({ key: `color-${c}`, label: c, clear: () => toggleColor(c) })) : []),
+    ...(minPrice ? [{ key: 'min', label: `Min $${Number(minPrice).toLocaleString()}`, clear: () => setMinPrice('') }] : []),
+    ...(maxPrice ? [{ key: 'max', label: `Max $${Number(maxPrice).toLocaleString()}`, clear: () => setMaxPrice('') }] : []),
+    ...(favOnly ? [{ key: 'fav', label: 'Favorites only', clear: () => setFavOnly(false) }] : []),
+  ]
+  const clearAllFilters = () => {
+    setSizeFilters(new Set()); setGradeFilters(new Set()); setColorSel(null)
+    setAreaZip(''); setGeoHits(null); setGeoMiss(false)
+    setMinPrice(''); setMaxPrice(''); setFavOnly(false)
+  }
+
   const inCart = (id: string) => cart.some(i => i.container.id === id)
 
   const addToCart = (c: Container, mode: CartMode) => {
@@ -491,12 +510,18 @@ export default function MarketplacePage() {
         <div ref={browseRef} style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', width: '100%' }}>
           {/* Mobile: filters live behind a toggle bar so inventory shows first */}
           {isMobile && (
-            <button onClick={() => setFiltersOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '12px 16px', background: 'var(--surf-w)', border: 'none', borderBottom: '1px solid var(--div)', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink)' }}>
+            <button onClick={() => setFiltersOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '12px 16px', background: activeFilters.length ? 'var(--primary-cont, #E3F0FF)' : 'var(--surf-w)', border: 'none', borderBottom: activeFilters.length ? '2px solid var(--primary)' : '1px solid var(--div)', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', color: activeFilters.length ? 'var(--primary)' : 'var(--ink)' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>
                 Filters &amp; Sort
+                {activeFilters.length > 0 && (
+                  <span style={{ minWidth: '18px', height: '18px', padding: '0 5px', borderRadius: '999px', background: 'var(--primary)', color: '#fff', fontSize: '11px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{activeFilters.length}</span>
+                )}
               </span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ transform: filtersOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}><polyline points="6 9 12 15 18 9" /></svg>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {activeFilters.length > 0 && <span style={{ fontSize: '11px', fontWeight: 600 }}>{filtered.length} shown</span>}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ transform: filtersOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}><polyline points="6 9 12 15 18 9" /></svg>
+              </span>
             </button>
           )}
           {/* Sidebar */}
@@ -505,7 +530,7 @@ export default function MarketplacePage() {
             : { width: 'var(--sb-w)', flexShrink: 0, borderRight: '1px solid var(--div)', padding: '14px 10px', position: 'sticky', top: 'var(--nav-h)', height: 'calc(100vh - var(--nav-h))', overflowY: 'auto', background: 'var(--surf-w)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.4px' }}>Filters</span>
-              <button onClick={() => { setCondFilter('used'); setSizeFilters(new Set()); setGradeFilters(new Set()); setColorSel(null); setAreaZip(''); setGeoHits(null); setGeoMiss(false) }} style={{ background: 'none', border: 'none', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>Reset</button>
+              <button onClick={() => { setCondFilter('used'); clearAllFilters() }} style={{ background: 'none', border: 'none', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>Reset</button>
             </div>
 
             {/* Zip Destination — first and loudest: the delivery ZIP drives
@@ -634,7 +659,11 @@ export default function MarketplacePage() {
           {/* Grid area */}
           <div style={{ flex: 1, padding: '18px 18px 60px', minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '14px', fontWeight: 700 }}>{filtered.length} containers</span>
+              <span style={{ fontSize: '14px', fontWeight: 700 }}>
+                {activeFilters.length > 0 && filtered.length !== tabListable.length
+                  ? <>{filtered.length} <span style={{ fontWeight: 400, color: 'var(--ink3)' }}>of {tabListable.length}</span> containers</>
+                  : <>{filtered.length} containers</>}
+              </span>
               {/* Favorites view — hearts saved on this device */}
               <button onClick={() => setFavOnly(o => !o)}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '5px 12px', borderRadius: 'var(--pill)', border: `1.5px solid ${favOnly ? '#E0245E' : 'var(--div)'}`, background: favOnly ? '#FDE8EF' : 'var(--surf-w)', color: favOnly ? '#E0245E' : 'var(--ink2)', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
@@ -650,6 +679,25 @@ export default function MarketplacePage() {
                 AI Graded Inventory
               </span>
             </div>
+
+            {/* Applied criteria — each chip removes its own filter */}
+            {activeFilters.length > 0 && (
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '16px' }}>
+                <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--ink3)' }}>Filtered by</span>
+                {activeFilters.map(f => (
+                  <button key={f.key} onClick={f.clear} title={`Remove: ${f.label}`}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '5px 8px 5px 12px', borderRadius: 'var(--pill)', border: '1.5px solid var(--primary)', background: 'var(--primary-cont, #E3F0FF)', color: 'var(--primary)', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    {f.label}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                  </button>
+                ))}
+                {activeFilters.length > 1 && (
+                  <button onClick={clearAllFilters} style={{ background: 'none', border: 'none', fontSize: '12px', fontWeight: 700, color: 'var(--ink2)', textDecoration: 'underline', cursor: 'pointer', fontFamily: 'inherit', padding: '5px 4px' }}>
+                    Clear all
+                  </button>
+                )}
+              </div>
+            )}
 
             {loading ? (
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(auto-fill, minmax(220px, 1fr))' : 'repeat(4,1fr)', gap: '10px' }}>
