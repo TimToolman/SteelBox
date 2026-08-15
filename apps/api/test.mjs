@@ -329,6 +329,68 @@ try {
   const shopForbidden = await api('/repairshops', { method: 'POST', token: mvpAdmin, body: { name: 'Rogue Repair' } })
   check('reseller admin cannot edit the network', shopForbidden.status === 403)
 
+  // ── Marketing portal: tenancy, CSV import, campaign funnel, plans ──
+  console.log('Marketing portal')
+  const mkLogin = await api('/auth/login', { method: 'POST', body: { email: 'marketing@mvpcontainer.com', password: 'test1234' } })
+  check('marketing persona signs in with the grant', mkLogin.status === 200 && !!mkLogin.body?.token && (mkLogin.body.user?.roles || []).includes('marketing'))
+  const mkt = mkLogin.body.token
+  const myContacts = await api('/marketing/contacts', { token: mkt })
+  check('contacts scoped to own reseller', myContacts.status === 200 && myContacts.body.length === 8 && myContacts.body.every(c => c.sellerId === 'sel_mvp'))
+  const hqContacts = await api('/marketing/contacts', { token: admin })
+  check("HQ sees every reseller's contacts", hqContacts.body.length === 10)
+  const demoContact = hqContacts.body.find(c => c.sellerId === 'sel_demo')
+  const crossDel = await api(`/marketing/contacts/${demoContact.id}`, { method: 'DELETE', token: mkt })
+  check("cannot touch another reseller's contact", crossDel.status === 404)
+  const noAccess = await api('/marketing/contacts', { token: buyer2 })
+  check('no marketing grant → no marketing API', noAccess.status === 403)
+  const imp = await api('/marketing/contacts/import', { method: 'POST', token: mkt, body: { source: 'csv', rows: [
+    { name: 'Existing Dup', email: 'albert.fontenot@gmail.com', zip: '70119' },
+    { name: 'Nadia Brooks', email: 'nadia.brooks@gmail.com', zip: '70115', city: 'New Orleans', state: 'LA' },
+    { name: 'No Email Row', zip: '70119' },
+  ] } })
+  check('CSV import dedupes + validates rows', imp.status === 200 && imp.body?.imported === 1 && imp.body?.skipped === 2 && imp.body?.total === 9)
+  const seededCamps = await api('/marketing/campaigns', { token: mkt })
+  check('campaign history scoped to own reseller', seededCamps.status === 200 && seededCamps.body.length === 3 && seededCamps.body.every(c => c.sellerId === 'sel_mvp'))
+  const campNew = await api('/marketing/campaigns', { method: 'POST', token: mkt, body: { name: 'Houston ZIP blast', type: 'email', subject: 'Local units near you', content: 'Hi {{firstName}} — graded units near {{zip}}.', audienceKind: 'zip', zipPrefixes: ['770'] } })
+  check('campaign drafts with a ZIP-prefix audience', campNew.status === 201 && campNew.body?.status === 'draft' && campNew.body?.zipPrefixes?.length === 1)
+  const launched = await api(`/marketing/campaigns/${campNew.body.id}/launch`, { method: 'POST', token: mkt })
+  check('launch freezes the ZIP-matched audience', launched.status === 200 && launched.body?.status === 'sent' && launched.body?.audienceCount === 2 && !!launched.body?.sentAt)
+  check('launch simulates a coherent funnel', launched.body.delivered <= launched.body.audienceCount && launched.body.opens <= launched.body.delivered && launched.body.clicks <= launched.body.opens && launched.body.spend >= 25)
+  const relaunch = await api(`/marketing/campaigns/${campNew.body.id}/launch`, { method: 'POST', token: mkt })
+  check('sent campaigns cannot relaunch', relaunch.status === 400)
+  const connNew = await api('/marketing/connections', { method: 'POST', token: mkt, body: { provider: 'google', apiKey: 'AIzaSyExample1234' } })
+  check('integration stores only a masked key', connNew.status === 201 && connNew.body?.apiKeyMasked === 'AIz****1234' && !JSON.stringify(connNew.body).includes('AIzaSyExample1234'))
+  const planSet = await api('/marketing/plan', { method: 'POST', token: mvpAdmin, body: { plan: 'pro' } })
+  const planGet = await api('/marketing/plan', { token: mkt })
+  check('marketing plan upgrades stick per reseller', planSet.status === 200 && planGet.body?.plan === 'pro')
+  const planBad = await api('/marketing/plan', { method: 'POST', token: mkt, body: { plan: 'diamond' } })
+  check('unknown plan tiers rejected', planBad.status === 400)
+  // HQ manages campaigns on a reseller's behalf (managedBy stamp + sellerId routing)
+  const hqCamp = await api('/marketing/campaigns', { method: 'POST', token: admin, body: { name: 'HQ boost for Demo Corp', type: 'social', platform: 'facebook', content: 'New arrivals in Baltimore', sellerId: 'sel_demo' } })
+  check("HQ drafts on the reseller's behalf", hqCamp.status === 201 && hqCamp.body?.sellerId === 'sel_demo' && hqCamp.body?.managedBy === 'hq')
+  const demoLogin1 = await api('/auth/login', { method: 'POST', body: { email: 'admin@democontainercorp.com', password: 'test1234' } })
+  const demoLogin2 = await api('/auth/login/verify', { method: 'POST', body: { pendingToken: demoLogin1.body?.pendingToken, code: demoLogin1.body?.devCode } })
+  const demoSees = (await api('/marketing/campaigns', { token: demoLogin2.body.token })).body
+  check('the reseller sees the HQ-managed campaign', demoSees.some(c => c.id === hqCamp.body.id && c.managedBy === 'hq'))
+  check("HQ campaign never leaks to other tenants", !(await api('/marketing/campaigns', { token: mkt })).body.some(c => c.id === hqCamp.body.id))
+  // A tenant passing sellerId cannot escape their own reseller
+  const escape = await api('/marketing/campaigns', { method: 'POST', token: mkt, body: { name: 'Escape attempt', type: 'email', sellerId: 'sel_demo' } })
+  check('tenants cannot write into another reseller', escape.status === 201 && escape.body?.sellerId === 'sel_mvp')
+  // Customer opt-out from the profile: flips consent everywhere, honored at launch
+  await api('/marketing/contacts/import', { method: 'POST', token: mkt, body: { rows: [{ name: 'Buyer Test', email: 'buyer@test.dev', zip: '70119' }] } })
+  const optState = await api('/marketing/consent', { token: buyer2 })
+  check('customer sees their own opt-in state', optState.status === 200 && optState.body?.optedIn === true && optState.body?.listed === true)
+  const optOut = await api('/marketing/consent', { method: 'POST', token: buyer2, body: { optIn: false } })
+  check('profile opt-out flips their contact rows', optOut.status === 200 && optOut.body?.changed >= 1)
+  const afterOut = (await api('/marketing/contacts', { token: mkt })).body.find(c => c.email === 'buyer@test.dev')
+  check('opt-out lands on the reseller list', afterOut?.consent === false)
+  const optCamp = await api('/marketing/campaigns', { method: 'POST', token: mkt, body: { name: 'NOLA re-blast', type: 'email', audienceKind: 'zip', zipPrefixes: ['701'] } })
+  const optLaunch = await api(`/marketing/campaigns/${optCamp.body.id}/launch`, { method: 'POST', token: mkt })
+  check('launch excludes opted-out contacts', optLaunch.status === 200 && optLaunch.body?.audienceCount === 3) // 4 in 701xx minus the opt-out
+  const optIn = await api('/marketing/consent', { method: 'POST', token: buyer2, body: { optIn: true } })
+  const afterIn = (await api('/marketing/contacts', { token: mkt })).body.find(c => c.email === 'buyer@test.dev')
+  check('opt back in restores consent', optIn.status === 200 && afterIn?.consent === true)
+
   // ── Reject path frees the container ──
   console.log('Reject path')
   const unit2 = containers.find(c => c.status === 'available' && c.id !== unit.id)

@@ -778,7 +778,7 @@ function UserModal({ target, drivers, sellers, suppliers, shipperLines, sellerId
     if (target === 'new') setForm({ name: '', email: '', role: 'customer', phone: '', driverId: '', password: '', sellerId: sellerId || '', roles: ['marketplace'], supplierId: '', shipperId: '' })
     // An explicit empty/blocked list stays empty (admin removed every grant);
     // only a missing field (legacy account) defaults to marketplace.
-    else setForm({ name: target.name, email: target.email, role: target.role, phone: target.phone || '', driverId: target.driverId || '', password: '', sellerId: target.sellerId || '', roles: Array.isArray(target.roles) ? target.roles.filter(r => ['marketplace', 'supplier', 'shipper'].includes(r)) : ['marketplace'], supplierId: target.supplierId || '', shipperId: target.shipperId || '' })
+    else setForm({ name: target.name, email: target.email, role: target.role, phone: target.phone || '', driverId: target.driverId || '', password: '', sellerId: target.sellerId || '', roles: Array.isArray(target.roles) ? target.roles.filter(r => ['marketplace', 'supplier', 'shipper', 'marketing'].includes(r)) : ['marketplace'], supplierId: target.supplierId || '', shipperId: target.shipperId || '' })
     setError('')
   }, [target, sellerId])
 
@@ -902,6 +902,10 @@ function UserModal({ target, drivers, sellers, suppliers, shipperLines, sellerId
             {shipperLines.filter(s => s.active !== false).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         )}
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '9px', fontSize: '13px', cursor: 'pointer' }}>
+          <input type="checkbox" checked={hasG('marketing')} onChange={() => toggleG('marketing')} style={{ marginTop: '2px' }} />
+          <span><b>Marketing portal</b> — contact uploads, campaigns, ads and reports for their reseller, as a marketplace tab.</span>
+        </label>
       </div>
 
       <label style={lbl}>Mobile phone</label>
@@ -3789,6 +3793,7 @@ export default function AdminPage() {
                                 {/* Portal grants beyond the primary role */}
                                 {(u.roles || []).includes('supplier') && u.role !== 'supplier' && <span title="Supplier portal grant" style={{ padding: '2px 7px', borderRadius: 'var(--r4)', fontSize: '10px', fontWeight: 700, background: '#EDE9FE', color: '#6D28D9' }}>+SUPPLIER</span>}
                                 {(u.roles || []).includes('shipper') && u.role !== 'shipper' && <span title="Shipper portal grant" style={{ padding: '2px 7px', borderRadius: 'var(--r4)', fontSize: '10px', fontWeight: 700, background: '#E0F2FE', color: '#0E7490' }}>+SHIPPER</span>}
+                                {(u.roles || []).includes('marketing') && <span title="Marketing portal grant" style={{ padding: '2px 7px', borderRadius: 'var(--r4)', fontSize: '10px', fontWeight: 700, background: '#FCE7F3', color: '#9D174D' }}>+MARKETING</span>}
                                 {u.roles && !u.roles.includes('marketplace') && <span title="Marketplace access removed — this account cannot sign in" style={{ padding: '2px 7px', borderRadius: 'var(--r4)', fontSize: '10px', fontWeight: 700, background: '#FDECEA', color: '#B3261E' }}>⛔ NO SIGN-IN</span>}
                               </div>
                             </Td>

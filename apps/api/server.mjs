@@ -218,8 +218,34 @@ const SCHEMAS = {
   // the seller at sale time, and drivers belong to a seller's fleet.
   sellers: {
     file: 'sellers.csv',
-    headers: ['id','name','legalName','brandPrimary','brandAccent','phone','email','tos','active','createdAt','territoryZips'],
+    headers: ['id','name','legalName','brandPrimary','brandAccent','phone','email','tos','active','createdAt','territoryZips','marketingPlan'],
     types: { active: 'boolean' },
+  },
+  // ── Marketing portal (reseller-facing) ────────────────────
+  // Contacts a reseller uploaded (CSV import) or collected. Strictly
+  // tenant-scoped by sellerId — one reseller can never see another's list.
+  mktcontacts: {
+    file: 'mktcontacts.csv',
+    headers: ['id','sellerId','name','email','phone','zip','city','state','tags','source','consent','createdAt'],
+    types: { tags: 'array', consent: 'boolean' },
+  },
+  // Campaigns: email blasts, social posts, paid ads. Draft → launch stamps
+  // sentAt and fills the delivery/engagement metrics (simulated until real
+  // send providers are connected). zipPrefixes narrows the audience to
+  // 3-digit ZIP zones ('' = whole list).
+  mktcampaigns: {
+    file: 'mktcampaigns.csv',
+    // managedBy 'hq' marks campaigns Nationwide SteelBox ran on the
+    // reseller's behalf; '' = the reseller ran it themselves.
+    headers: ['id','sellerId','name','type','status','subject','content','platform','cta','audienceKind','zipPrefixes','audienceCount','budget','spend','delivered','opens','clicks','conversions','revenue','unsubs','sentAt','createdAt','managedBy'],
+    types: { zipPrefixes: 'array', audienceCount: 'number', budget: 'number', spend: 'number', delivered: 'number', opens: 'number', clicks: 'number', conversions: 'number', revenue: 'number', unsubs: 'number', sentAt: 'stringOrNull' },
+  },
+  // Outbound marketing integrations (SendGrid, Meta, Google Ads, …).
+  // Keys are stored masked — this is a directory of connections, not a vault.
+  mktconnections: {
+    file: 'mktconnections.csv',
+    headers: ['id','sellerId','provider','status','apiKeyMasked','connectedAt'],
+    types: {},
   },
 }
 
@@ -439,7 +465,7 @@ function verifyToken(token) {
 // entirely), plus 'supplier' and/or 'shipper'. A single marketplace login
 // then offers each granted portal as a tab. Grants can never confer
 // admin/driver — those stay primary-role only.
-const PORTAL_GRANTS = ['marketplace', 'supplier', 'shipper']
+const PORTAL_GRANTS = ['marketplace', 'supplier', 'shipper', 'marketing']
 // 'blocked' is a stored sentinel: an admin explicitly removed every grant.
 // Without it, "all grants removed" (empty list) would be indistinguishable
 // from a legacy row that predates grants — which defaults to marketplace.
@@ -499,8 +525,11 @@ function ensureSeedUsers() {
   // Reseller admins — every reseller gets at least one admin of its own,
   // locked to that tenant (users.sellerId). The blank-sellerId account above
   // is SteelBox Co. HQ, which can spoof any tenant.
-  ensure('admin@mvpcontainer.com', { role: 'admin', name: 'Marie Landry', sellerId: 'sel_mvp' })
-  ensure('admin@democontainercorp.com', { role: 'admin', name: 'Dana Whitfield', sellerId: 'sel_demo' })
+  ensure('admin@mvpcontainer.com', { role: 'admin', name: 'Marie Landry', sellerId: 'sel_mvp', roles: ['marketplace', 'marketing'] })
+  ensure('admin@democontainercorp.com', { role: 'admin', name: 'Dana Whitfield', sellerId: 'sel_demo', roles: ['marketplace', 'marketing'] })
+  // Reseller marketing persona — Marketing portal tab behind the single
+  // marketplace login, scoped to their reseller's contacts and campaigns.
+  ensure('marketing@mvpcontainer.com', { role: 'customer', name: 'Josie Trahan', sellerId: 'sel_mvp', roles: ['marketplace', 'marketing'] })
   // Damage-claim personas: the container owner and the shipping line.
   ensure('supplier@oceanbox.com', { role: 'supplier', name: 'Dana Reyes', supplierId: 'sup_01', roles: ['marketplace', 'supplier'] })
   ensure('shipper@meridianlines.com', { role: 'shipper', name: 'Kofi Mensah', shipperId: 'shp_01', roles: ['marketplace', 'shipper'] })
@@ -735,6 +764,45 @@ function ensureSeedClaimTables() {
       { id: 'shop_03', name: 'Coastal Refinishing', city: 'Mobile', state: 'AL', phone: '(251) 555-0296', specialty: 'Blast & repaint', approved: true, contactName: 'Miles Turner', email: 'miles@coastalrefinish.com', siteIds: ['mp_02', 'dep_cdi'] },
     ])
     console.log('Seeded repair shops (3)')
+  }
+  // Marketing portal seeds — a starter audience, campaign history and
+  // connected providers per reseller so the portal demos with real numbers.
+  if (readTable('mktcontacts').length === 0) {
+    const now = new Date().toISOString()
+    const mk = (sellerId, name, email, phone, zip, city, state, tags) =>
+      ({ id: uid('mc'), sellerId, name, email, phone, zip, city, state, tags, source: 'seed', consent: true, createdAt: now })
+    writeTable('mktcontacts', [
+      mk('sel_mvp', 'Albert Fontenot', 'albert.fontenot@gmail.com', '(504) 555-0311', '70119', 'New Orleans', 'LA', ['buyer']),
+      mk('sel_mvp', 'Renee Boudreaux', 'renee.b@yahoo.com', '(504) 555-0322', '70115', 'New Orleans', 'LA', ['lead']),
+      mk('sel_mvp', 'Sam Okafor', 'sam.okafor@outlook.com', '(713) 555-0333', '77003', 'Houston', 'TX', ['buyer', 'b2b']),
+      mk('sel_mvp', 'Dot Guidry', 'dot.guidry@gmail.com', '(225) 555-0344', '70806', 'Baton Rouge', 'LA', ['lead']),
+      mk('sel_mvp', 'Hector Ramirez', 'hramirez@construxtx.com', '(713) 555-0355', '77041', 'Houston', 'TX', ['b2b']),
+      mk('sel_mvp', 'June Callahan', 'june.callahan@gmail.com', '(985) 555-0366', '70401', 'Hammond', 'LA', ['lead']),
+      mk('sel_mvp', 'Farmers Co-op of Acadiana', 'ops@acadianacoop.com', '(337) 555-0377', '70501', 'Lafayette', 'LA', ['b2b', 'buyer']),
+      mk('sel_mvp', 'Tricia Nguyen', 'tricia.nguyen@gmail.com', '(832) 555-0388', '77584', 'Pearland', 'TX', ['buyer']),
+      mk('sel_demo', 'Walt Pruitt', 'walt.pruitt@gmail.com', '(410) 555-0399', '21224', 'Baltimore', 'MD', ['lead']),
+      mk('sel_demo', 'Harbor East Storage', 'mgr@harboreaststorage.com', '(410) 555-0401', '21231', 'Baltimore', 'MD', ['b2b']),
+    ])
+    console.log('Seeded marketing contacts (10)')
+  }
+  if (readTable('mktcampaigns').length === 0) {
+    const iso = d => new Date(Date.now() - d * 86400000).toISOString()
+    writeTable('mktcampaigns', [
+      { id: 'camp_01', sellerId: 'sel_mvp', name: 'Spring Yard Clearance', type: 'email', status: 'sent', subject: '20ft one-trip specials — this week only', content: 'Hi {{firstName}}, graded 20ft units from $2,150 delivered to {{zip}}. Every unit photographed and AI-graded.', platform: '', cta: 'Shop Inventory', audienceKind: 'all', zipPrefixes: [], audienceCount: 2140, budget: 0, spend: 43, delivered: 2088, opens: 861, clicks: 118, conversions: 9, revenue: 24030, unsubs: 6, sentAt: iso(21), createdAt: iso(24) },
+      { id: 'camp_02', sellerId: 'sel_mvp', name: 'Houston Metro Search Ads', type: 'ad', status: 'running', subject: '', content: 'Shipping containers delivered in 3-5 days. Photos + AI condition grade on every unit.', platform: 'google', cta: 'Get My Price', audienceKind: 'zip', zipPrefixes: ['770', '775'], audienceCount: 96400, budget: 450, spend: 297, delivered: 96400, opens: 41230, clicks: 1512, conversions: 11, revenue: 31460, unsubs: 0, sentAt: iso(9), createdAt: iso(10) },
+      { id: 'camp_03', sellerId: 'sel_mvp', name: 'New Arrivals Reel', type: 'social', status: 'draft', subject: '', content: 'Fresh drop: 12 one-trip 40HCs just hit the NOLA yard. Tap to see every unit in photos.', platform: 'instagram', cta: 'See the Yard', audienceKind: 'all', zipPrefixes: [], audienceCount: 0, budget: 0, spend: 0, delivered: 0, opens: 0, clicks: 0, conversions: 0, revenue: 0, unsubs: 0, sentAt: null, createdAt: iso(2) },
+      { id: 'camp_04', sellerId: 'sel_demo', name: 'Mid-Atlantic Intro Offer', type: 'email', status: 'sent', subject: 'Containers now delivering in the DMV', content: 'Demo Container Corp now serves {{zip}} — graded used units with all-in delivered pricing.', platform: '', cta: 'Browse Local Stock', audienceKind: 'all', zipPrefixes: [], audienceCount: 830, budget: 0, spend: 25, delivered: 811, opens: 302, clicks: 41, conversions: 3, revenue: 8460, unsubs: 2, sentAt: iso(14), createdAt: iso(15) },
+    ])
+    console.log('Seeded marketing campaigns (4)')
+  }
+  if (readTable('mktconnections').length === 0) {
+    const now = new Date().toISOString()
+    writeTable('mktconnections', [
+      { id: 'conn_01', sellerId: 'sel_mvp', provider: 'sendgrid', status: 'connected', apiKeyMasked: 'SG.****hV2q', connectedAt: now },
+      { id: 'conn_02', sellerId: 'sel_mvp', provider: 'meta', status: 'connected', apiKeyMasked: 'EAAB****9dZC', connectedAt: now },
+      { id: 'conn_03', sellerId: 'sel_demo', provider: 'mailchimp', status: 'connected', apiKeyMasked: 'mc-****41a8', connectedAt: now },
+    ])
+    console.log('Seeded marketing connections (3)')
   }
 }
 
@@ -2250,6 +2318,228 @@ async function handleRequest(req, res) {
         mps.splice(mi, 1)
         writeTable('meetpoints', mps)
         return send(res, 200, { deleted: true })
+      }
+    }
+
+    // ── Marketing portal (reseller campaigns) ─────────────────
+    // Access: the 'marketing' portal grant or any admin. Tenancy is strict:
+    // any account carrying sellerId is locked to that reseller's contacts,
+    // campaigns and connections; only blank-sellerId HQ admins see across.
+    if (seg[0] === 'marketing') {
+      // Marketing consent is every signed-in customer's own switch — the
+      // profile dialog's opt-out/opt-in. It flips consent on every contact
+      // row carrying their email, across all resellers' lists.
+      if (seg[1] === 'consent' && seg.length === 2) {
+        if (!user) return denied(401, 'Sign in required')
+        const email = String(user.email || '').toLowerCase()
+        const all = readTable('mktcontacts')
+        if (method === 'GET') {
+          const mine = all.filter(c => (c.email || '').toLowerCase() === email)
+          return send(res, 200, { optedIn: !mine.some(c => c.consent === false), listed: mine.length > 0 })
+        }
+        if (method === 'POST') {
+          const body = await readBody(req)
+          const optIn = body.optIn !== false
+          let changed = 0
+          all.forEach((c, i) => {
+            if ((c.email || '').toLowerCase() === email && c.consent !== optIn) { all[i] = { ...c, consent: optIn }; changed++ }
+          })
+          if (changed) writeTable('mktcontacts', all)
+          return send(res, 200, { optedIn: optIn, changed })
+        }
+      }
+      const canMarket = !!user && (user.role === 'admin' || grantsOf(user).includes('marketing'))
+      if (!canMarket) return denied(user ? 403 : 401, 'Marketing access required')
+      const tenant = user.sellerId || null
+      const scope = rows => tenant ? rows.filter(r => (r.sellerId || 'sel_mvp') === tenant) : rows
+      // Writes land on the caller's own reseller; SteelBox Co. HQ (blank
+      // sellerId) may act on behalf of any reseller by passing sellerId.
+      const ownFor = body => tenant || (body && body.sellerId) || 'sel_mvp'
+
+      // Deterministic engagement simulator — until a real send provider is
+      // wired, launching a campaign yields stable, plausible funnel numbers
+      // keyed off the campaign id (same campaign → same numbers on re-read).
+      const rngFor = key => {
+        let h = 1779033703 ^ key.length
+        for (let i = 0; i < key.length; i++) { h = Math.imul(h ^ key.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19) }
+        return () => { h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296 }
+      }
+
+      if (seg[1] === 'contacts') {
+        const all = readTable('mktcontacts')
+        if (seg.length === 2 && method === 'GET') return send(res, 200, scope(all))
+        // Bulk CSV import — rows parsed client-side; dedupe by email within
+        // the tenant so re-uploads are safe.
+        if (seg.length === 3 && seg[2] === 'import' && method === 'POST') {
+          const body = await readBody(req)
+          const rows = Array.isArray(body.rows) ? body.rows : []
+          const own = ownFor(body)
+          const have = new Set(all.filter(c => (c.sellerId || 'sel_mvp') === own).map(c => (c.email || '').toLowerCase()))
+          let imported = 0, skipped = 0
+          for (const r of rows.slice(0, 5000)) {
+            const email = String(r.email || '').trim().toLowerCase()
+            if (!email || !email.includes('@') || have.has(email)) { skipped++; continue }
+            have.add(email)
+            all.push({
+              id: uid('mc'), sellerId: own, name: String(r.name || '').slice(0, 80), email,
+              phone: String(r.phone || '').slice(0, 24), zip: String(r.zip || '').replace(/\D/g, '').slice(0, 5),
+              city: String(r.city || '').slice(0, 60), state: String(r.state || '').slice(0, 20),
+              tags: Array.isArray(r.tags) ? r.tags.slice(0, 8) : [],
+              source: String(body.source || 'csv').slice(0, 40), consent: r.consent !== false,
+              createdAt: new Date().toISOString(),
+            })
+            imported++
+          }
+          writeTable('mktcontacts', all)
+          return send(res, 200, { imported, skipped, total: scope(all).length })
+        }
+        if (seg.length === 2 && method === 'POST') {
+          const body = await readBody(req)
+          const own = ownFor(body)
+          const email = String(body.email || '').trim().toLowerCase()
+          if (!email || !email.includes('@')) return send(res, 400, { message: 'A valid email is required' })
+          if (all.some(c => (c.sellerId || 'sel_mvp') === own && (c.email || '').toLowerCase() === email)) return send(res, 409, { message: 'Contact already exists' })
+          const record = {
+            id: uid('mc'), sellerId: own, name: String(body.name || ''), email,
+            phone: String(body.phone || ''), zip: String(body.zip || '').replace(/\D/g, '').slice(0, 5),
+            city: String(body.city || ''), state: String(body.state || ''),
+            tags: Array.isArray(body.tags) ? body.tags : [], source: 'manual', consent: body.consent !== false,
+            createdAt: new Date().toISOString(),
+          }
+          all.push(record)
+          writeTable('mktcontacts', all)
+          return send(res, 201, record)
+        }
+        if (seg.length === 3 && method === 'PATCH') {
+          const idx = all.findIndex(c => c.id === seg[2] && (!tenant || (c.sellerId || 'sel_mvp') === tenant))
+          if (idx === -1) return send(res, 404, { message: 'Contact not found' })
+          const body = await readBody(req)
+          for (const k of ['name', 'phone', 'zip', 'city', 'state', 'tags', 'consent']) {
+            if (k in body) all[idx][k] = k === 'consent' ? body[k] !== false : body[k]
+          }
+          writeTable('mktcontacts', all)
+          return send(res, 200, all[idx])
+        }
+        if (seg.length === 3 && method === 'DELETE') {
+          const idx = all.findIndex(c => c.id === seg[2] && (!tenant || (c.sellerId || 'sel_mvp') === tenant))
+          if (idx === -1) return send(res, 404, { message: 'Contact not found' })
+          all.splice(idx, 1)
+          writeTable('mktcontacts', all)
+          return send(res, 200, { deleted: true })
+        }
+      }
+
+      if (seg[1] === 'campaigns') {
+        const all = readTable('mktcampaigns')
+        if (seg.length === 2 && method === 'GET') return send(res, 200, scope(all))
+        if (seg.length === 2 && method === 'POST') {
+          const body = await readBody(req)
+          if (!body.name) return send(res, 400, { message: 'name is required' })
+          const type = ['email', 'social', 'ad'].includes(body.type) ? body.type : 'email'
+          const own = ownFor(body)
+          const record = {
+            id: uid('camp'), sellerId: own, name: String(body.name).slice(0, 120), type, status: 'draft',
+            managedBy: tenant ? '' : 'hq', // HQ drafts are run on the reseller's behalf
+            subject: String(body.subject || '').slice(0, 200), content: String(body.content || '').slice(0, 4000),
+            platform: String(body.platform || '').slice(0, 30), cta: String(body.cta || '').slice(0, 60),
+            audienceKind: body.audienceKind === 'zip' ? 'zip' : 'all',
+            zipPrefixes: Array.isArray(body.zipPrefixes) ? body.zipPrefixes.map(z => String(z).replace(/\D/g, '').slice(0, 3)).filter(z => z.length === 3).slice(0, 20) : [],
+            audienceCount: 0, budget: Number(body.budget) || 0, spend: 0,
+            delivered: 0, opens: 0, clicks: 0, conversions: 0, revenue: 0, unsubs: 0,
+            sentAt: null, createdAt: new Date().toISOString(),
+          }
+          all.push(record)
+          writeTable('mktcampaigns', all)
+          return send(res, 201, record)
+        }
+        const idx = all.findIndex(c => c.id === seg[2] && (!tenant || (c.sellerId || 'sel_mvp') === tenant))
+        if (idx === -1) return send(res, 404, { message: 'Campaign not found' })
+        if (seg.length === 3 && method === 'PATCH') {
+          const body = await readBody(req)
+          const { id, sellerId, ...rest } = body
+          all[idx] = { ...all[idx], ...rest, id: all[idx].id, sellerId: all[idx].sellerId }
+          writeTable('mktcampaigns', all)
+          return send(res, 200, all[idx])
+        }
+        if (seg.length === 3 && method === 'DELETE') {
+          all.splice(idx, 1)
+          writeTable('mktcampaigns', all)
+          return send(res, 200, { deleted: true })
+        }
+        // Launch: freeze the audience, stamp sentAt, simulate the funnel.
+        if (seg.length === 4 && seg[3] === 'launch' && method === 'POST') {
+          const c = all[idx]
+          if (c.status !== 'draft') return send(res, 400, { message: 'Only draft campaigns can launch' })
+          const contacts = readTable('mktcontacts').filter(x => (x.sellerId || 'sel_mvp') === (c.sellerId || 'sel_mvp'))
+          const matched = c.audienceKind === 'zip' && c.zipPrefixes.length
+            ? contacts.filter(x => c.zipPrefixes.some(p => String(x.zip || '').startsWith(p)))
+            : contacts
+          const r = rngFor(c.id)
+          const audienceCount = c.type === 'ad'
+            ? Math.round((c.budget || 100) * (180 + r() * 140)) // paid reach scales with budget
+            : matched.filter(x => x.consent !== false).length
+          const delivered = c.type === 'email' ? Math.round(audienceCount * (0.955 + r() * 0.04)) : audienceCount
+          const opens = Math.round(delivered * (c.type === 'ad' ? 0.34 + r() * 0.14 : 0.30 + r() * 0.22))
+          const clicks = Math.round(opens * (0.09 + r() * 0.13))
+          const conversions = Math.round(clicks * (0.05 + r() * 0.09))
+          const revenue = Math.round(conversions * (2400 + r() * 1400))
+          const unsubs = c.type === 'email' ? Math.round(delivered * (0.002 + r() * 0.004)) : 0
+          const spend = c.type === 'email' ? Math.max(25, Math.round(audienceCount * 0.02)) : c.type === 'social' ? 15 : (c.budget || 100)
+          all[idx] = {
+            ...c, status: c.type === 'ad' ? 'running' : 'sent', audienceCount,
+            delivered, opens, clicks, conversions, revenue, unsubs, spend,
+            sentAt: new Date().toISOString(),
+          }
+          writeTable('mktcampaigns', all)
+          return send(res, 200, all[idx])
+        }
+      }
+
+      if (seg[1] === 'connections') {
+        const all = readTable('mktconnections')
+        if (seg.length === 2 && method === 'GET') return send(res, 200, scope(all))
+        if (seg.length === 2 && method === 'POST') {
+          const body = await readBody(req)
+          const provider = String(body.provider || '').toLowerCase()
+          if (!provider) return send(res, 400, { message: 'provider is required' })
+          const key = String(body.apiKey || '')
+          // Store only a masked fingerprint — this is a connection directory, not a vault.
+          const masked = key ? `${key.slice(0, 3)}****${key.slice(-4)}` : ''
+          const existing = all.find(c => (c.sellerId || 'sel_mvp') === ownFor(body) && c.provider === provider)
+          if (existing) {
+            const i = all.findIndex(c => c.id === existing.id)
+            all[i] = { ...all[i], status: 'connected', apiKeyMasked: masked || all[i].apiKeyMasked, connectedAt: new Date().toISOString() }
+            writeTable('mktconnections', all)
+            return send(res, 200, all[i])
+          }
+          const record = { id: uid('conn'), sellerId: ownFor(body), provider, status: 'connected', apiKeyMasked: masked, connectedAt: new Date().toISOString() }
+          all.push(record)
+          writeTable('mktconnections', all)
+          return send(res, 201, record)
+        }
+        if (seg.length === 3 && method === 'DELETE') {
+          const idx = all.findIndex(c => c.id === seg[2] && (!tenant || (c.sellerId || 'sel_mvp') === tenant))
+          if (idx === -1) return send(res, 404, { message: 'Connection not found' })
+          all.splice(idx, 1)
+          writeTable('mktconnections', all)
+          return send(res, 200, { deleted: true })
+        }
+      }
+
+      // Plan: which paid marketing tier this reseller is on.
+      if (seg[1] === 'plan') {
+        const sellers = readTable('sellers')
+        const sid = tenant || url.searchParams.get('sellerId') || 'sel_mvp'
+        const si = sellers.findIndex(s => s.id === sid)
+        if (si === -1) return send(res, 404, { message: 'Seller not found' })
+        if (seg.length === 2 && method === 'GET') return send(res, 200, { sellerId: sid, plan: sellers[si].marketingPlan || 'starter' })
+        if (seg.length === 2 && method === 'POST') {
+          const body = await readBody(req)
+          if (!['starter', 'growth', 'pro'].includes(body.plan)) return send(res, 400, { message: 'plan must be starter, growth or pro' })
+          sellers[si] = { ...sellers[si], marketingPlan: body.plan }
+          writeTable('sellers', sellers)
+          return send(res, 200, { sellerId: sid, plan: body.plan })
+        }
       }
     }
 
