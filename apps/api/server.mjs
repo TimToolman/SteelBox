@@ -115,7 +115,7 @@ const SCHEMAS = {
   },
   drivers: {
     file: 'drivers.csv',
-    headers: ['id','driverCode','name','initials','cdlClass','vehicle','licensePlate','status','rating','deliveriesMonth','deliveriesTotal','onTimePercent','activeOrderId','activeOrderSku','nextShift','colorHex','active','address','cellPhone','hourlyWage','trucks','workHours','sellerId','cdl','truckType','haulCaps','serviceZips','availableDays','licenseDocUrl','insuranceDocUrl','contractor'],
+    headers: ['id','driverCode','name','initials','cdlClass','vehicle','licensePlate','status','rating','deliveriesMonth','deliveriesTotal','onTimePercent','activeOrderId','activeOrderSku','nextShift','colorHex','active','address','cellPhone','hourlyWage','trucks','workHours','sellerId','cdl','truckType','haulCaps','serviceZips','availableDays','licenseDocUrl','insuranceDocUrl','plateDocUrl','contractor'],
     types: {
       rating: 'number', deliveriesMonth: 'number', deliveriesTotal: 'number', onTimePercent: 'number', hourlyWage: 'number',
       active: 'boolean', cdl: 'boolean', contractor: 'boolean',
@@ -906,6 +906,33 @@ function savePhoto(sku, slot, dataUrl) {
 // GEMINI_API_KEY on the server; the model is overridable via GEMINI_IMAGE_MODEL.
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
+const GEMINI_TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash'
+
+// OCR a contractor's license-plate photo. Best-effort: without a Gemini
+// key (or on any failure) the caller falls back to manual entry.
+async function ocrPlate(dataUrl) {
+  const m = /^data:image\/(jpeg|png|webp);base64,(.+)$/.exec(String(dataUrl || ''))
+  if (!GEMINI_KEY || !m) return { text: '', source: 'unavailable' }
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TEXT_MODEL}:generateContent`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_KEY },
+        body: JSON.stringify({
+          contents: [{ parts: [
+            { text: 'Read the vehicle license plate in this photo. Reply with ONLY the plate characters (include the state abbreviation if printed on the plate). If no plate is legible, reply NONE.' },
+            { inline_data: { mime_type: `image/${m[1]}`, data: m[2] } },
+          ] }],
+        }),
+      })
+    if (!res.ok) return { text: '', source: 'unavailable' }
+    const j = await res.json()
+    const text = (j?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join(' ').trim()
+    if (!text || /^none\b/i.test(text)) return { text: '', source: 'gemini' }
+    return { text: text.replace(/\s+/g, ' ').slice(0, 20), source: 'gemini' }
+  } catch { return { text: '', source: 'unavailable' } }
+}
 const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image'
 const SHOT_NAMES = [
   'front doors closed', 'front doors open', 'right hand side', 'back',
@@ -1973,20 +2000,30 @@ async function handleRequest(req, res) {
         }
         return send(res, 200, drivers[idx])
       }
-      // Contractor compliance docs (license / insurance) — image upload,
-      // stored alongside container photos. Admin or the driver themself.
+      // Contractor compliance docs (license / insurance / license plate) —
+      // image upload, stored alongside container photos. Admin or the
+      // driver themself. A plate photo is OCR'd (Gemini vision, when the
+      // key is configured) and the read fills drivers.licensePlate.
       if (seg.length === 3 && seg[2] === 'docs' && method === 'POST') {
         if (!hasRole('admin') && !(hasRole('driver') && user.driverId === seg[1])) {
           return denied(user ? 403 : 401, 'Not allowed')
         }
         if (idx === -1) return send(res, 404, { message: 'Driver not found' })
         const body = await readBody(req)
-        const kind = body.kind === 'insurance' ? 'insurance' : 'license'
+        const kind = ['insurance', 'plate'].includes(body.kind) ? body.kind : 'license'
+        const field = kind === 'license' ? 'licenseDocUrl' : kind === 'insurance' ? 'insuranceDocUrl' : 'plateDocUrl'
         const saved = savePhoto(`DOC-${drivers[idx].driverCode}-${kind}`, 0, body.dataUrl)
         if (saved.error) return send(res, 400, { message: saved.error })
-        drivers[idx] = { ...drivers[idx], [kind === 'license' ? 'licenseDocUrl' : 'insuranceDocUrl']: saved.url }
+        drivers[idx] = { ...drivers[idx], [field]: saved.url }
+        let plateText = '', ocrSource = ''
+        if (kind === 'plate') {
+          const ocr = await ocrPlate(body.dataUrl)
+          plateText = ocr.text
+          ocrSource = ocr.source
+          if (plateText) drivers[idx] = { ...drivers[idx], licensePlate: plateText }
+        }
         writeTable('drivers', drivers)
-        return send(res, 200, drivers[idx])
+        return send(res, 200, kind === 'plate' ? { ...drivers[idx], plateText, ocrSource } : drivers[idx])
       }
       // Soft delete — keep the row (activity/order history intact), just deactivate.
       if (seg.length === 2 && method === 'DELETE') {
