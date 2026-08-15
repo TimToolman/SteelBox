@@ -521,14 +521,22 @@ export default function MarketplacePage() {
               )}
               {geoMiss && (
                 <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '6px', lineHeight: 1.45 }}>
-                  No seller's service area covers {areaZip} yet — showing every area. Call us and we'll quote it anyway.
+                  Not covered yet — showing nationwide. Call us for a quote.
                 </div>
               )}
-              {!areaZip && (
-                <div style={{ fontSize: '11px', color: 'var(--ink3)', marginTop: '6px', lineHeight: 1.45 }}>
-                  Enter your ZIP for local inventory and all-in delivered pricing.
-                </div>
-              )}
+              {/* Or skip the ZIP entirely: nationwide is the active state
+                  whenever no ZIP is set; clicking it also forgets a
+                  remembered ZIP so the choice sticks. */}
+              <button
+                onClick={() => {
+                  setAreaZip(''); setGeoHits(null); setGeoMiss(false)
+                  try { localStorage.removeItem('sbx_zip'); sessionStorage.setItem('sbx_zip_prompted', '1') } catch { /* private mode */ }
+                }}
+                style={{ display: 'flex', width: '100%', justifyContent: 'center', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', boxSizing: 'border-box', marginTop: '8px', padding: '7px 12px', borderRadius: 'var(--pill)', border: `1.5px solid ${!areaZip ? 'var(--primary)' : 'var(--div)'}`, background: !areaZip ? 'var(--primary)' : 'var(--surf-w)', color: !areaZip ? '#fff' : 'var(--ink2)', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer' }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.6 3.8 5.7 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.7-3.8-9S9.5 5.6 12 3z" /></svg>
+                Nationwide Search
+              </button>
             </div>
 
             {/* Sort — next, per merchandising: order matters before narrowing */}
