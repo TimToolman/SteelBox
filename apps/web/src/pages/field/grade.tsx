@@ -1,5 +1,5 @@
 // ============================================================
-// Field App — AI Grade screen (inspectors, and drivers who inspect)
+// Field App — Inspections screen (inspectors, and drivers who inspect)
 //
 // Pick a unit → the vision model reads its uploaded photo set →
 // answer the five inspector questions → the combined model
@@ -12,6 +12,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { containers as containersApi, claims as claimsApi, photoUrl, SHOT_LABELS, CLAIM_STAGES, type Container, type DamageClaim } from '../../lib/api'
 import { DamageCollect } from './DamageCollect'
+import { ReportDamageSheet } from './ReportDamage'
+import { UnitPhotoStrip } from './UnitPhotos'
 import { GRADE_META } from '../../lib/specs'
 import {
   INSPECTOR_QUESTIONS, analyzeContainerPhotos, analyzePhotoList, gradeContainer, assessDamage,
@@ -19,7 +21,7 @@ import {
   type GradeResult, type DamageResult, type PhotoFeatures,
 } from '../../lib/grading'
 
-const INK = '#1A1C2E', INK2 = '#44475A', DIV = '#E1E2EC', BLUE = '#0057B8'
+const INK = '#1A1C2E', INK2 = '#44475A', DIV = '#E1E2EC', BLUE = '#0057B8', RED = '#B3261E', AMBER = '#7B4F00'
 
 const card: React.CSSProperties = { margin: '0 12px 10px', background: '#fff', borderRadius: '16px', border: `1px solid ${DIV}`, padding: '14px', boxShadow: '0 1px 4px rgba(26,28,46,.08)' }
 
@@ -63,6 +65,7 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
   const [answers, setAnswers] = useState<Record<string, number>>({})
   const [result, setResult] = useState<GradeResult | null>(null)
   const [applying, setApplying] = useState(false)
+  const [reporting, setReporting] = useState(false)   // report-damage sheet
 
   // Units that CAN be graded: at least one documentation photo uploaded.
   // Units a driver flagged on the walk-around sort to the top — they are
@@ -77,10 +80,15 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
   }, [containers, query])
   const heldCount = gradable.filter(c => c.inspectionRequired).length
 
-  const start = async (c: Container) => {
-    setUnit(c); setFeatures(null); setAnswers({}); setResult(null); setAnalyzeProg([0, (c.photos || []).filter(Boolean).length])
+  const reanalyze = async (c: Container) => {
+    setFeatures(null); setAnalyzeProg([0, (c.photos || []).filter(Boolean).length])
     const f = await analyzeContainerPhotos(c, (done, total) => setAnalyzeProg([done, total]))
     setFeatures(f)
+  }
+
+  const start = async (c: Container) => {
+    setUnit(c); setAnswers({}); setResult(null)
+    await reanalyze(c)
   }
 
   const answered = Object.keys(answers).length
@@ -127,7 +135,7 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
     return (
       <div style={{ paddingBottom: '90px' }}>
         <div style={{ padding: '16px 12px 10px' }}>
-          <div style={{ fontSize: '19px', fontWeight: 700, color: INK }}>AI Condition Grading</div>
+          <div style={{ fontSize: '19px', fontWeight: 700, color: INK }}>Inspections</div>
         </div>
         {bucketTabs}
         <DamageInspection inspectorName={inspectorName} toast={toast} containers={containers} />
@@ -140,10 +148,11 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
     return (
       <div style={{ paddingBottom: '90px' }}>
         <div style={{ padding: '16px 12px 10px' }}>
-          <div style={{ fontSize: '19px', fontWeight: 700, color: INK }}>AI Condition Grading</div>
+          <div style={{ fontSize: '19px', fontWeight: 700, color: INK }}>Inspections</div>
           <div style={{ fontSize: '12px', color: INK2, marginTop: '3px', lineHeight: 1.5 }}>
-            Pick a unit you're picking up or reviewing. The model reads its photo
-            documentation, asks you five questions, and proposes a grade with a 1–5 quality sub-score.
+            Shoot or retake the unit's photos, report anything you find, then grade it: the
+            model reads the photo set, asks you five questions, and proposes a grade with a
+            1–5 quality sub-score.
           </div>
         </div>
         {bucketTabs}
@@ -213,22 +222,54 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
         <div style={{ fontSize: '11px', color: INK2 }}>{unit.size}</div>
       </div>
 
-      {/* Step 1 — photo analysis */}
+      {/* What the field crew already reported on this unit, and the way to add
+          to it — an inspector walking the unit finds things too. */}
+      {unit.inspectionRequired && (
+        <div style={{ ...card, background: '#FFF8E1', borderColor: '#F2C94C', display: 'flex', gap: '11px', alignItems: 'flex-start' }}>
+          <span style={{ flexShrink: 0, color: AMBER, marginTop: '1px' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: INK }}>Reported damage — held off the marketplace</div>
+            <div style={{ fontSize: '11.5px', color: INK2, lineHeight: 1.5, marginTop: '2px' }}>
+              {unit.inspectionReason || 'Damage reported'}
+              {unit.inspectionFlaggedBy ? ` · reported by ${unit.inspectionFlaggedBy}` : ''}.
+              Applying a grade below releases it.
+            </div>
+          </div>
+        </div>
+      )}
+      <div style={{ margin: '0 12px 10px' }}>
+        <button onClick={() => setReporting(true)}
+          style={{ width: '100%', padding: '12px', borderRadius: '14px', border: `1.5px solid #F0B8B2`, background: '#fff', color: RED, fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
+          {unit.inspectionRequired ? 'Report more damage' : 'Report damage on this unit'}
+        </button>
+      </div>
+      {reporting && (
+        <ReportDamageSheet
+          container={unit} sku={unit.sku} reportedBy={inspectorName} toast={toast}
+          onClose={() => setReporting(false)}
+          onReported={async () => {
+            setReporting(false)
+            // Pull the unit back so the report banner shows what was just added.
+            try { setUnit(await containersApi.get(unit.id)) } catch { /* list refresh still runs */ }
+            onApplied()
+          }}
+        />
+      )}
+
+      {/* Step 1 — photo analysis. The inspector shoots and retakes here
+          exactly like the driver does in the job flow: a slot they don't like
+          is one tap from a fresh photo, and the model re-reads the set. */}
       <div style={card}>
         <div style={{ fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '10px' }}>
-          1 · Photo analysis {features ? '· complete' : `· reading ${analyzeProg[0]}/${analyzeProg[1]}`}
+          1 · Photos & analysis {features ? '· complete' : `· reading ${analyzeProg[0]}/${analyzeProg[1]}`}
         </div>
-        <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', paddingBottom: '4px' }}>
-          {(unit.photos || []).slice(0, 8).map((u, i) => u ? (
-            <div key={i} style={{ position: 'relative', flexShrink: 0 }}>
-              <img src={photoUrl(u)} alt={SHOT_LABELS[i]} style={{ width: '58px', height: '44px', objectFit: 'cover', borderRadius: '8px', opacity: features || analyzeProg[0] > i ? 1 : 0.35 }} />
-              {(features || analyzeProg[0] > i) && (
-                <span style={{ position: 'absolute', bottom: '3px', right: '3px', width: '14px', height: '14px', borderRadius: '50%', background: '#1B7A5A', display: 'grid', placeItems: 'center' }}>
-                  <svg width="8" height="8" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="3,10.5 8,16 17,5" /></svg>
-                </span>
-              )}
-            </div>
-          ) : null)}
+        <UnitPhotoStrip container={unit} inspectorName={inspectorName} toast={toast}
+          onContainer={c => { setUnit(c); setResult(null); reanalyze(c) }} />
+        <div style={{ fontSize: '11px', color: INK2, marginTop: '8px', lineHeight: 1.5 }}>
+          Capture or retake any shot — the model re-reads the set each time.
         </div>
         {features && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', marginTop: '10px' }}>
@@ -455,8 +496,6 @@ export function GradeReviewScreen({ sku, result, applying, onApprove, onBack }: 
 // slots — never the retail gallery), answer the same five questions, and
 // the model determines severity D·1 (minor) to D·5 (severe). Applying
 // moves the claim from "Awaiting inspection" to "Awaiting estimate".
-
-const RED = '#B3261E'
 
 function DamageInspection({ inspectorName, toast, containers }: { inspectorName: string; toast: (m: string) => void; containers: Container[] }) {
   const [claims, setClaims] = useState<DamageClaim[]>([])
