@@ -180,6 +180,17 @@ export function SiteNav({ tenant, active, onSelect, right, brand }: {
 
 // ── Hero ──────────────────────────────────────────────────
 
+const HERO_TRUST = ['Your exact unit', 'Photos + AI grade', 'All-in ZIP price', 'Tracked 3–5 day delivery']
+
+// Checkmark used by the hero trust row.
+function CheckIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 13l4 4L19 7" />
+    </svg>
+  )
+}
+
 function Hero({ tenant }: { tenant: Tenant }) {
   const [input, setInput] = useState('')
   // ZIP the shopper last checked ('' until they submit) — the form answers
@@ -189,14 +200,35 @@ function Hero({ tenant }: { tenant: Tenant }) {
   // so content is one flick away. Hysteresis (collapse >80, expand <10)
   // prevents jitter from the page shortening under the scroll position.
   const [collapsed, setCollapsed] = useState(false)
+  const heroRef = React.useRef<HTMLElement>(null)
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 940px)')
-    const onScroll = () => {
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)')
+    let raf = 0
+    const apply = () => {
+      raf = 0
       const y = window.scrollY
       setCollapsed(prev => mq.matches && (prev ? y > 10 : y > 80))
+      // Parallax: the photo layer drifts down (and fades) as the hero
+      // scrolls away, the copy drifts at ~45% of that — classic depth.
+      // Skipped entirely for reduced-motion and while collapsed on phones.
+      const el = heroRef.current
+      if (!el) return
+      const h = el.offsetHeight || 1
+      const t = still.matches ? 0 : Math.min(1, Math.max(0, y / h))
+      el.style.setProperty('--ld-par-bg', `${(t * 118).toFixed(1)}px`)
+      el.style.setProperty('--ld-par-fg', `${(t * 52).toFixed(1)}px`)
+      el.style.setProperty('--ld-par-o', String(1 - t * 0.6))
     }
+    const onScroll = () => { if (!raf) raf = window.requestAnimationFrame(apply) }
+    apply()
     window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
+    window.addEventListener('resize', onScroll, { passive: true })
+    return () => {
+      if (raf) window.cancelAnimationFrame(raf)
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+    }
   }, [])
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -209,16 +241,26 @@ function Hero({ tenant }: { tenant: Tenant }) {
     }
   }
   return (
-    <section className={`ld-hero ld-hero--portal${collapsed ? ' ld-hero--collapsed' : ''}`}>
-      <img className="ld-hero-bgimg" src={heroImg()} alt="" aria-hidden="true" />
+    <section ref={heroRef} className={`ld-hero ld-hero--portal${collapsed ? ' ld-hero--collapsed' : ''}`}>
+      {/* Parallax photo layer: image + industrial scrim + steel corrugation */}
+      <div className="ld-hero-bglayer" aria-hidden="true">
+        <img className="ld-hero-bgimg" src={heroImg()} alt="" />
+        <div className="ld-hero-scrim" />
+        <div className="ld-hero-texture" />
+      </div>
       <div className="ld-hero-inner">
-        <h1>Pick It. See It. Price It. Track It.</h1>
-        <p className="ld-hero-sub">
-          Pick your exact container — then see its real photos and AI-verified condition grade,
-          price it all-in to your ZIP before you commit, and track it to your site in 3–5 days.
-          No stock photos, no call-for-quote, no mystery.
+        <div className="ld-hero-badge ld-rise ld-rise--1">
+          <i aria-hidden="true" />Live inventory · Real photos · AI-verified grades
+        </div>
+        <h1 className="ld-rise ld-rise--2">
+          Pick It. See It.{' '}
+          <span className="ld-hero-accent">Price It. Track It.</span>
+        </h1>
+        <p className="ld-hero-sub ld-rise ld-rise--3">
+          Your exact container — real photos, AI-verified grade, an all-in price to your ZIP,
+          and tracked delivery in 3–5 days. No stock photos. No call-for-quote. No mystery.
         </p>
-        <form className="ld-searchbar" onSubmit={submit}>
+        <form className="ld-searchbar ld-rise ld-rise--4" onSubmit={submit}>
           <label htmlFor="hero-zip" style={{ position: 'absolute', left: '-9999px' }}>Delivery ZIP code</label>
           <input
             id="hero-zip" inputMode="numeric" pattern="[0-9]{5}"
@@ -234,46 +276,82 @@ function Hero({ tenant }: { tenant: Tenant }) {
               : <>{checked} is outside our standard delivery area — <a href={tenant.phoneHref}>call {tenant.phone}</a> and we'll see what we can do.</>}
           </p>
         )}
-        <div className="ld-hero-ctas">
+        <div className="ld-hero-ctas ld-rise ld-rise--4">
           <a className="ld-btn ld-btn--accent ld-btn--hero" href={u('shop')}>
             Browse all inventory <span aria-hidden="true">→</span>
           </a>
         </div>
-        <div className="ld-hero-points">
-          <span>Your exact unit</span>
-          <span>Photos + AI grade</span>
-          <span>All-in ZIP price</span>
-          <span>Tracked 3–5 day delivery</span>
+        <div className="ld-hero-trust ld-rise ld-rise--5">
+          {HERO_TRUST.map(t => <span key={t}><CheckIcon />{t}</span>)}
         </div>
-        <p className="ld-hero-tagline">Grading performed by Machine Learning / AI technology</p>
+        <p className="ld-hero-tagline ld-rise ld-rise--5">Grading performed by Machine Learning / AI technology</p>
       </div>
+      <div className="ld-hero-fade" aria-hidden="true" />
     </section>
   )
 }
 
 // ── How it works ──────────────────────────────────────────
 
+// Step icons — 2D stroke set, currentColor so they flip with the tile.
+const STEP_ICONS: Record<string, React.ReactNode> = {
+  cart: <><path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.3 2.3c-.6.6-.2 1.7.7 1.7H17" /><circle cx="9" cy="20" r="1.6" /><circle cx="17" cy="20" r="1.6" /></>,
+  grid: <><rect x="4" y="4" width="16" height="4.5" rx="1" /><rect x="4" y="12" width="8" height="8" rx="1" /><rect x="16" y="12" width="4" height="8" rx="1" /></>,
+  check: <><circle cx="12" cy="12" r="9" /><path d="M8.5 12.2l2.5 2.5 4.5-5" /></>,
+  truck: <><path d="M3 7h10v9H3z" /><path d="M13 10h4l3 3v3h-7z" /><circle cx="7" cy="18.5" r="1.7" /><circle cx="17" cy="18.5" r="1.7" /></>,
+}
+function StepIcon({ name }: { name: string }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {STEP_ICONS[name]}
+    </svg>
+  )
+}
+
 export function HowItWorks() {
   const steps = [
-    { t: 'Pick Buy or Rent', d: 'Own it outright or rent by the month — it\'s the same field-inspected inventory either way.', href: u('shop?tab=buy') },
-    { t: 'Pick your size & grade', d: `20ft or 40ft, standard or high cube, grades A through R — each verified in a field inspection with a full photo set.`, href: u('shop') },
-    { t: 'Pick new or used', d: 'New one-trip boxes or inspected used units — the photos show exactly what you\'re getting.', href: u('shop?cond=new') },
-    { t: 'Checkout', d: `Add to cart and pick a delivery window. Payment is held until the container is set on your site and you've walked around it.`, href: u('shop') },
+    { n: '01', icon: 'cart', t: 'Pick Buy or Rent', d: 'Own it outright or rent by the month — the same field-inspected inventory either way.', href: u('shop?tab=buy') },
+    { n: '02', icon: 'grid', t: 'Pick size & grade', d: '20ft or 40ft, standard or high cube, grades A through R — each verified with a full photo set.', href: u('shop') },
+    { n: '03', icon: 'check', t: 'Pick new or used', d: 'New one-trip boxes or inspected used units — the photos show exactly what you\'re getting.', href: u('shop?cond=new') },
+    { n: '04', icon: 'truck', t: 'Checkout & track', d: 'Add to cart and pick a delivery window. Payment is held until the box is set on your site.', href: u('shop') },
   ]
+  // Cards cascade in the first time the grid scrolls into view. Progressive
+  // enhancement: the reveal class is added by JS, so the prerendered
+  // (and no-JS) page always shows the cards.
+  const gridRef = React.useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = gridRef.current
+    if (!el) return
+    el.classList.add('ld-hiw-reveal')
+    if (typeof IntersectionObserver !== 'function') { el.classList.add('is-in'); return }
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) { el.classList.add('is-in'); io.disconnect() } })
+    }, { rootMargin: '-60px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
   return (
     <section className="ld-section ld-section--tint" id="how-it-works" aria-labelledby="how-h">
       <div className="ld-wrap">
         <p className="ld-kicker">How it works</p>
-        <h2 id="how-h" className="ld-h2">From browsing to a box on the ground in four steps</h2>
-        <ol className="ld-steps" style={{ listStyle: 'none', padding: 0 }}>
-          {steps.map((s, i) => (
-            <li className="ld-step" key={s.t}>
-              <span className="ld-step-num" aria-hidden="true">{i + 1}</span>
-              <b>{s.t}</b>
-              <p>{s.d} <a href={s.href} style={{ fontWeight: 700 }}>Start here</a></p>
-            </li>
+        <h2 id="how-h" className="ld-h2">From browsing to a box on the ground in four clear steps</h2>
+        <div className="ld-hiw-grid" ref={gridRef}>
+          {steps.map(s => (
+            <a className="ld-hiw-card" key={s.n} href={s.href}>
+              <div className="ld-hiw-top">
+                <span className="ld-hiw-num" aria-hidden="true">{s.n}</span>
+                <span className="ld-hiw-icon"><StepIcon name={s.icon} /></span>
+              </div>
+              <h3>{s.t}</h3>
+              <p>{s.d}</p>
+              <span className="ld-hiw-go">
+                Start here
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+              </span>
+              <span className="ld-hiw-accent" aria-hidden="true" />
+            </a>
           ))}
-        </ol>
+        </div>
       </div>
     </section>
   )
