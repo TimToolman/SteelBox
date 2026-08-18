@@ -5,6 +5,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { photoUrl, SHOT_LABELS, RENDER_SLOT, RENDER_LABEL, type Container, type ContainerGrade, type ContainerSize } from '../../lib/api'
 import { GRADE_META } from '../../lib/specs'
+import { Lightbox, ThumbStrip, ViewerControls, useLightbox, useWheelZoom, useZoomPan, STEP, ExpandIcon } from '../../components/Lightbox'
 
 
 // ── Photo gallery + 3D render viewer ───────────────────────
@@ -89,11 +90,29 @@ export function PhotoGallery({ container }: { container: Container }) {
   const SHOT_ANGLES = [-70, -50, -12, 70, 192, 110, -110, -85, -30]
   const [rotY, setRotY] = useState(SHOT_ANGLES[0])
   const [rotX, setRotX] = useState(-12)
-  const [imgAspect, setImgAspect] = useState<number | null>(null)
   const drag = useRef<{ x: number; y: number; ry: number; rx: number } | null>(null)
-  const goTo = (i: number) => { setIdx(i); setRotY(SHOT_ANGLES[i] ?? -18); setRotX(-12); setImgAspect(null); drag.current = null }
+  const goTo = (i: number) => { setIdx(i); setRotY(SHOT_ANGLES[i] ?? -18); setRotX(-12); drag.current = null }
   useEffect(() => { goTo(0) }, [container.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const step = (dir: -1 | 1) => goTo((idx + dir + items.length) % items.length)
+
+  // The hero zooms in place — the same gestures and limits as the
+  // full-screen viewer, so the controls under it mean one thing everywhere.
+  const view = useZoomPan()
+  const stageRef = useRef<HTMLDivElement | null>(null)
+  useWheelZoom(stageRef, view.zoomBy, !!item.url)
+  useEffect(() => { view.reset() }, [idx, container.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Full-screen: only the shots that actually exist, captioned by slot.
+  const lb = useLightbox()
+  const shotsWithPhotos = items
+    .map((it, i) => ({ it, i }))
+    .filter(({ it }) => !!it.url)
+    .map(({ it, i }) => ({ url: photoUrl(it.url!), caption: it.label, sub: `${it.isRender ? 'AI 3D render' : `Photo ${i + 1}`} · ${container.sku}` }))
+  const openFull = () => {
+    if (!item.url) return
+    const at = shotsWithPhotos.findIndex(s => s.url === photoUrl(item.url!))
+    lb.show(shotsWithPhotos, at < 0 ? 0 : at)
+  }
 
   const pt = (e: React.MouseEvent | React.TouchEvent) => 'touches' in e ? e.touches[0] : e as React.MouseEvent
   const onDown = (e: React.MouseEvent | React.TouchEvent) => { const p = pt(e); drag.current = { x: p.clientX, y: p.clientY, ry: rotY, rx: rotX } }
@@ -104,34 +123,25 @@ export function PhotoGallery({ container }: { container: Container }) {
     onTouchStart: onDown, onTouchMove: onMove, onTouchEnd: onUp,
   }
 
-  // Hug the arrows to the displayed image's edge (objectFit: contain leaves
-  // side gutters on portrait shots) — 8px gap outside the image, clamped to
-  // the stage edge for full-width images and the 3D placeholder.
-  const halfW = item.url && imgAspect ? Math.round((230 * imgAspect) / 2) : null
-  const arrowOffset = halfW != null ? `max(8px, calc(50% - ${halfW + 46}px))` : '10px'
-  const arrowStyle = (side: 'left' | 'right'): React.CSSProperties => ({
-    position: 'absolute', top: '50%', [side]: arrowOffset, transform: 'translateY(-50%)', zIndex: 4,
-    width: '38px', height: '38px', borderRadius: '50%', border: 'none', cursor: 'pointer',
-    background: 'rgba(255,255,255,.92)', boxShadow: '0 2px 10px rgba(0,0,0,.35)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-  })
   return (
     <div style={{ background: '#0B1629' }}>
-      <div {...dragHandlers} style={{ position: 'relative', height: '230px', overflow: 'hidden', background: 'radial-gradient(circle at 50% 38%,#1a2b47,#0a1526)', userSelect: 'none', cursor: item.url ? 'default' : 'grab', touchAction: item.url ? 'auto' : 'none' }}>
-        <div style={{ position: 'absolute', inset: 0 }}>
+      {/* Hero — tall enough to actually judge a container by */}
+      <div ref={stageRef} className="sb-hero" {...dragHandlers}
+        style={{ position: 'relative', height: 'clamp(280px, 40vw, 440px)', overflow: 'hidden', background: 'radial-gradient(circle at 50% 38%,#1a2b47,#0a1526)', userSelect: 'none', cursor: item.url ? 'default' : 'grab', touchAction: item.url ? 'auto' : 'none' }}>
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {item.url
-            ? <img src={photoUrl(item.url)} alt={item.label} draggable={false}
-                onLoad={e => { const el = e.currentTarget; if (el.naturalHeight) setImgAspect(el.naturalWidth / el.naturalHeight) }}
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            ? <img src={photoUrl(item.url)} alt={item.label} {...view.handlers} onClick={openFull}
+                style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block', transform: view.transform, transition: 'transform .12s ease-out', cursor: view.cursor, touchAction: 'none' }} />
             : <Container3D size={container.size} grade={container.grade} rotY={rotY} rotX={rotX} tex={tex} />}
         </div>
-        {/* Previous / next — step through the 9 images */}
-        <button aria-label="Previous photo" onClick={() => step(-1)} style={arrowStyle('left')}>
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="12.5,4 6.5,10 12.5,16" /></svg>
-        </button>
-        <button aria-label="Next photo" onClick={() => step(1)} style={arrowStyle('right')}>
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="7.5,4 13.5,10 7.5,16" /></svg>
-        </button>
+        {/* Open full screen — appears on hover, always reachable by keyboard */}
+        {item.url && (
+          <button className="sb-hero-expand" onClick={openFull} aria-label="View full screen" title="View full screen"
+            style={{ position: 'absolute', top: '10px', right: '10px', zIndex: 4, display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 12px', borderRadius: 'var(--pill)', border: '1px solid rgba(255,255,255,.2)', background: 'rgba(8,14,26,.72)', color: '#fff', fontSize: '11px', fontWeight: 700, letterSpacing: '.3px', cursor: 'pointer', fontFamily: 'inherit' }}>
+            <ExpandIcon />
+            Full screen
+          </button>
+        )}
         {item.isRender && (
           <div style={{ position: 'absolute', top: '10px', left: '10px', display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(0,87,184,.9)', color: '#fff', borderRadius: 'var(--r4)', padding: '4px 10px', fontSize: '10px', fontWeight: 700 }}>
             <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2 3 6v8l7 4 7-4V6l-7-4Z" /><path d="M3 6l7 4 7-4" /><path d="M10 10v8" /></svg>
@@ -144,27 +154,45 @@ export function PhotoGallery({ container }: { container: Container }) {
             Drag to rotate
           </div>
         )}
-        <div style={{ position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,.55)', borderRadius: 'var(--pill)', padding: '3px 10px', fontFamily: 'var(--mono)', fontSize: '10px', color: '#fff', whiteSpace: 'nowrap' }}>
-          {idx + 1} / {items.length} · {item.label}{!item.url && !item.isRender ? ' · photo pending' : ''}
-        </div>
       </div>
+
+      {/* Control bar under the image box — which shot this is on the left,
+          previous · zoom out · zoom in · next on the right. */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', padding: '10px 12px 4px', background: '#060F1E' }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, letterSpacing: '.7px', color: 'rgba(255,255,255,.5)' }}>
+            {idx + 1} / {items.length}
+          </div>
+          <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#fff', letterSpacing: '-.15px', marginTop: '1px' }}>
+            {item.label}
+            {!item.url && !item.isRender && <span style={{ fontWeight: 600, color: 'rgba(255,255,255,.45)' }}> · photo pending</span>}
+          </div>
+        </div>
+        <ViewerControls tone="dark" compact zoom={view.zoom}
+          onPrev={() => step(-1)} onNext={() => step(1)}
+          onZoomIn={() => view.zoomBy(STEP)} onZoomOut={() => view.zoomBy(-STEP)} onFit={view.reset} />
+      </div>
+
       {/* 9 thumbnails — slot i is always the same labelled shot as the field app */}
-      <div style={{ display: 'flex', gap: '3px', padding: '6px', background: '#060F1E', overflowX: 'auto' }}>
+      <div className="sb-thumbs" style={{ padding: '6px 12px 10px', background: '#060F1E' }}>
         {items.map((it, i) => (
-          <button key={i} onClick={() => goTo(i)} title={it.label}
-            style={{ width: '74px', height: '52px', flexShrink: 0, borderRadius: 'var(--r4)', overflow: 'hidden', cursor: 'pointer', border: `2px solid ${i === idx ? 'var(--cta)' : 'transparent'}`, background: '#162030', color: 'rgba(255,255,255,.65)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px', padding: '3px', position: 'relative' }}>
+          <button key={i} onClick={() => goTo(i)} title={it.label} aria-current={i === idx}
+            className={`sb-thumb${i === idx ? ' is-active' : ''}`}
+            style={{ color: 'rgba(255,255,255,.65)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
             {it.url
-              ? <img src={photoUrl(it.url)} alt={it.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ? <img src={photoUrl(it.url)} alt={it.label} />
               : it.isRender && texReady
                 ? <>
                     <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#4ADE80" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2 3 6v8l7 4 7-4V6l-7-4Z" /><path d="M3 6l7 4 7-4" /><path d="M10 10v8" /></svg>
                     <span style={{ fontSize: '7px', lineHeight: 1.1, textAlign: 'center', color: '#4ADE80', fontWeight: 700 }}>3D view</span>
                   </>
-                : <><span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, color: '#fff' }}>{i + 1}</span><span style={{ fontSize: '7px', lineHeight: 1.1, textAlign: 'center' }}>{it.isRender ? '3D render' : it.label}</span></>}
-            {it.isRender && it.url && <span style={{ position: 'absolute', bottom: '2px', right: '2px', background: 'rgba(0,87,184,.95)', color: '#fff', fontSize: '7px', fontWeight: 700, padding: '1px 4px', borderRadius: '2px' }}>3D</span>}
+                : <><span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, color: '#fff' }}>{i + 1}</span><span style={{ fontSize: '7px', lineHeight: 1.1, textAlign: 'center', padding: '0 3px' }}>{it.isRender ? '3D render' : it.label}</span></>}
+            {it.isRender && it.url && <span style={{ position: 'absolute', top: '2px', right: '2px', background: 'rgba(0,87,184,.95)', color: '#fff', fontSize: '7px', fontWeight: 700, padding: '1px 4px', borderRadius: '2px' }}>3D</span>}
           </button>
         ))}
       </div>
+
+      {lb.open && <Lightbox shots={lb.open.shots} index={lb.open.index} onIndex={lb.setIndex} onClose={lb.close} />}
     </div>
   )
 }

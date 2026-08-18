@@ -8,6 +8,7 @@
 import React, { useState } from 'react'
 import { photoUrl, claimEvents, claims as claimsApi, DAMAGE_SHOT_LABELS, type DamageClaim } from '../../lib/api'
 import { damageLabel, SEVERITY_WORD } from '../../lib/grading'
+import type { LightboxShot } from '../../components/Lightbox'
 
 const INK = '#0D0E12', INK2 = '#44474F', INK3 = '#6B7280', DIV = '#E2E4E9'
 
@@ -18,6 +19,15 @@ const fmtT = (iso: string) => new Date(iso).toLocaleString('en-US', { month: 'sh
 // old slot labels so historic packets still read correctly.
 export const photoCaption = (claim: DamageClaim, i: number) =>
   claim.photoReasons?.[i] || DAMAGE_SHOT_LABELS[i] || `Photo ${i + 1}`
+
+// The claim's evidence as a viewer set. Empty slots are skipped, so
+// shotIndex() maps a slot back to its place in the set the viewer shows.
+export const claimShots = (claim: DamageClaim): LightboxShot[] =>
+  (claim.photos || []).map((u, i) => ({ u, i })).filter(({ u }) => !!u).map(({ u, i }) => ({
+    url: photoUrl(u), caption: photoCaption(claim, i), sub: claim.photoNotes?.[i] || '',
+  }))
+export const shotIndex = (claim: DamageClaim, slot: number) =>
+  (claim.photos || []).slice(0, slot).filter(Boolean).length
 
 // ── Package the whole claim: .zip download / signed link ────
 // The API bundles the evidence photos (named by reason) with a printable

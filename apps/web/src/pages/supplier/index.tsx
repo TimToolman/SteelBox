@@ -15,12 +15,13 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../hooks'
 import {
   containers as containersApi, claims as claimsApi, suppliersApi, shippersApi, repairShops as repairShopsApi,
-  depots as depotsApi, prefs as prefsApi, photoUrl, SIZE_LABEL, CLAIM_STAGES,
+  depots as depotsApi, prefs as prefsApi, photoUrl, findingsOf, SIZE_LABEL, CLAIM_STAGES,
   type Container, type DamageClaim, type Supplier, type Shipper, type RepairShop, type ClaimStatus, type AuthUser, type Depot,
 } from '../../lib/api'
 import { GRADE_META, DAMAGE_DISCOUNT } from '../../lib/specs'
 import { FilterRail, FilterGroup, ChipRow, Chip, useSetFilter, railSelect, PeriodFilter, PERIOD_ALL, periodPasses, type Period } from '../../components/filters'
-import { ClaimTimeline, ClaimPacket, ClaimPackageActions, photoCaption } from './claimkit'
+import { ClaimTimeline, ClaimPacket, ClaimPackageActions, photoCaption, claimShots } from './claimkit'
+import { Lightbox, useLightbox } from '../../components/Lightbox'
 import { gradeLabel, damageLabel, SEVERITY_WORD } from '../../lib/grading'
 import { Snackbar } from '../../components/ui'
 import { useSnackbar } from '../../hooks'
@@ -73,6 +74,7 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
   const [rep, setRep] = useState<Record<string, { shopId: string; date: string }>>({})
   const [askPrice, setAskPrice] = useState<Record<string, string>>({})
   const [packet, setPacket] = useState<DamageClaim | null>(null)
+  const lb = useLightbox()
   // The workspace is a page of its own, in its own tab — a claim is desk work
   // and the evidence needs the whole window.
   const openWorkspace = (c: DamageClaim) =>
@@ -105,6 +107,10 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
   const myClaims = useMemo(() =>
     claimList.filter(c => !supplierId || c.supplierId === supplierId), [claimList, supplierId])
   const claimedIds = new Set(myClaims.filter(c => c.status !== 'closed').map(c => c.containerId))
+  // Claimable = not already claimed, and carrying at least one photographed
+  // finding from an inspection. Without evidence the API refuses the claim.
+  const claimable = useMemo(() => fleet.filter(c =>
+    !claimedIds.has(c.id) && findingsOf(c).some(f => !!f.photo)), [fleet, claimList]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const createClaim = async () => {
     if (!newForm.containerId || !newForm.shipperId) { toast('Pick the container and the shipping line'); return }
@@ -198,7 +204,7 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
   const stagesPresent = [...new Set(myClaims.map(c => c.status))]
   const severitiesPresent = [...new Set(myClaims.map(c => c.severity).filter(s => s > 0))].sort()
   const STAGE_WORD: Record<string, string> = {
-    awaiting_inspection: 'Awaiting inspection (legacy)', awaiting_estimate: 'Review & estimate',
+    awaiting_estimate: 'Review & estimate',
     awaiting_shipper: 'Awaiting shipper', awaiting_decision: 'Awaiting decision',
     repair_scheduled: 'Repair scheduled', sell_as_damaged: 'Sell as damaged', closed: 'Closed',
   }
@@ -247,11 +253,18 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
 
           {newOpen && (
             <div style={{ ...card, marginBottom: '12px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '10px' }}>New damage claim — the field team inspects next</div>
+              <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>New damage claim</div>
+              {/* A claim is evidence or it is nothing, so only units the field
+                  crew photographed damage on can be claimed for. */}
+              <div style={{ fontSize: '11.5px', color: INK3, marginBottom: '10px' }}>
+                {claimable.length
+                  ? 'Only units with photographed damage from an inspection can be claimed — the photos come across with the claim.'
+                  : 'No unit has photographed damage on file yet. A claim is raised after an inspection records it.'}
+              </div>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                 <select value={newForm.containerId} onChange={e => setNewForm(f => ({ ...f, containerId: e.target.value }))} style={{ ...inp, minWidth: '220px' }}>
                   <option value="">— Container —</option>
-                  {fleet.filter(c => !claimedIds.has(c.id)).map(c => <option key={c.id} value={c.id}>{c.sku} · {SIZE_LABEL[c.size] ?? c.size}</option>)}
+                  {claimable.map(c => <option key={c.id} value={c.id}>{c.sku} · {SIZE_LABEL[c.size] ?? c.size}</option>)}
                 </select>
                 <select value={newForm.shipperId} onChange={e => setNewForm(f => ({ ...f, shipperId: e.target.value }))} style={{ ...inp, minWidth: '190px' }}>
                   <option value="">— Shipping line —</option>
@@ -308,7 +321,8 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
                   <div style={{ display: 'flex', gap: '5px', marginTop: '10px', overflowX: 'auto' }}>
                     {(c.photos || []).filter(Boolean).map((u, i) => (
                       <div key={i} style={{ flexShrink: 0, width: '76px' }}>
-                        <img src={photoUrl(u)} alt={photoCaption(c, i)} style={{ width: '76px', height: '56px', objectFit: 'cover', borderRadius: '8px', display: 'block' }} />
+                        <img src={photoUrl(u)} alt={photoCaption(c, i)} onClick={() => lb.show(claimShots(c), i)}
+                          style={{ width: '76px', height: '56px', objectFit: 'cover', borderRadius: '8px', display: 'block', cursor: 'zoom-in' }} />
                         <div style={{ fontSize: '9px', fontWeight: 800, color: RED, marginTop: '2px' }}>{photoCaption(c, i)}</div>
                       </div>
                     ))}
@@ -320,7 +334,7 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
                   {/* One way in: the workspace. Sending, emailing and
                       downloading all live behind Review → Estimate → Send, so
                       nothing leaves the building without being read first. */}
-                  {(c.status === 'awaiting_inspection' || c.status === 'awaiting_estimate' || c.status === 'awaiting_shipper') && (
+                  {(c.status === 'awaiting_estimate' || c.status === 'awaiting_shipper') && (
                     <>
                       <button onClick={() => openWorkspace(c)} style={btn(BLUE)}>Open claim workspace →</button>
                       <span style={{ fontSize: '11.5px', color: INK3 }}>
@@ -403,6 +417,7 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
         </section>
       </main>
       {packet && <ClaimPacket claim={packet} onClose={() => setPacket(null)} />}
+      {lb.open && <Lightbox shots={lb.open.shots} index={lb.open.index} onIndex={lb.setIndex} onClose={lb.close} />}
     </div>
   )
 }

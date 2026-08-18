@@ -963,10 +963,9 @@ export interface RepairShop {
 // The supplier-facing tracker follows these stages in order; the last two
 // are terminal outcomes of the supplier's retail-or-wholesale decision.
 export type ClaimStatus =
-  // 'awaiting_inspection' is legacy: a claim is now raised only once an
-  // inspection is done and submitted, so it opens at the estimate. Rows
-  // filed before that still resolve, they just aren't produced any more.
-  | 'awaiting_inspection'
+  // A claim is raised only once an inspection is done, so there is no
+  // "awaiting inspection" state — it opens at the estimate with its
+  // damage evidence already attached.
   | 'awaiting_estimate'     // review the evidence, price the repair
   | 'awaiting_shipper'      // shipping line reviews the estimate
   | 'awaiting_decision'     // supplier decides: repair (retail) or sell as damaged

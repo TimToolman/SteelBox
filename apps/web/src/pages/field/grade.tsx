@@ -12,6 +12,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { claims as claimsApi, photoUrl, findingsOf, CLAIM_STAGES, type Container, type DamageClaim } from '../../lib/api'
 import { ClaimWorkspace } from './ClaimWorkspace'
+import { Lightbox, useLightbox } from '../../components/Lightbox'
 import { WalkAround } from './WalkAround'
 import { GRADE_META } from '../../lib/specs'
 import {
@@ -76,6 +77,12 @@ export function GradeScreen({ containers, inspectorName, canClaim, toast, onAppl
 
   // What the walk-around recorded, station by station.
   const findings = useMemo(() => findingsOf(unit), [unit])
+  // An inspector deciding a grade off someone else's walk needs the photo at
+  // full size, not a 62px thumbnail.
+  const lb = useLightbox()
+  const findingShots = useMemo(() => findings.filter(f => f.photo).map(f => ({
+    url: photoUrl(f.photo), caption: `${f.station} · ${f.reasons.join(', ') || f.question}`, sub: f.note || '',
+  })), [findings])
   // Held because the driver wanted the call made here, not because anything
   // was found — the screen shouldn't send an inspector hunting for damage.
   const secondOpinion = unit?.inspectionKind === 'opinion'
@@ -93,7 +100,15 @@ export function GradeScreen({ containers, inspectorName, canClaim, toast, onAppl
       // it starts at the estimate rather than asking the same questions again.
       const majors = findings.filter(f => f.level === 'major').length
       const severity = majors >= 2 ? 5 : majors === 1 ? 4 : findings.length >= 2 ? 3 : 2
-      const created = await claimsApi.create({ containerId: unit.id, notes: summary, severity, inspectorName, inspectedAt: new Date().toISOString() })
+      // Every claim opens with its evidence attached — the photos taken at
+      // the stops where the damage was found.
+      const shot = findings.filter(f => f.photo)
+      const created = await claimsApi.create({
+        containerId: unit.id, notes: summary, severity, inspectorName, inspectedAt: new Date().toISOString(),
+        photos: shot.map(f => f.photo),
+        photoReasons: shot.map(f => f.reasons.join(', ') || f.question),
+        photoNotes: shot.map(f => f.note),
+      })
       // The evidence was captured on the walk — the claim opens straight into
       // its workspace, at the estimate, rather than sending anyone to collect.
       toast(`${created.claimNumber} opened — review it and add the repair estimate`)
@@ -243,7 +258,8 @@ export function GradeScreen({ containers, inspectorName, canClaim, toast, onAppl
             {findings.map((f, i) => (
               <div key={i} style={{ display: 'flex', gap: '9px', alignItems: 'flex-start', marginTop: '9px', paddingTop: '9px', borderTop: `1px solid #F2C94C` }}>
                 {f.photo
-                  ? <img src={photoUrl(f.photo)} alt={f.reasons.join(', ')} style={{ width: '62px', height: '46px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0 }} />
+                  ? <img src={photoUrl(f.photo)} alt={f.reasons.join(', ')} onClick={() => lb.show(findingShots, findingShots.findIndex(s => s.url === photoUrl(f.photo)))}
+                      style={{ width: '62px', height: '46px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0, cursor: 'zoom-in' }} />
                   : <span style={{ width: '62px', height: '46px', borderRadius: '8px', background: '#fff', flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: '9px', color: INK2 }}>no photo</span>}
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: f.level === 'major' ? RED : INK }}>
@@ -258,6 +274,14 @@ export function GradeScreen({ containers, inspectorName, canClaim, toast, onAppl
                 driver's job screen, and never on a second-opinion hold. */}
             {!secondOpinion && canClaim && (() => {
               const existing = openClaimFor(unit)
+              // No photo, no claim — the API refuses one without evidence, so
+              // the button says what is missing rather than failing on tap.
+              if (!existing && !findings.some(f => f.photo)) return (
+                <div style={{ marginTop: '11px', fontSize: '11px', color: INK2, lineHeight: 1.5 }}>
+                  A damage claim needs at least one photo of the damage. Walk the unit below and
+                  photograph what you find.
+                </div>
+              )
               return (
                 <button onClick={() => existing ? goToClaim(existing.id) : raiseClaim()} disabled={claiming}
                   style={{ marginTop: '11px', padding: '9px 14px', borderRadius: '999px', border: `1.5px solid ${RED}`, background: '#fff', color: RED, fontSize: '12px', fontWeight: 700, cursor: claiming ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
@@ -278,6 +302,8 @@ export function GradeScreen({ containers, inspectorName, canClaim, toast, onAppl
         onHome={() => setUnit(null)}
         onDone={() => onApplied()}
       />
+
+      {lb.open && <Lightbox shots={lb.open.shots} index={lb.open.index} onIndex={lb.setIndex} onClose={lb.close} />}
     </div>
   )
 

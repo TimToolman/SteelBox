@@ -164,3 +164,47 @@ button, input, select, textarea {
    photo URLs. Delete together with the demo-photo fallback. */
 img[src*="#tint-red"] { filter: hue-rotate(-32deg) saturate(2.2) brightness(.84); }
 img[src*="#tint-white"] { filter: saturate(.25) brightness(1.15); }
+
+/* ── Photo viewer (components/Lightbox.tsx) ─────────────────
+   One image experience across the marketplace and the claim
+   workspace: the same control cluster under every image box,
+   the same thumbnail strip, the same hover feel. */
+
+.sb-vc { display: flex; align-items: center; gap: 8px; }
+.sb-vc-btn { transition: background .16s ease, border-color .16s ease, transform .12s ease; }
+.sb-vc-btn:not(:disabled):hover { transform: translateY(-1px); }
+.sb-vc-dark .sb-vc-btn:not(:disabled):hover { background: rgba(255,255,255,.17) !important; border-color: rgba(255,255,255,.34) !important; }
+.sb-vc-light .sb-vc-btn:not(:disabled):hover { background: var(--surf1) !important; border-color: var(--ink3) !important; }
+.sb-vc-btn:not(:disabled):active { transform: translateY(0) scale(.94); }
+
+.sb-vc-level {
+  min-width: 54px; padding: 7px 10px; border-radius: 999px; cursor: pointer;
+  font-family: var(--mono); font-size: 11.5px; font-weight: 700; letter-spacing: .4px;
+  transition: background .16s ease, border-color .16s ease, color .16s ease;
+}
+.sb-vc-dark .sb-vc-level { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.16); color: rgba(255,255,255,.82); }
+.sb-vc-dark .sb-vc-level:hover { background: rgba(255,255,255,.17); color: #fff; }
+.sb-vc-light .sb-vc-level { background: var(--surf-w); border: 1px solid var(--div); color: var(--ink2); }
+.sb-vc-light .sb-vc-level:hover { background: var(--surf1); color: var(--ink); }
+
+/* Thumbnail strip — the active shot is unmistakable. */
+.sb-thumbs { display: flex; gap: 7px; overflow-x: auto; max-width: 100%; padding: 3px 2px 7px; scrollbar-width: thin; }
+.sb-thumb {
+  position: relative; flex-shrink: 0; width: 76px; height: 54px; padding: 0; overflow: hidden;
+  border: none; border-radius: var(--r8); cursor: pointer; background: #162030;
+  opacity: .5; filter: saturate(.7);
+  transition: opacity .18s ease, filter .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+.sb-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sb-thumb:hover { opacity: .85; filter: none; transform: translateY(-2px); }
+.sb-thumb.is-active { opacity: 1; filter: none; box-shadow: 0 0 0 2px var(--cta); }
+/* The bar under the active thumb reads at a glance even on a busy strip. */
+.sb-thumb.is-active::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--cta);
+}
+.sb-thumbs-light .sb-thumb { background: var(--surf1); }
+
+/* Marketplace hero: the whole stage lifts its affordances on hover. */
+.sb-hero { transition: box-shadow .2s ease; }
+.sb-hero .sb-hero-expand { opacity: 0; transition: opacity .18s ease, transform .18s ease; transform: translateY(3px); }
+.sb-hero:hover .sb-hero-expand { opacity: 1; transform: none; }

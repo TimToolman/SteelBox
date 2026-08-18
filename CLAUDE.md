@@ -82,7 +82,22 @@
   `photoNotes`. `GET /claims/:id/package.zip?t=…` streams the whole claim
   (summary + photos named by reason) behind an HMAC-signed token; the
   demo builds the identical archive in the browser and hands back a
-  `blob:` URL.
+  `blob:` URL. Every claim carries at least one damage photo — POST
+  /claims derives them from the unit's `inspectionFindings` when the
+  caller sends none, saves any inline data URL to disk (the .zip and
+  the claim document read files), and refuses a claim with neither.
+
+- One photo viewer for the whole platform: `components/Lightbox.tsx`.
+  `useZoomPan()` (wheel/pinch/drag/double-tap), `ViewerControls`
+  (previous · zoom out · level · zoom in · next — always in that order,
+  always **under** the image box), `ThumbStrip`, `Lightbox`,
+  `useLightbox()`. Styling lives in `styles/tokens.css` under
+  `.sb-vc` / `.sb-thumb` / `.sb-hero`. Two things it must keep doing:
+  render through `createPortal` into `<body>` (the field app centres
+  its column with a `transform`, which boxes any `position: fixed`
+  child into a sliver), and bind its keys in the **capture** phase with
+  `stopPropagation` (hosts bind the same arrows — the marketplace
+  detail modal steps containers on ← →).
 
 - Home-page redesign in progress (Aug 2026): the pre-redesign page is
   frozen at `apps/web/snapshots/landing-v1/` (restore steps in its

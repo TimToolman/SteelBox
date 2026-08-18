@@ -407,6 +407,22 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
     if (!cont) throw new Error('containerId is required')
     const sup = db.suppliers.find(x => x.id === body.supplierId) ?? db.suppliers[0]
     const shp = db.shippers.find(x => x.id === body.shipperId) ?? db.shippers[0]
+    // Same rule as the API: a claim carries evidence or it isn't created.
+    const photos: string[] = [...(Array.isArray(body.photos) ? body.photos as string[] : [])].filter(Boolean)
+    const photoReasons: string[] = [...(Array.isArray(body.photoReasons) ? body.photoReasons as string[] : [])]
+    const photoNotes: string[] = [...(Array.isArray(body.photoNotes) ? body.photoNotes as string[] : [])]
+    if (photos.length === 0) {
+      let findings: { photo?: string; reasons?: string[]; question?: string; note?: string }[] = []
+      try { findings = JSON.parse(String(cont.inspectionFindings || '[]')) } catch { findings = [] }
+      for (const f of findings) {
+        if (!f?.photo) continue
+        photos.push(f.photo)
+        photoReasons.push((f.reasons || []).join(', ') || f.question || 'Damage')
+        photoNotes.push(f.note || '')
+      }
+    }
+    if (photos.length === 0) throw new Error('A claim needs at least one damage photo — inspect the unit first.')
+
     const row = {
       id: uid('clm'), claimNumber: `CLM-${String(db.claims.length + 1).padStart(4, '0')}`,
       containerId: cont.id, containerSku: cont.sku,
@@ -414,7 +430,8 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
       shipperId: shp?.id || '', shipperName: (shp?.name as string) || '',
       vesselRef: String(body.vesselRef || ''),
       status: 'awaiting_estimate',
-      severity: Number(body.severity) || 0, photos: [], notes: String(body.notes || ''),
+      severity: Number(body.severity) || 0, photos, photoReasons, photoNotes,
+      notes: String(body.notes || ''),
       estimateAmount: 0, estimateNotes: '', shipperDecision: '', shipperNotes: '',
       shipperDecidedAt: null, repairShopId: '', repairShopName: '', repairDate: '',
       decision: '', inspectorName: '', inspectedAt: null, createdAt: new Date().toISOString(),

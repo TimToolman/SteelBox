@@ -174,9 +174,15 @@ try {
   const dmgUnit = [...containers].reverse().find(c => c.status === 'available' && c.id !== unit.id) || containers[0]
   await api(`/containers/${dmgUnit.id}`, { method: 'PATCH', token: admin, body: { supplierId: 'sup_01' } })
   const shippers = (await api('/shippers', { token: supplier })).body
-  const claim = await api('/claims', { method: 'POST', token: supplier, body: { containerId: dmgUnit.id, shipperId: shippers[0].id, vesselRef: 'MV-TEST-042', notes: 'Fork damage at transship' } })
+  const dmgPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+  // A claim is evidence or it is nothing — one without a photo of the damage
+  // is refused outright.
+  const bare = await api('/claims', { method: 'POST', token: supplier, body: { containerId: dmgUnit.id, shipperId: shippers[0].id, notes: 'Fork damage, no evidence' } })
+  check('a claim with no damage photo is refused', bare.status === 400 && /at least one damage photo/i.test(bare.body?.message || ''))
+  const claim = await api('/claims', { method: 'POST', token: supplier, body: { containerId: dmgUnit.id, shipperId: shippers[0].id, vesselRef: 'MV-TEST-042', notes: 'Fork damage at transship', photos: [dmgPng], photoReasons: ['Gouge'], photoNotes: ['Corner post, ocean side'] } })
   // A claim is raised only after an inspection, so it opens at the estimate.
   check('a filed claim opens at the estimate, not an inspection', claim.status === 201 && claim.body?.status === 'awaiting_estimate' && claim.body?.claimNumber?.startsWith('CLM-'))
+  check('and carries the inspection evidence in with it', claim.body?.photos?.length === 1 && claim.body?.photoReasons?.[0] === 'Gouge')
   const claimId = claim.body.id
 
   // Field inspection: severity + move to estimate (driver-level access).
@@ -213,14 +219,15 @@ try {
 
   // ── Damage photos as their own reason-tagged collection ──
   console.log('Damage collection + packaging')
-  const dmgPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+  // The claim already opened with one shot from the inspection; the crew
+  // keeps adding to that same collection.
   const shot1 = await api(`/claims/${claimId}/photos`, { method: 'POST', token: admin, body: { dataUrl: dmgPng, reason: 'Bent', note: 'Top rail, door end' } })
-  check('damage photo appends with its reason', shot1.status === 200 && shot1.body?.photos?.length === 1 && shot1.body?.photoReasons?.[0] === 'Bent' && shot1.body?.photoNotes?.[0] === 'Top rail, door end')
+  check('damage photo appends with its reason', shot1.status === 200 && shot1.body?.photos?.length === 2 && shot1.body?.photoReasons?.[1] === 'Bent' && shot1.body?.photoNotes?.[1] === 'Top rail, door end')
   const shot2 = await api(`/claims/${claimId}/photos`, { method: 'POST', token: admin, body: { dataUrl: dmgPng, reason: 'Hole' } })
   const shot3 = await api(`/claims/${claimId}/photos`, { method: 'POST', token: admin, body: { dataUrl: dmgPng, reason: 'Rust' } })
-  check('collection keeps appending in order', shot3.body?.photos?.length === 3 && shot3.body?.photoReasons?.join(',') === 'Bent,Hole,Rust')
-  const delShot = await api(`/claims/${claimId}/photos/1`, { method: 'DELETE', token: admin })
-  check('removing a shot drops its reason with it', delShot.body?.photos?.length === 2 && delShot.body?.photoReasons?.join(',') === 'Bent,Rust')
+  check('collection keeps appending in order', shot3.body?.photos?.length === 4 && shot3.body?.photoReasons?.join(',') === 'Gouge,Bent,Hole,Rust')
+  const delShot = await api(`/claims/${claimId}/photos/2`, { method: 'DELETE', token: admin })
+  check('removing a shot drops its reason with it', delShot.body?.photos?.length === 3 && delShot.body?.photoReasons?.join(',') === 'Gouge,Bent,Rust')
 
   // Package: a real .zip with the summary + one file per photo
   const linkRes = await api(`/claims/${claimId}/package-link`, { token: supplier })
@@ -232,7 +239,7 @@ try {
   check('response is a real zip archive', zipBuf.subarray(0, 4).toString('hex') === '504b0304')
   check('zip attaches with the claim filename', (zipRes.headers.get('content-disposition') || '').includes(`claim-${claim.body.claimNumber}.zip`))
   const zipText = zipBuf.toString('latin1')
-  check('zip holds the summary + both photos named by reason', zipText.includes('summary.html') && zipText.includes('01-bent.png') && zipText.includes('02-rust.png'))
+  check('zip holds the summary + every photo named by reason', zipText.includes('summary.html') && zipText.includes('01-gouge.png') && zipText.includes('02-bent.png') && zipText.includes('03-rust.png'))
   check('summary carries the claim details', zipText.includes(claim.body.claimNumber) && zipText.includes('Bent'))
   const badTok = await fetch(`${BASE}/claims/${claimId}/package.zip?t=123.deadbeef`)
   check('forged package links are rejected', badTok.status === 401 || badTok.status === 403)
@@ -350,7 +357,8 @@ try {
   check('shipping line created with contact + address', shpNew.status === 201 && shpNew.body?.contactName === 'Mei Chen' && shpNew.body?.address.includes('Seattle'))
   check('new line appears in the picker list', (await api('/shippers', { token: admin })).body.some(s => s.name === 'Pacific Crown Line'))
   const clUnit = containers.find(c => c.status === 'available' && c.id !== unit.id)
-  const clm = await api('/claims', { method: 'POST', token: admin, body: { containerId: clUnit.id, supplierId: 'sup_01', shipperId: shpNew.body.id, vesselRef: 'PCL-778' } })
+  const clmPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+  const clm = await api('/claims', { method: 'POST', token: admin, body: { containerId: clUnit.id, supplierId: 'sup_01', shipperId: shpNew.body.id, vesselRef: 'PCL-778', photos: [clmPng], photoReasons: ['Dent'] } })
   check('claim against the new line resolves its name', clm.status === 201 && clm.body?.shipperName === 'Pacific Crown Line')
   await api(`/shippers/${shpNew.body.id}`, { method: 'PATCH', token: admin, body: { name: 'Pacific Crown Lines' } })
   const clmAfter = (await api('/claims', { token: admin })).body.find(c => c.id === clm.body.id)
@@ -409,8 +417,15 @@ try {
   check('and cannot read the claim queue either', drvListBlocked.status === 403 || drvListBlocked.status === 401)
   const grantClaims = await api(`/users/${drvAcct.body.id}`, { method: 'PATCH', token: admin, body: { roles: ['marketplace', 'claims'] } })
   check('an admin can grant claims access', grantClaims.status === 200 && grantClaims.body?.roles.includes('claims'))
+  // Even with the grant, the claim needs evidence — and the evidence the
+  // walk-around already captured is what it carries in.
+  const noShots = await api('/claims', { method: 'POST', token: fieldDriver, body: { containerId: claimUnit.id, notes: 'Hole — left panel' } })
+  check('a granted driver still cannot open a claim with no photo', noShots.status === 400)
+  const walkPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+  await api(`/containers/${claimUnit.id}`, { method: 'PATCH', token: admin, body: { inspectionFindings: JSON.stringify([{ station: 'Left hand side', question: 'structure', level: 'major', reasons: ['Hole'], note: 'Left panel, fist-sized', photo: walkPng, at: new Date().toISOString(), by: 'Field Driver' }]) } })
   const fieldClaim = await api('/claims', { method: 'POST', token: fieldDriver, body: { containerId: claimUnit.id, notes: 'Hole — left panel, fist-sized' } })
   check('with the grant, the field crew can open a damage claim', fieldClaim.status === 201 && fieldClaim.body?.notes.includes('left panel'))
+  check('and the walk-around findings become its evidence', fieldClaim.body?.photos?.length === 1 && fieldClaim.body?.photoReasons?.[0] === 'Hole' && fieldClaim.body?.photoNotes?.[0] === 'Left panel, fist-sized')
   check('and can read the queue', (await api('/claims', { token: fieldDriver })).status === 200)
   const insListBlocked = await api('/claims', { token: inspector })
   check('an inspector without the grant is refused the same way', insListBlocked.status === 403 || insListBlocked.status === 401)
