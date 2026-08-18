@@ -14,7 +14,8 @@ import { useAuth, useSnackbar } from '../../hooks'
 import { claims as claimsApi, prefs as prefsApi, photoUrl, type DamageClaim, type AuthUser } from '../../lib/api'
 import { damageLabel, SEVERITY_WORD } from '../../lib/grading'
 import { Snackbar } from '../../components/ui'
-import { ClaimTimeline, ClaimPacket, ClaimPackageActions, photoCaption } from '../supplier/claimkit'
+import { ClaimTimeline, ClaimPacket, ClaimPackageActions, photoCaption, claimShots, shotIndex } from '../supplier/claimkit'
+import { Lightbox, useLightbox } from '../../components/Lightbox'
 import { FilterRail, FilterGroup, ChipRow, Chip, useSetFilter, railSelect, PeriodFilter, PERIOD_ALL, periodPasses, type Period } from '../../components/filters'
 
 const INK = '#0D0E12', INK2 = '#44474F', INK3 = '#6B7280', DIV = '#E2E4E9', BLUE = '#0057B8', RED = '#B3261E', GREEN = '#1B7A5A'
@@ -31,6 +32,7 @@ export default function ShipperReviewPage({ embedded = false }: { embedded?: boo
   const [packet, setPacket] = useState<DamageClaim | null>(null)
   // Claims this session has actually opened and read.
   const [reviewed, setReviewed] = useState<Set<string>>(new Set())
+  const lb = useLightbox()
 
   // Opens the whole claim — every photo, damage, note and the estimate — in
   // its own tab, and marks it read so the decision buttons appear.
@@ -145,12 +147,15 @@ export default function ShipperReviewPage({ embedded = false }: { embedded?: boo
             {c.estimateNotes && <div style={{ fontSize: '12px', color: INK2, marginTop: '6px' }}>Estimate: {c.estimateNotes}</div>}
             {c.notes && <div style={{ fontSize: '12px', color: INK3, marginTop: '2px' }}>Claim notes: {c.notes}</div>}
 
-            {/* Evidence gallery — captured unedited by the field inspection */}
+            {/* Evidence gallery — captured unedited by the field inspection.
+                A shipper is about to pay out on these, so any of them opens
+                full-screen to zoom into. */}
             {(c.photos || []).filter(Boolean).length > 0 && (
               <div style={{ display: 'flex', gap: '6px', marginTop: '10px', overflowX: 'auto' }}>
                 {(c.photos || []).map((u, i) => u ? (
                   <div key={i} style={{ flexShrink: 0 }}>
-                    <img src={photoUrl(u)} alt={photoCaption(c, i)} style={{ width: '108px', height: '80px', objectFit: 'cover', borderRadius: '8px', display: 'block' }} />
+                    <img src={photoUrl(u)} alt={photoCaption(c, i)} onClick={() => lb.show(claimShots(c), shotIndex(c, i))}
+                      style={{ width: '108px', height: '80px', objectFit: 'cover', borderRadius: '8px', display: 'block', cursor: 'zoom-in' }} />
                     <div style={{ fontSize: '9px', fontWeight: 700, color: INK2, marginTop: '2px', maxWidth: '108px' }}>{photoCaption(c, i)}</div>
                     {c.photoNotes?.[i] && <div style={{ fontSize: '9px', color: INK3, maxWidth: '108px', lineHeight: 1.3 }}>{c.photoNotes[i]}</div>}
                   </div>
@@ -207,6 +212,7 @@ export default function ShipperReviewPage({ embedded = false }: { embedded?: boo
         </div>{/* rail + column row */}
       </main>
       {packet && <ClaimPacket claim={packet} onClose={() => setPacket(null)} />}
+      {lb.open && <Lightbox shots={lb.open.shots} index={lb.open.index} onIndex={lb.setIndex} onClose={lb.close} />}
       <Snackbar message={message} open={snackOpen} onClose={snackClose} />
     </div>
   )

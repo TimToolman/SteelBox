@@ -12,6 +12,7 @@ import { allowedModes, condOf, SIZE_LABELS, type CartMode } from './shared'
 import type { RelayQuote } from '../../lib/territory'
 import type { Seller as SellerT } from '../../lib/api'
 import { PhotoGallery } from './PhotoGallery'
+import { Lightbox, useLightbox } from '../../components/Lightbox'
 import { SellerLogo } from './SellerMark'
 
 // ── Container Detail Modal ─────────────────────────────────
@@ -38,6 +39,7 @@ export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onN
   // The shopper picks Buy vs Rent right in the modal (seeded from the active
   // browse tab, constrained to what this unit's listingType allows).
   const [txn, setTxn] = useState<CartMode>(mode)
+  const lb = useLightbox()
 
   // Reset the gallery (and ZIP result) whenever the viewed container changes,
   // and snap the modal back to the top — Prev/Next live at the bottom, so
@@ -156,13 +158,14 @@ export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onN
             <div style={{ background: '#FDECEA', border: '1px solid #F5C6C0', borderRadius: 'var(--r12)', padding: '12px 13px', marginBottom: '16px' }}>
               <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.8px', color: '#B3261E', fontWeight: 700, marginBottom: '8px' }}>Damage photos — sold as-is</div>
               <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
-                {(container.damagePhotos || []).filter(Boolean).map((u, i) => (
-                  <a key={i} href={photoUrl(u)} target="_blank" rel="noreferrer" style={{ flexShrink: 0 }}>
+                {(container.damagePhotos || []).filter(Boolean).map((u, i, all) => (
+                  <button key={i} type="button" style={{ flexShrink: 0, padding: 0, border: 'none', background: 'none', cursor: 'zoom-in' }}
+                    onClick={() => lb.show(all.map((p, j) => ({ url: photoUrl(p), caption: `Damage photo ${j + 1}`, sub: `${sku} · sold as-is` })), i)}>
                     <img src={photoUrl(u)} alt={`Damage photo ${i + 1}`} style={{ width: '96px', height: '72px', objectFit: 'cover', borderRadius: 'var(--r8)', display: 'block' }} />
-                  </a>
+                  </button>
                 ))}
               </div>
-              <div style={{ fontSize: '11px', color: 'var(--ink2)', marginTop: '8px', lineHeight: 1.5 }}>Documented by the field damage inspection. Tap a photo to open it full size.</div>
+              <div style={{ fontSize: '11px', color: 'var(--ink2)', marginTop: '8px', lineHeight: 1.5 }}>Documented by the field damage inspection. Tap a photo to zoom in on it full screen.</div>
             </div>
           )}
 
@@ -323,6 +326,8 @@ export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onN
           <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="8,4 14,10 8,16" /></svg>
         </button>
       </div>
+
+      {lb.open && <Lightbox shots={lb.open.shots} index={lb.open.index} onIndex={lb.setIndex} onClose={lb.close} />}
     </Modal>
   )
 }

@@ -20,7 +20,8 @@ import {
 } from '../../lib/api'
 import { GRADE_META, DAMAGE_DISCOUNT } from '../../lib/specs'
 import { FilterRail, FilterGroup, ChipRow, Chip, useSetFilter, railSelect, PeriodFilter, PERIOD_ALL, periodPasses, type Period } from '../../components/filters'
-import { ClaimTimeline, ClaimPacket, ClaimPackageActions, photoCaption } from './claimkit'
+import { ClaimTimeline, ClaimPacket, ClaimPackageActions, photoCaption, claimShots } from './claimkit'
+import { Lightbox, useLightbox } from '../../components/Lightbox'
 import { gradeLabel, damageLabel, SEVERITY_WORD } from '../../lib/grading'
 import { Snackbar } from '../../components/ui'
 import { useSnackbar } from '../../hooks'
@@ -73,6 +74,7 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
   const [rep, setRep] = useState<Record<string, { shopId: string; date: string }>>({})
   const [askPrice, setAskPrice] = useState<Record<string, string>>({})
   const [packet, setPacket] = useState<DamageClaim | null>(null)
+  const lb = useLightbox()
   // The workspace is a page of its own, in its own tab — a claim is desk work
   // and the evidence needs the whole window.
   const openWorkspace = (c: DamageClaim) =>
@@ -319,7 +321,8 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
                   <div style={{ display: 'flex', gap: '5px', marginTop: '10px', overflowX: 'auto' }}>
                     {(c.photos || []).filter(Boolean).map((u, i) => (
                       <div key={i} style={{ flexShrink: 0, width: '76px' }}>
-                        <img src={photoUrl(u)} alt={photoCaption(c, i)} style={{ width: '76px', height: '56px', objectFit: 'cover', borderRadius: '8px', display: 'block' }} />
+                        <img src={photoUrl(u)} alt={photoCaption(c, i)} onClick={() => lb.show(claimShots(c), i)}
+                          style={{ width: '76px', height: '56px', objectFit: 'cover', borderRadius: '8px', display: 'block', cursor: 'zoom-in' }} />
                         <div style={{ fontSize: '9px', fontWeight: 800, color: RED, marginTop: '2px' }}>{photoCaption(c, i)}</div>
                       </div>
                     ))}
@@ -414,6 +417,7 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
         </section>
       </main>
       {packet && <ClaimPacket claim={packet} onClose={() => setPacket(null)} />}
+      {lb.open && <Lightbox shots={lb.open.shots} index={lb.open.index} onIndex={lb.setIndex} onClose={lb.close} />}
     </div>
   )
 }

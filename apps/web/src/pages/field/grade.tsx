@@ -12,6 +12,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { claims as claimsApi, photoUrl, findingsOf, CLAIM_STAGES, type Container, type DamageClaim } from '../../lib/api'
 import { ClaimWorkspace } from './ClaimWorkspace'
+import { Lightbox, useLightbox } from '../../components/Lightbox'
 import { WalkAround } from './WalkAround'
 import { GRADE_META } from '../../lib/specs'
 import {
@@ -76,6 +77,12 @@ export function GradeScreen({ containers, inspectorName, canClaim, toast, onAppl
 
   // What the walk-around recorded, station by station.
   const findings = useMemo(() => findingsOf(unit), [unit])
+  // An inspector deciding a grade off someone else's walk needs the photo at
+  // full size, not a 62px thumbnail.
+  const lb = useLightbox()
+  const findingShots = useMemo(() => findings.filter(f => f.photo).map(f => ({
+    url: photoUrl(f.photo), caption: `${f.station} · ${f.reasons.join(', ') || f.question}`, sub: f.note || '',
+  })), [findings])
   // Held because the driver wanted the call made here, not because anything
   // was found — the screen shouldn't send an inspector hunting for damage.
   const secondOpinion = unit?.inspectionKind === 'opinion'
@@ -251,7 +258,8 @@ export function GradeScreen({ containers, inspectorName, canClaim, toast, onAppl
             {findings.map((f, i) => (
               <div key={i} style={{ display: 'flex', gap: '9px', alignItems: 'flex-start', marginTop: '9px', paddingTop: '9px', borderTop: `1px solid #F2C94C` }}>
                 {f.photo
-                  ? <img src={photoUrl(f.photo)} alt={f.reasons.join(', ')} style={{ width: '62px', height: '46px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0 }} />
+                  ? <img src={photoUrl(f.photo)} alt={f.reasons.join(', ')} onClick={() => lb.show(findingShots, findingShots.findIndex(s => s.url === photoUrl(f.photo)))}
+                      style={{ width: '62px', height: '46px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0, cursor: 'zoom-in' }} />
                   : <span style={{ width: '62px', height: '46px', borderRadius: '8px', background: '#fff', flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: '9px', color: INK2 }}>no photo</span>}
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: f.level === 'major' ? RED : INK }}>
@@ -294,6 +302,8 @@ export function GradeScreen({ containers, inspectorName, canClaim, toast, onAppl
         onHome={() => setUnit(null)}
         onDone={() => onApplied()}
       />
+
+      {lb.open && <Lightbox shots={lb.open.shots} index={lb.open.index} onIndex={lb.setIndex} onClose={lb.close} />}
     </div>
   )
 
