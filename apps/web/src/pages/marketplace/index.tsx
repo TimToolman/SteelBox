@@ -30,6 +30,7 @@ import { OrderBuildModal } from './OrderBuildModal'
 import { CustomerMessageModal } from './CustomerMessageModal'
 import { BulkForm } from './BulkForm'
 import { CustomerProfileModal, type ProfileTab } from './CustomerProfileModal'
+import { Icon } from '../../components/icons'
 import { InsightsPanel } from './Insights'
 
 // ── Demo photo fallback ────────────────────────────────────
@@ -734,7 +735,7 @@ export default function MarketplacePage() {
               </div>
             ) : filtered.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--ink3)' }}>
-                <div style={{ fontSize: '32px', marginBottom: '12px' }}>{favOnly ? '🤍' : '📦'}</div>
+                <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'center', color: 'var(--ink3)' }}><Icon name={favOnly ? 'star' : 'box'} size={34} /></div>
                 <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '4px' }}>{favOnly ? 'No favorites yet' : 'No containers match your filters'}</div>
                 <div style={{ fontSize: '13px' }}>{favOnly ? 'Tap the heart on any container to save it here.' : 'Try adjusting grade or price filters, or call us directly.'}</div>
               </div>
@@ -820,17 +821,21 @@ export default function MarketplacePage() {
         </div>
       )}
 
-      {/* ── Trust bar ── */}
-      <div style={{ background: 'var(--ink)', padding: '18px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '36px', flexWrap: 'wrap' }}>
+      {/* ── Trust bar ──
+             Line icons, not emoji: emoji render as a different typeface on
+             every OS and ignore the colour around them. On a phone the row
+             becomes two columns — five stacked lines with 36px gaps was most
+             of a screen for five short phrases. */}
+      <div className="mkt-trust">
         {[
-          { icon: '🛡', text: 'Field-inspected every unit' },
-          { icon: '🚚', text: '3–5 day delivery' },
-          { icon: '📷', text: '12-photo documentation' },
-          { icon: '📅', text: 'Flexible rental terms' },
-          { icon: '✓', text: 'Lifetime warranty' },
+          { icon: 'shield', text: 'Field-inspected every unit' },
+          { icon: 'truck', text: '3–5 day delivery' },
+          { icon: 'camera', text: '12-photo documentation' },
+          { icon: 'calendar', text: 'Flexible rental terms' },
+          { icon: 'check', text: 'Lifetime warranty' },
         ].map(item => (
-          <div key={item.text} style={{ display: 'flex', alignItems: 'center', gap: '9px', color: 'rgba(255,255,255,.65)', fontSize: '12px', fontWeight: 500 }}>
-            <div style={{ width: '30px', height: '30px', borderRadius: 'var(--r8)', background: 'rgba(255,255,255,.07)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>{item.icon}</div>
+          <div key={item.text} className="mkt-trust-item">
+            <span className="mkt-trust-icon"><Icon name={item.icon} size={16} /></span>
             {item.text}
           </div>
         ))}
@@ -870,6 +875,9 @@ export default function MarketplacePage() {
         onAddToCart={addToCart}
         mode={activeTab === 'rent' ? 'rent' : 'buy'}
         seller={selectedContainer ? sellerById.get(selectedContainer.sellerId) : undefined}
+        // A ZIP checked on a unit IS the shopper's delivery ZIP — it fills
+        // the rail and rides into checkout rather than dying with the modal.
+        onZipChecked={z => setAreaZip(z)}
         inCart={selectedContainer ? inCart(selectedContainer.id) : false}
         index={selectedContainer ? filtered.findIndex(c => c.id === selectedContainer.id) : -1}
         total={filtered.length}
@@ -883,6 +891,7 @@ export default function MarketplacePage() {
       {/* ── Cart / checkout ── */}
       <CartModal
         relayInfo={relayInfo}
+        knownZip={areaZip}
         open={cartOpen}
         cart={cart}
         user={user}

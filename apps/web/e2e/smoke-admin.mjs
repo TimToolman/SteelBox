@@ -45,6 +45,37 @@ await clickCard(card)
 await shop.waitForTimeout(1100)
 ok(await shop.locator('.sb-hero').count() === 1, 'and clicking opens the detail')
 
+// ══ 1b. The delivery ZIP survives the trip to checkout ══
+// A relay fee quoted on the unit page has to reach the cart: the shopper
+// already said where it's going, twice.
+section('1b · ZIP carries into the cart')
+// An Atlanta (FC-) unit delivered to Baltimore crosses territories — that is
+// what puts a relay fee on the order.
+await shop.keyboard.press('Escape')
+await shop.waitForTimeout(500)
+await clickCard(shop.locator('.mkt-card').filter({ hasText: /FC-/ }).first())
+await shop.waitForTimeout(1300)
+await shop.locator('input[placeholder="70112"]').fill('21224')
+await shop.getByRole('button', { name: 'Check', exact: true }).click()
+await shop.waitForTimeout(900)
+const quoted = ((await text(shop)).match(/\+\$([\d,]+)/) || [])[1]
+ok(!!quoted, `the unit page quotes a cross-territory relay (+$${quoted})`)
+await shop.getByRole('button', { name: /Add to Cart —/ }).click()
+await shop.waitForTimeout(900)
+await shop.getByRole('button', { name: /^Cart/ }).first().click()
+await shop.waitForTimeout(1500)
+ok(await shop.locator('input[placeholder="77493"]').inputValue() === '21224', 'checkout opens with that ZIP already filled')
+const cartBody = await text(shop)
+ok(/Cross-territory relay/.test(cartBody), 'the relay line is on the order')
+ok(cartBody.includes(quoted), `and Due today carries the $${quoted} fee`)
+await shop.screenshot({ path: `${SHOTS}/cart-relay.png`, fullPage: true })
+// Editing the delivery address takes over from the carried ZIP.
+await shop.locator('input[placeholder="77493"]').fill('70112')
+await shop.waitForTimeout(900)
+ok(!/Cross-territory relay/.test(await text(shop)), 'changing the delivery ZIP re-prices it — in-territory drops the relay')
+await shop.getByRole('button', { name: /^Close|✕/ }).first().click().catch(() => {})
+await shop.waitForTimeout(500)
+
 // ══ 2. Beta issue reporter, end to end ══
 section('2 · Beta issue reporter')
 await shop.keyboard.press('Escape')

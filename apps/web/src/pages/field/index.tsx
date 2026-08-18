@@ -15,6 +15,7 @@ import { WalkAround } from './WalkAround'
 import { gradeContainer, gradeLabel, INSPECTOR_QUESTIONS, type PhotoFeatures } from '../../lib/grading'
 import { activity, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, containers as containersApi, availability as availabilityApi, messages as messagesApi, customers as customersApi, orders as ordersApi, parseTrucks, parseWorkHours, encodeWorkHours, photoUrl, fileToDataUrl, cutoutContainer, type ActivityEvent, type Depot, type Driver, type SchedJob, type DayHours, type Availability, type Message, type Customer, type Container, type Order } from '../../lib/api'
 import { loadSession, saveSession, clearSession } from '../../lib/capture'
+import { Icon } from '../../components/icons'
 
 // Fallback driver when an admin opens the field app (admin accounts have no
 // linked driver record). Driver logins use their own drivers.csv row.
@@ -22,32 +23,6 @@ const FALLBACK_DRIVER_ID = 'drv_01'
 const ACTOR = 'Mike Torres'
 // Company dispatch identity for driver ⇄ admin messaging (single place to change).
 const DISPATCH = { name: 'Dispatch (James R.)', email: 'ops@mvpcontainer.co' }
-
-// ── Stroke icons (match the admin portal's simple iconography) ──
-const ICON_PATHS: Record<string, React.ReactNode> = {
-  home:   <><rect x="2" y="2" width="7" height="7" rx="1.5" /><rect x="11" y="2" width="7" height="7" rx="1.5" /><rect x="2" y="11" width="7" height="7" rx="1.5" /><rect x="11" y="11" width="7" height="7" rx="1.5" /></>,
-  truck:  <><rect x="1" y="6" width="11" height="9" rx="1.5" /><path d="M12 9h4l3 3v3h-7V9z" /><circle cx="5" cy="16.5" r="1.5" fill="currentColor" stroke="none" /><circle cx="15" cy="16.5" r="1.5" fill="currentColor" stroke="none" /></>,
-  box:    <><rect x="2" y="6" width="16" height="11" rx="1.5" /><path d="M2 9h16" /><path d="M8 6v11" /></>,
-  camera: <><path d="M2 7h2.5L6 5h8l1.5 2H18a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V8a1 1 0 011-1z" /><circle cx="10" cy="11" r="3" /></>,
-  calendar: <><rect x="2" y="4" width="16" height="14" rx="2" /><line x1="2" y1="8.5" x2="18" y2="8.5" /><line x1="7" y1="2" x2="7" y2="6" /><line x1="13" y1="2" x2="13" y2="6" /></>,
-  pin:    <><path d="M10 2a5.5 5.5 0 0 0-5.5 5.5c0 4 5.5 10 5.5 10s5.5-6 5.5-10A5.5 5.5 0 0 0 10 2z" /><circle cx="10" cy="7.5" r="1.8" /></>,
-  phone:  <><path d="M6.5 2h7a1 1 0 011 1v14a1 1 0 01-1 1h-7a1 1 0 01-1-1V3a1 1 0 011-1z" /><line x1="9" y1="15.5" x2="11" y2="15.5" /></>,
-  sms:    <><path d="M3 4h14a1 1 0 011 1v8a1 1 0 01-1 1H8l-4 3v-3H3a1 1 0 01-1-1V5a1 1 0 011-1z" /></>,
-  check:  <><polyline points="3,10.5 8,16 17,5" /></>,
-  pen:    <><path d="M13.5 3.5l3 3L7 16H4v-3z" /><path d="M12 5l3 3" /></>,
-  receipt: <><path d="M5 2h10v16l-2.5-1.5L10 18l-2.5-1.5L5 18z" /><line x1="8" y1="6.5" x2="12" y2="6.5" /><line x1="8" y1="9.5" x2="12" y2="9.5" /></>,
-  user:   <><circle cx="10" cy="6.5" r="3" /><path d="M3.5 17a6.5 6.5 0 0 1 13 0" /></>,
-  star:   <><path d="M10 2.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 7.8l5-.7z" /></>,
-  arrow:  <><polyline points="8,4 14,10 8,16" /></>,
-  ret:    <><path d="M8 4L4 8l4 4" /><path d="M4 8h9a4 4 0 0 1 4 4v2" /></>,
-  alert:  <><path d="M10 2.5L1.5 17.5h17L10 2.5z" /><line x1="10" y1="8" x2="10" y2="12" /><circle cx="10" cy="14.6" r="0.5" fill="currentColor" stroke="none" /></>,
-  refresh: <><path d="M15.5 6.5A6.5 6.5 0 1 0 17 11" /><polyline points="16 2.5 16 6.5 12 6.5" /></>,
-  inbox: <><path d="M2.5 11.5 5 4h10l2.5 7.5v4a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z" /><path d="M2.5 11.5H7l1 2h4l1-2h4.5" /></>,
-  trash: <><polyline points="3 5.5 17 5.5" /><path d="M5.5 5.5 6.5 17h7l1-11.5" /><path d="M8 5.5V3h4v2.5" /></>,
-}
-function Icon({ name, size = 18, color = 'currentColor', sw = 1.6 }: { name: string; size?: number; color?: string; sw?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">{ICON_PATHS[name]}</svg>
-}
 
 // ── Job model + workflows ─────────────────────────────────
 
@@ -1244,7 +1219,7 @@ export default function FieldAppPage() {
         style={{ margin: '12px', width: 'calc(100% - 24px)', background: doneCount >= PHOTO_TARGET ? '#1B7A5A' : '#0057B8', color: '#fff', border: 'none', borderRadius: '16px', padding: '16px', fontFamily: "'Google Sans', sans-serif", fontSize: '15px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(0,87,184,.3)' }}>
         <Icon name="camera" size={17} color="#fff" /> {doneCount >= PHOTO_TARGET ? 'All shots done — Review & Submit' : `Take Next Shot (${(shots.find(s => !s.done)?.id) ?? 1} of ${PHOTO_TARGET})`}
       </button>
-      <div style={{ textAlign: 'center', padding: '4px 12px 10px', fontSize: '11px', color: '#44475A' }}>📷 takes a new photo · ⬆ uploads one already taken · each shot uploads instantly</div>
+      <div style={{ textAlign: 'center', padding: '4px 12px 10px', fontSize: '11px', color: '#44475A' }}>Capture takes a new photo · Upload uses one already taken · each shot uploads instantly</div>
     </div>
     )
   }

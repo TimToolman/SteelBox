@@ -305,7 +305,7 @@ function Hero({ tenant }: { tenant: Tenant }) {
         <div className="ld-hero-trust ld-rise ld-rise--5">
           {HERO_TRUST.map(t => <span key={t}><CheckIcon />{t}</span>)}
         </div>
-        <p className="ld-hero-tagline ld-rise ld-rise--5">Grading performed by Machine Learning / AI technology</p>
+        <p className="ld-hero-tagline ld-rise ld-rise--5">Graded by AI technology</p>
       </div>
       <div className="ld-hero-fade" aria-hidden="true" />
     </section>
