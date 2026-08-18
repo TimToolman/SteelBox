@@ -77,6 +77,70 @@ send it over and it lands under the section it belongs to.
       metrics, provider connections and plan tiers. The multi-channel build-out is
       blueprinted in `MARKETING-PORTAL.md` and tasked below.
 
+## Payments (Stripe) — NOT BUILT
+
+Checkout today collects an order and says "we'll call you"; there is no card
+processing anywhere in the codebase. This is the single largest gap between the demo
+and a site that can take money.
+
+- [ ] Stripe account + business verification. **Calendar-bound** (days to weeks of
+      underwriting); start it before the code, not after.
+- [ ] Payment Intents on checkout — card, Apple/Google Pay. Never store a PAN; the
+      card never touches our server.
+- [ ] Webhook receiver (`payment_intent.succeeded/failed`, `charge.refunded`) as the
+      authority on paid state — the browser's word for "it worked" is not evidence.
+- [ ] Idempotency keys on every charge so a double-tap or retry can't bill twice.
+- [ ] Order state machine: pending → authorized → captured → fulfilled → refunded,
+      replacing today's phone-payment checklist.
+- [ ] Deposits + partial payments (rentals take a month's deposit; custom builds take
+      a deposit up front).
+- [ ] Refunds from the admin portal, with an audit row per refund.
+- [ ] Multi-tenant money: which seller is paid for which order (Stripe Connect if
+      resellers are paid directly, or one account + internal ledger). **Decision needed
+      before building** — it changes the schema.
+- [ ] Sales tax by delivery ZIP (Stripe Tax or Avalara) — a container delivered across
+      state lines is a taxable event we currently ignore.
+- [ ] PCI SAQ-A questionnaire (trivial with hosted fields, but it must be filed).
+
+## Rental subscriptions — NOT BUILT
+
+A rental today prices `term × monthly rate` once at checkout and then nothing ever
+renews, invoices or ends. Renting is the recurring half of the business and none of
+that machinery exists.
+
+- [ ] Subscription records: unit, customer, rate, start, term, renewal mode, status.
+- [ ] Stripe Subscriptions (or scheduled Payment Intents) for the monthly charge.
+- [ ] Dunning: retry schedule, failed-payment emails, and what happens on day 30
+      (suspend? recover the unit? — a policy decision, not a code one).
+- [ ] Proration on early return, and end-of-term: auto-renew, month-to-month, or return.
+- [ ] Deposit hold + release, tied to the return inspection the field app already runs.
+- [ ] Customer self-serve: see the subscription, change the card, schedule a return.
+- [ ] Rental revenue reporting separated from sales (MRR, churn, units on rent).
+- [ ] Return-to-inventory automation: subscription ends → unit re-enters the marketplace
+      once the return walk-around clears it.
+
+## Production infrastructure — NOT BUILT
+
+- [ ] **Postgres migration** (promoted from Nice-to-have — it now blocks payments,
+      subscriptions and the marketing portal). Every `SCHEMAS` entry is already a table
+      definition; the CSV read/write layer becomes the query layer.
+- [ ] Hosting + CI: build, migrations and rollback on deploy.
+- [ ] Automated backups with a **restore actually tested**, not just configured.
+- [ ] Error tracking (Sentry) and uptime alerting — right now a 500 in production is
+      invisible until a customer calls.
+- [ ] Secrets management: no keys in env files on a laptop.
+- [ ] Rate limiting + bot protection on auth, checkout and the quote forms.
+- [ ] Load check: the API is single-instance by design (CSV + SSE). Confirm Postgres
+      lifts that, then run more than one replica.
+- [ ] Real photography to replace `demo-photos/` and the borrowed-photo fallback.
+
+## Legal & policy — NOT BUILT
+
+- [ ] Terms of sale, rental agreement, privacy policy, cookie/consent banner.
+- [ ] Refund + cancellation policy stated at checkout (required before charging cards).
+- [ ] Damage-claim terms: who is liable for what, referenced by the claim document.
+- [ ] Business insurance + reseller agreements. **Calendar-bound.**
+
 ## Marketing portal — multi-channel build-out
 
 Full technical blueprint, schema and rationale: **`MARKETING-PORTAL.md`**.
