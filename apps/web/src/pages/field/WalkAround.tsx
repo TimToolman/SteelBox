@@ -25,7 +25,10 @@ import {
 import { INSPECTOR_QUESTIONS, analyzeContainerPhotos, gradeContainer, gradeLabel, type GradeResult, type PhotoFeatures } from '../../lib/grading'
 import { GRADE_META } from '../../lib/specs'
 
-const INK = '#1A1C2E', INK2 = '#44475A', DIV = '#E1E2EC', BLUE = '#0057B8', RED = '#B3261E', GREEN = '#1B7A5A', AMBER = '#7B4F00'
+// GO is deliberately brighter than the app's standard blue: on the walk-around
+// the Next button is the one thing the driver is looking for, and it has to
+// read as live from arm's length in daylight.
+const INK = '#1A1C2E', INK2 = '#44475A', DIV = '#E1E2EC', BLUE = '#0057B8', GO = '#0B6BE8', RED = '#B3261E', GREEN = '#1B7A5A', AMBER = '#7B4F00'
 
 const card: React.CSSProperties = { margin: '0 12px 10px', background: '#fff', borderRadius: '16px', border: `1px solid ${DIV}`, padding: '14px', boxShadow: '0 1px 4px rgba(26,28,46,.08)' }
 const cardTitle: React.CSSProperties = { fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '10px' }
@@ -72,6 +75,11 @@ export function WalkAround({ container, inspectorName, onDone, onExit, toast }: 
   const [reasons, setReasons] = useState<string[]>([])
   const [note, setNote] = useState('')
   const [shot, setShot] = useState('')                  // damage photo URL for this finding
+  // Damage can be found at a stop that asks nothing (the back panel, the
+  // sticker) or at one whose question came back clean — the doors latch fine
+  // but there's a hole in one. Either opens the same editor by hand.
+  const [manual, setManual] = useState(false)
+  const [manualLevel, setManualLevel] = useState<'minor' | 'major'>('minor')
 
   // Clean-walk grading (only ever runs when nothing was found)
   const [features, setFeatures] = useState<PhotoFeatures[] | null>(null)
@@ -86,6 +94,14 @@ export function WalkAround({ container, inspectorName, onDone, onExit, toast }: 
     answer === undefined ? null : answer === 0 ? 'clean' : question?.options[answer]?.capGrade ? 'major' : 'minor'
   const photos = unit.photos || []
   const shotsMissing = (station?.shots || []).filter(sl => !photos[sl])
+  // One finding per stop: the question drives it when the answer isn't clean,
+  // otherwise the driver opens it by hand.
+  const fromQuestion = !!level && level !== 'clean'
+  const drilling = fromQuestion || manual
+  const findingLevel: 'minor' | 'major' = fromQuestion ? (level as 'minor' | 'major') : manualLevel
+  // A hand-raised finding always needs the photo — there's no answer standing
+  // behind it, so the picture is the evidence.
+  const photoRequired = drilling && (findingLevel === 'major' || manual)
 
   const jumpTop = () => topRef.current?.scrollIntoView({ block: 'start' })
 
@@ -123,33 +139,51 @@ export function WalkAround({ container, inspectorName, onDone, onExit, toast }: 
     if (!station) return ''
     if (shotsMissing.length) return `Take the ${shotsMissing.map(s => SHOT_LABELS[s]).join(' and ')} shot${shotsMissing.length > 1 ? 's' : ''} first`
     if (question && answer === undefined) return 'Answer the question for this station'
-    if (level === 'major' && !shot) return 'A photo of the damage is required to continue'
-    if (level !== 'clean' && level !== null && reasons.length === 0 && !note.trim()) return 'Say what you found'
+    if (photoRequired && !shot) return 'A photo of the damage is required to continue'
+    // A photo IS saying what you found — the reason chips sharpen it, they
+    // don't gate it. Only an empty finding (no photo, no reason, no note) has
+    // nothing to record.
+    if (drilling && !shot && reasons.length === 0 && !note.trim()) return 'Say what you found — or add a photo'
     return ''
-  }, [station, shotsMissing, question, answer, level, shot, reasons, note])
+  }, [station, shotsMissing, question, answer, drilling, photoRequired, shot, reasons, note])
 
   const next = async () => {
     if (blocked) { toast(blocked); return }
     // Build the new list here so the last station's finding is included when
     // the walk closes out on this same tap.
-    const all = question && level && level !== 'clean'
+    const all = drilling
       ? [...findings, {
-          station: station.title, question: question.title, level,
+          station: station.title,
+          question: fromQuestion ? question!.title : 'Spotted on the walk',
+          level: findingLevel,
           reasons: [...reasons], note: note.trim(), photo: shot,
           at: new Date().toISOString(), by: inspectorName,
         } as DamageFinding]
       : findings
     setFindings(all)
-    setReasons([]); setNote(''); setShot('')
+    setReasons([]); setNote(''); setShot(''); setManual(false); setManualLevel('minor')
     const nextAt = at + 1
     setAt(nextAt)
     jumpTop()
     if (nextAt === STATIONS.length) await queueOrGrade(all)
   }
 
+  // Going back has to be safe: the finding recorded at that stop comes back
+  // into the editor rather than being left behind (which would re-block the
+  // photo gate with the photo gone, and double-record on the way forward).
   const back = () => {
     if (at === 0) { onExit(); return }
-    setReasons([]); setNote(''); setShot('')
+    const prev = STATIONS[at - 1]
+    const i = findings.findIndex(f => f.station === prev.title)
+    if (i !== -1) {
+      const f = findings[i]
+      setReasons(f.reasons); setNote(f.note); setShot(f.photo)
+      setManualLevel(f.level)
+      setManual(f.question === 'Spotted on the walk')
+      setFindings(list => list.filter((_, k) => k !== i))
+    } else {
+      setReasons([]); setNote(''); setShot(''); setManual(false); setManualLevel('minor')
+    }
     setAt(a => a - 1)
     jumpTop()
   }
@@ -293,7 +327,7 @@ export function WalkAround({ container, inspectorName, onDone, onExit, toast }: 
 
   // ── A station ──
   return (
-    <div style={{ paddingBottom: '110px' }}>
+    <div style={{ paddingBottom: '20px', minHeight: 'calc(100vh - 88px)', display: 'flex', flexDirection: 'column' }}>
       {header}
 
       <div style={card}>
@@ -332,7 +366,7 @@ export function WalkAround({ container, inspectorName, onDone, onExit, toast }: 
               const on = answer === oi
               const worst = !!o.capGrade
               return (
-                <button key={oi} onClick={() => { setAnswers(p => ({ ...p, [question.key]: oi })); if (oi === 0) { setReasons([]); setNote(''); setShot('') } }}
+                <button key={oi} onClick={() => { setAnswers(p => ({ ...p, [question.key]: oi })); if (oi === 0 && !manual) { setReasons([]); setNote(''); setShot('') } }}
                   style={{ textAlign: 'left', padding: '11px 13px', borderRadius: '11px', fontSize: '12.5px', fontWeight: on ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit', border: `1.5px solid ${on ? (worst ? RED : oi === 0 ? GREEN : '#B45309') : DIV}`, background: on ? (worst ? '#FDECEA' : oi === 0 ? '#E6F4EE' : '#FFF8E1') : '#fff', color: on ? (worst ? RED : oi === 0 ? GREEN : AMBER) : INK2 }}>
                   {o.label}
                 </button>
@@ -342,12 +376,49 @@ export function WalkAround({ container, inspectorName, onDone, onExit, toast }: 
         </div>
       )}
 
-      {/* Drill-down — only when the answer wasn't clean */}
-      {level && level !== 'clean' && (
-        <div style={{ ...card, borderColor: level === 'major' ? RED : '#F2C94C', borderWidth: '1.5px' }}>
-          <div style={{ ...cardTitle, color: level === 'major' ? RED : AMBER }}>
-            {level === 'major' ? 'Structural finding · photo required' : 'What did you see?'}
+      {/* Found something here? Available at EVERY stop — the back panel and
+          the sticker ask no question, and a stop that answered clean can still
+          have a hole in it. */}
+      {!drilling && (
+        <div style={{ margin: '0 12px 10px' }}>
+          <button onClick={() => { setManual(true); setManualLevel('minor') }}
+            style={{ width: '100%', padding: '12px', borderRadius: '14px', border: `1.5px solid #F0B8B2`, background: '#fff', color: RED, fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
+            Found damage at this stop
+          </button>
+        </div>
+      )}
+
+      {/* The finding editor — opened by a non-clean answer or by hand */}
+      {drilling && (
+        <div style={{ ...card, borderColor: findingLevel === 'major' ? RED : '#F2C94C', borderWidth: '1.5px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+            <div style={{ ...cardTitle, color: findingLevel === 'major' ? RED : AMBER, marginBottom: 0 }}>
+              {findingLevel === 'major' ? 'Structural finding · photo required'
+                : photoRequired ? 'Finding · photo required'
+                : 'What did you see?'}
+            </div>
+            {manual && (
+              <button onClick={() => { setManual(false); setReasons([]); setNote(''); setShot('') }}
+                style={{ marginLeft: 'auto', background: 'none', border: 'none', color: INK2, fontSize: '12px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>Cancel</button>
+            )}
           </div>
+
+          {/* A hand-raised finding has no answer behind it, so it says how bad */}
+          {manual && (
+            <div style={{ display: 'flex', gap: '7px', marginBottom: '10px' }}>
+              {(['minor', 'major'] as const).map(lv => (
+                <button key={lv} onClick={() => setManualLevel(lv)}
+                  style={{ flex: 1, padding: '10px', borderRadius: '11px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                    border: `1.5px solid ${manualLevel === lv ? (lv === 'major' ? RED : '#B45309') : DIV}`,
+                    background: manualLevel === lv ? (lv === 'major' ? '#FDECEA' : '#FFF8E1') : '#fff',
+                    color: manualLevel === lv ? (lv === 'major' ? RED : AMBER) : INK2 }}>
+                  {lv === 'minor' ? 'Cosmetic' : 'Structural'}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px' }}>
             {DAMAGE_REASONS.map(r => (
               <button key={r} style={chip(reasons.includes(r))}
@@ -359,20 +430,30 @@ export function WalkAround({ container, inspectorName, onDone, onExit, toast }: 
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '11px' }}>
             {shot && <img src={photoUrl(shot)} alt="Damage" style={{ width: '76px', height: '58px', objectFit: 'cover', borderRadius: '9px', flexShrink: 0 }} />}
             <button onClick={captureDamage} disabled={busy}
-              style={{ flex: 1, padding: '11px', borderRadius: '11px', border: `1.5px solid ${level === 'major' && !shot ? RED : '#C4C6D0'}`, background: level === 'major' && !shot ? RED : '#fff', color: level === 'major' && !shot ? '#fff' : BLUE, fontSize: '12.5px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
-              {shot ? 'Retake damage photo' : level === 'major' ? 'Photograph the damage — required' : 'Add a photo (optional)'}
+              style={{ flex: 1, padding: '11px', borderRadius: '11px', border: `1.5px solid ${photoRequired && !shot ? RED : '#C4C6D0'}`, background: photoRequired && !shot ? RED : '#fff', color: photoRequired && !shot ? '#fff' : BLUE, fontSize: '12.5px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+              {shot ? 'Retake damage photo' : photoRequired ? 'Photograph the damage — required' : 'Add a photo (optional)'}
             </button>
           </div>
         </div>
       )}
 
-      {/* Next */}
-      <div style={{ position: 'fixed', left: 0, right: 0, bottom: '68px', padding: '10px 12px', background: 'linear-gradient(180deg, rgba(246,247,251,0) 0%, #F6F7FB 38%)' }}>
+      {/* Next — sticky INSIDE the app frame, so it tracks the phone-width
+          column instead of spanning the whole desktop window. */}
+      <div style={{ position: 'sticky', bottom: '78px', zIndex: 5, padding: '12px 12px 4px', margin: '4px 0 0', background: 'linear-gradient(180deg, rgba(248,249,255,0) 0%, #F8F9FF 34%)' }}>
         <button onClick={next} disabled={busy}
-          style={{ width: '100%', padding: '15px', borderRadius: '999px', border: 'none', background: blocked ? '#C4C6D0' : BLUE, color: '#fff', fontSize: '14.5px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', boxShadow: blocked ? 'none' : '0 4px 14px rgba(0,87,184,.25)' }}>
+          style={{
+            width: '100%', padding: '16px', borderRadius: '999px', border: 'none',
+            background: blocked ? '#DCDFE8' : GO, color: blocked ? '#8A8FA0' : '#fff',
+            fontSize: '15px', fontWeight: 700, cursor: busy ? 'wait' : blocked ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit', letterSpacing: '0.2px',
+            boxShadow: blocked ? 'none' : '0 6px 18px rgba(11,107,232,.38)',
+            transition: 'background .15s, box-shadow .15s',
+          }}>
           {at === STATIONS.length - 1 ? 'Finish walk-around' : 'Next stop →'}
         </button>
-        {blocked && <div style={{ fontSize: '11px', color: level === 'major' && !shot ? RED : INK2, textAlign: 'center', marginTop: '6px' }}>{blocked}</div>}
+        {blocked
+          ? <div style={{ fontSize: '11.5px', fontWeight: 600, color: level === 'major' && !shot ? RED : INK2, textAlign: 'center', marginTop: '7px' }}>{blocked}</div>
+          : <div style={{ fontSize: '11.5px', fontWeight: 600, color: GO, textAlign: 'center', marginTop: '7px' }}>Ready — tap to continue</div>}
       </div>
     </div>
   )
