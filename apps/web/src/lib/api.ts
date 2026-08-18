@@ -51,10 +51,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 // ── Auth ──────────────────────────────────────────────────
 
-// 'inspector' handles inspections and grading. 'adjuster' is the legacy name
-// for the same role, still accepted on accounts created before the rename.
-// A driver may inspect too — it is simply never required of them.
-export type Role = 'customer' | 'driver' | 'inspector' | 'adjuster' | 'supplier' | 'shipper' | 'marketing' | 'admin'
+// 'inspector' handles inspections and grading. A driver may inspect too —
+// it is simply never required of them.
+export type Role = 'customer' | 'driver' | 'inspector' | 'supplier' | 'shipper' | 'marketing' | 'admin'
 
 export interface AuthUser {
   id: string
@@ -286,6 +285,10 @@ export interface Container {
   inspectionFlaggedBy?: string
   inspectionFlaggedAt?: string | null
   inspectionFindings?: string    // JSON DamageFinding[] from the guided walk-around
+  // The walk's condition answers, keyed by INSPECTOR_QUESTIONS key —
+  // an inspector reviewing someone else's walk needs to see what they
+  // actually answered, not just what they photographed.
+  inspectionAnswers?: string     // JSON Record<questionKey, optionIndex>
   // Why it's held: 'damage' (something was found) or 'opinion' (the walk came
   // back clean and the driver wanted an inspector to make the call).
   inspectionKind?: '' | 'damage' | 'opinion'
@@ -1011,6 +1014,24 @@ export function findingsOf(c: Container | null | undefined): DamageFinding[] {
     const parsed = JSON.parse(c.inspectionFindings)
     return Array.isArray(parsed) ? parsed as DamageFinding[] : []
   } catch { return [] }
+}
+
+// What the walker answered at each station, for an inspector reading
+// someone else's walk. Empty when no walk was recorded.
+export function answersOf(c: Container | null | undefined): Record<string, number> {
+  if (!c?.inspectionAnswers) return {}
+  try {
+    const parsed = JSON.parse(c.inspectionAnswers)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, number> : {}
+  } catch { return {} }
+}
+
+// Has anyone actually walked this unit? A unit a driver only loaded has no
+// answers and no findings — an inspector must run the original inspection.
+export function walkedBy(c: Container | null | undefined): string {
+  if (!c) return ''
+  const hasWalk = Object.keys(answersOf(c)).length > 0 || findingsOf(c).length > 0
+  return hasWalk ? (c.inspectionFlaggedBy || c.inspectorName || 'Field crew') : ''
 }
 
 export const DAMAGE_SHOT_LABELS = [

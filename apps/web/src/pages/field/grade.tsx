@@ -10,7 +10,7 @@
 // ============================================================
 
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { claims as claimsApi, photoUrl, findingsOf, CLAIM_STAGES, type Container, type DamageClaim } from '../../lib/api'
+import { claims as claimsApi, photoUrl, findingsOf, answersOf, walkedBy, CLAIM_STAGES, type Container, type DamageClaim } from '../../lib/api'
 import { ClaimWorkspace } from './ClaimWorkspace'
 import { loadSession, saveSession } from '../../lib/capture'
 import { Lightbox, useLightbox } from '../../components/Lightbox'
@@ -25,6 +25,7 @@ import {
 const INK = '#1A1C2E', INK2 = '#44475A', DIV = '#E1E2EC', BLUE = '#0057B8', RED = '#B3261E', AMBER = '#7B4F00'
 
 const card: React.CSSProperties = { margin: '0 12px 10px', background: '#fff', borderRadius: '16px', border: `1px solid ${DIV}`, padding: '14px', boxShadow: '0 1px 4px rgba(26,28,46,.08)' }
+const cardTitle: React.CSSProperties = { fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '10px' }
 
 function ScoreBar({ score }: { score: number }) {
   const color = score >= 75 ? '#1B7A5A' : score >= 45 ? '#B45309' : '#B3261E'
@@ -52,18 +53,28 @@ interface GradeScreenProps {
   // the account before a driver or inspector can review or submit one.
   // Inspecting and grading never needed it; filing money claims does.
   canClaim: boolean
+  // Inspector rights — an inspector, or a driver an admin granted claims
+  // access. A plain driver grades units but never reviews reported damage.
+  canInspectDamage?: boolean
   toast: (msg: string) => void
   onApplied: () => void      // parent refreshes its container list
 }
 
-export function GradeScreen({ containers, inspectorName, canClaim, toast, onApplied }: GradeScreenProps) {
-  // Two separate inspection buckets: inspection required (the unit's saleable
-  // condition — it can't list until this is done) and damage claims
-  // (sea-freight damage evidence for the shipper/insurance pipeline).
-  // Photos and results never mix.
-  // Which bucket and which unit are open survives a page reload — the walk
+export function GradeScreen({ containers, inspectorName, canClaim, canInspectDamage = false, toast, onApplied }: GradeScreenProps) {
+  // Three queues, because three different jobs arrive here:
+  //   initial   nobody has inspected this unit — a driver just loaded it, so
+  //             the original inspection (and its grade) happens here
+  //   damage    a walk found something; verify it, grade it, maybe claim it
+  //   reviewed  already inspected, plus the claims in flight and their
+  //             estimate uploads
+  // Which queue and which unit are open survives a page reload — the walk
   // takes photos, and a phone camera round-trip can reload the whole tab.
-  const [bucket, setBucket] = useState<'retail' | 'damage'>(() => loadSession<{ bucket: 'retail' | 'damage' }>('sbx_grade_ui')?.bucket ?? 'retail')
+  const QUEUES = ['initial', 'damage', 'reviewed'] as const
+  type Queue = typeof QUEUES[number]
+  const [bucket, setBucket] = useState<Queue>(() => {
+    const saved = loadSession<{ bucket: Queue }>('sbx_grade_ui')?.bucket
+    return saved && QUEUES.includes(saved) ? saved : 'initial'
+  })
   const [query, setQuery] = useState('')
   const [unit, setUnit] = useState<Container | null>(null)
   const restoredUnit = useRef(false)
@@ -87,10 +98,15 @@ export function GradeScreen({ containers, inspectorName, canClaim, toast, onAppl
   const openClaimFor = (c: Container | null) =>
     c ? claims.find(x => (x.containerId === c.id || x.containerSku === c.sku) && x.status !== 'closed') : undefined
 
-  const goToClaim = (id: string) => { setUnit(null); setBucket('damage'); setOpenClaimId(id) }
+  const goToClaim = (id: string) => { setUnit(null); setBucket('reviewed'); setOpenClaimId(id) }
 
   // What the walk-around recorded, station by station.
   const findings = useMemo(() => findingsOf(unit), [unit])
+  // The answers behind those findings. An inspector reading someone else's
+  // walk needs to see what was actually answered at each station — a clean
+  // answer next to a photographed finding is itself information.
+  const walkAnswers = useMemo(() => answersOf(unit), [unit])
+  const walker = useMemo(() => walkedBy(unit), [unit])
   // An inspector deciding a grade off someone else's walk needs the photo at
   // full size, not a 62px thumbnail.
   const lb = useLightbox()
@@ -134,46 +150,54 @@ export function GradeScreen({ containers, inspectorName, canClaim, toast, onAppl
     } finally { setClaiming(false) }
   }
 
-  // Units that CAN be graded: at least one documentation photo uploaded.
-  // Units a driver flagged on the walk-around sort to the top — they are
-  // held off the marketplace until someone here grades them.
+  // Which queue a unit belongs to. A standing hold wins over everything:
+  // reported damage outranks a grade the unit already carries.
+  const queueOf = (c: Container): Queue =>
+    c.inspectionRequired ? 'damage' : c.aiGraded ? 'reviewed' : 'initial'
+
+  // Units that CAN be worked here: at least one documentation photo on file.
+  const withPhotos = useMemo(
+    () => containers.filter(c => (c.photos || []).filter(Boolean).length > 0),
+    [containers])
+  const counts = useMemo(() => {
+    const n = { initial: 0, damage: 0, reviewed: 0 } as Record<Queue, number>
+    withPhotos.forEach(c => { n[queueOf(c)]++ })
+    return n
+  }, [withPhotos])
   const gradable = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const rank = (c: Container) => c.inspectionRequired ? 0 : c.aiGraded ? 2 : 1
-    return containers
-      .filter(c => (c.photos || []).filter(Boolean).length > 0)
+    return withPhotos
+      .filter(c => queueOf(c) === bucket)
       .filter(c => !q || c.sku.toLowerCase().includes(q) || (c.depotLocation || '').toLowerCase().includes(q))
-      .sort((a, b) => rank(a) - rank(b) || a.sku.localeCompare(b.sku))
-  }, [containers, query])
-  const heldCount = gradable.filter(c => c.inspectionRequired).length
+      .sort((a, b) => a.sku.localeCompare(b.sku))
+  }, [withPhotos, query, bucket])
+  const heldCount = counts.damage
 
   // Opening a unit hands it straight to the walk-around, which does its own
   // photo analysis.
   const start = (c: Container) => setUnit(c)
 
-  // Without the grant there is no second bucket to switch to.
-  const bucketTabs = !canClaim ? null : (
+  // The damage queue is inspector work: a plain driver never sees it.
+  const visibleQueues = QUEUES.filter(k => k !== 'damage' || canInspectDamage)
+  const QUEUE_LABEL: Record<Queue, string> = {
+    initial: 'Needs inspection', damage: 'Damage review', reviewed: 'Reviewed',
+  }
+  const QUEUE_HINT: Record<Queue, string> = {
+    initial: 'Nobody has inspected these yet — walk one to grade it and put it on the marketplace.',
+    damage: 'A walk found damage on these. Verify what was reported, grade it, and open a claim if the line is liable.',
+    reviewed: 'Already inspected. Claims in flight are here too — add the repair estimate and send them on.',
+  }
+  const bucketTabs = (
     <div style={{ display: 'flex', gap: '4px', margin: '0 12px 10px', background: '#EEF2FF', border: `1px solid ${DIV}`, borderRadius: '999px', padding: '3px' }}>
-      {([['retail', 'Inspection Required'], ['damage', 'Damage claims']] as const).map(([k, label]) => (
-        <button key={k} onClick={() => setBucket(k)}
-          style={{ flex: 1, padding: '8px 0', borderRadius: '999px', border: 'none', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: bucket === k ? '#fff' : 'transparent', color: bucket === k ? (k === 'damage' ? '#B3261E' : BLUE) : INK2, boxShadow: bucket === k ? '0 1px 4px rgba(26,28,46,.1)' : 'none' }}>
-          {label}
+      {visibleQueues.map(k => (
+        <button key={k} onClick={() => { setBucket(k); setUnit(null) }}
+          style={{ flex: 1, padding: '8px 4px', borderRadius: '999px', border: 'none', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: bucket === k ? '#fff' : 'transparent', color: bucket === k ? (k === 'damage' ? RED : BLUE) : INK2, boxShadow: bucket === k ? '0 1px 4px rgba(26,28,46,.1)' : 'none' }}>
+          {QUEUE_LABEL[k]}
+          {counts[k] > 0 && <span style={{ marginLeft: '5px', opacity: bucket === k ? 1 : 0.7 }}>{counts[k]}</span>}
         </button>
       ))}
     </div>
   )
-
-  if (bucket === 'damage' && canClaim && !unit) {
-    return (
-      <div style={{ paddingBottom: '90px' }}>
-        <div style={{ padding: '16px 12px 10px' }}>
-          <div style={{ fontSize: '19px', fontWeight: 700, color: INK }}>Inspections</div>
-        </div>
-        {bucketTabs}
-        <DamageInspection inspectorName={inspectorName} toast={toast} containers={containers} openClaimId={openClaimId} onOpened={() => setOpenClaimId('')} />
-      </div>
-    )
-  }
 
   // ── Unit list ──
   if (!unit) {
@@ -182,20 +206,18 @@ export function GradeScreen({ containers, inspectorName, canClaim, toast, onAppl
         <div style={{ padding: '16px 12px 10px' }}>
           <div style={{ fontSize: '19px', fontWeight: 700, color: INK }}>Inspections</div>
           <div style={{ fontSize: '12px', color: INK2, marginTop: '3px', lineHeight: 1.5 }}>
-            Shoot or retake the unit's photos, report anything you find, then grade it: the
-            model reads the photo set, asks you five questions, and proposes a grade with a
-            1–5 quality sub-score.
+            {QUEUE_HINT[bucket]}
           </div>
         </div>
         {bucketTabs}
-        {heldCount > 0 && (
+        {bucket === 'damage' && heldCount > 0 && (
           <div style={{ margin: '0 12px 10px', background: '#FFF8E1', border: '1.5px solid #F2C94C', borderRadius: '14px', padding: '11px 13px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
             <span style={{ flexShrink: 0, color: '#7B4F00', marginTop: '1px' }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
             </span>
             <div style={{ fontSize: '12px', color: INK2, lineHeight: 1.5 }}>
-              <b style={{ color: INK }}>{heldCount} unit{heldCount === 1 ? '' : 's'} held off the marketplace</b> — damage was
-              reported on a walk-around. Grading one here releases it back to the listing.
+              <b style={{ color: INK }}>{heldCount} unit{heldCount === 1 ? '' : 's'} held off the marketplace</b> — a walk-around
+              reported damage. Verifying and grading one here releases it back to the listing.
             </div>
           </div>
         )}
@@ -207,7 +229,9 @@ export function GradeScreen({ containers, inspectorName, canClaim, toast, onAppl
         </div>
         {gradable.length === 0 && (
           <div style={{ ...card, textAlign: 'center', color: INK2, fontSize: '13px' }}>
-            No units with photo documentation yet — complete a photo session first.
+            {bucket === 'initial' ? 'Nothing waiting on a first inspection.'
+              : bucket === 'damage' ? 'No reported damage to review right now.'
+              : 'Nothing inspected yet.'}
           </div>
         )}
         {gradable.map(c => {
@@ -239,6 +263,11 @@ export function GradeScreen({ containers, inspectorName, canClaim, toast, onAppl
             </button>
           )
         })}
+        {/* Claims sit with the reviewed work: they only exist after an
+            inspection, and what's left on them is the estimate and the send. */}
+        {bucket === 'reviewed' && canClaim && (
+          <DamageInspection inspectorName={inspectorName} toast={toast} containers={containers} openClaimId={openClaimId} onOpened={() => setOpenClaimId('')} />
+        )}
       </div>
     )
   }
@@ -248,6 +277,59 @@ export function GradeScreen({ containers, inspectorName, canClaim, toast, onAppl
   // happens to be the final say, so findings don't queue back to them.
   return (
     <div style={{ paddingBottom: '90px' }}>
+      {/* Whoever walked this unit before you, and exactly what they answered.
+          No walk on file means this is the original inspection — the driver
+          only loaded it, so nothing has been judged yet. */}
+      {walker ? (
+        <div style={{ ...card, marginTop: '14px' }}>
+          <div style={cardTitle}>Walk on file · {walker}</div>
+          <div style={{ fontSize: '11.5px', color: INK2, lineHeight: 1.5, marginBottom: '10px' }}>
+            {Object.keys(walkAnswers).length > 0
+              ? 'What they answered at each station. Walk it yourself below — your answers replace these.'
+              : 'They recorded findings without completing every station question.'}
+          </div>
+          {INSPECTOR_QUESTIONS.filter(q => walkAnswers[q.key] !== undefined).map(q => {
+            const pickIdx = walkAnswers[q.key]
+            const opt = q.options[pickIdx]
+            const bad = pickIdx > 0
+            const structural = !!opt?.capGrade
+            return (
+              <div key={q.key} style={{ display: 'flex', gap: '9px', alignItems: 'flex-start', padding: '7px 0', borderTop: `1px solid ${DIV}` }}>
+                <span style={{ flexShrink: 0, width: '9px', height: '9px', borderRadius: '50%', marginTop: '5px', background: structural ? RED : bad ? AMBER : '#1B7A5A' }} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: '11px', color: INK2, fontWeight: 600 }}>{q.title}</div>
+                  <div style={{ fontSize: '12.5px', fontWeight: 700, color: structural ? RED : INK, lineHeight: 1.4 }}>
+                    {opt?.label ?? '—'}
+                    {structural && <span style={{ marginLeft: '6px', fontSize: '9px', background: '#FDECEA', color: RED, borderRadius: '999px', padding: '1px 6px' }}>STRUCTURAL</span>}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+          {/* Every documentation photo the walk produced, at full size on tap. */}
+          {(unit.photos || []).filter(Boolean).length > 0 && (
+            <>
+              <div style={{ ...cardTitle, marginTop: '12px' }}>Photos from that walk · {(unit.photos || []).filter(Boolean).length}</div>
+              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
+                {(unit.photos || []).filter(Boolean).map((u, i, all) => (
+                  <img key={i} src={photoUrl(u)} alt={`Walk photo ${i + 1}`}
+                    onClick={() => lb.show(all.map((p2, j) => ({ url: photoUrl(p2), caption: `Walk photo ${j + 1}`, sub: unit.sku })), i)}
+                    style={{ width: '72px', height: '54px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0, cursor: 'zoom-in' }} />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
+        <div style={{ ...card, marginTop: '14px', background: '#EEF2FF', borderColor: '#C7D7F5' }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: INK }}>No inspection on file — this one is yours</div>
+          <div style={{ fontSize: '11.5px', color: INK2, lineHeight: 1.5, marginTop: '3px' }}>
+            A driver moved this unit without inspecting it. Walk it below to grade it and put it on
+            the marketplace.
+          </div>
+        </div>
+      )}
+
       {/* Shown whenever this unit has damage on file — held by the field crew,
           or found by this inspector on a previous pass. The claim route has to
           exist in both cases, not only while a hold is standing. */}

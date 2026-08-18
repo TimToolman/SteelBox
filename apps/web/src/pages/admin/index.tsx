@@ -930,7 +930,7 @@ function UserModal({ target, drivers, sellers, suppliers, shipperLines, sellerId
           <span>
             <b>Damage claims</b> — lets a driver or inspector review and submit claims against a shipping line
             from the field app. Inspections and grading do not need this; filing money claims does.
-            {hasG('claims') && !['driver', 'inspector', 'adjuster', 'admin'].includes(form.role) && (
+            {hasG('claims') && !['driver', 'inspector', 'admin'].includes(form.role) && (
               <span style={{ display: 'block', color: '#7B4F00', fontWeight: 700, fontSize: '11px', marginTop: '2px' }}>
                 Only takes effect on a driver or inspector account.
               </span>
@@ -1032,7 +1032,7 @@ function ShipperModal({ target, onClose, onSaved }: {
       <label style={lbl}>Address</label>
       <input style={inp} value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} placeholder="1 Harbor Plaza, Long Beach, CA 90802" />
       <label style={lbl}>Notes (optional)</label>
-      <input style={inp} value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Files via broker; cc their adjuster on packets" />
+      <input style={inp} value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Files via broker; cc their claims desk on packets" />
       {error && <div style={{ background: '#FDECEA', border: '1px solid #F5C6C0', color: '#B3261E', borderRadius: 'var(--r8)', padding: '9px 12px', fontSize: '12px', marginBottom: '10px' }}>{error}</div>}
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '8px' }}>
         <Button variant="ghost" onClick={onClose}>Cancel</Button>

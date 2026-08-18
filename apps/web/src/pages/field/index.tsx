@@ -1610,6 +1610,10 @@ export default function FieldAppPage() {
       <GradeScreen
         containers={containerList}
         inspectorName={user?.name || 'Field Inspector'}
+        // Inspector rights: being an inspector, or a driver an admin has
+        // granted claims access. A plain driver inspects and grades, but
+        // never sees the damage-review queue.
+        canInspectDamage={user?.role === 'inspector' || user?.role === 'admin' || (user?.roles || []).includes('claims')}
         canClaim={user?.role === 'admin' || (user?.roles || []).includes('claims')}
         toast={toast}
         onApplied={() => fetchContainers().catch(() => {})}
@@ -1627,7 +1631,10 @@ export default function FieldAppPage() {
           inspectorName={me?.name || user?.name || 'Field Inspector'}
           toast={toast}
           onExit={() => goTo('flow')}
-          onHome={() => goTo('dashboard')}
+          // The walk is one step of the job, not a detour away from it: a
+          // graded unit or one handed to an inspector both land back on the
+          // task, now standing on Load.
+          onHome={() => goTo('flow')}
           onDone={(updated, wasQueued) => {
             setContainerList(prev => prev.map(c => c.id === updated.id ? updated : c))
             fetchContainers().catch(() => {})

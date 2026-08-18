@@ -55,12 +55,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           } />
           {/* One claim, full page, its own tab — supplier, inspector or admin */}
           <Route path="/claim" element={
-            <RequireRole roles={['supplier', 'driver', 'inspector', 'adjuster', 'admin']} title="Damage Claim">
+            <RequireRole roles={['supplier', 'driver', 'inspector', 'admin']} title="Damage Claim">
               <ClaimPage />
             </RequireRole>
           } />
           <Route path="/field" element={
-            <RequireRole roles={['driver', 'inspector', 'adjuster', 'admin']} title="Field App">
+            <RequireRole roles={['driver', 'inspector', 'admin']} title="Field App">
               <FieldAppPage />
             </RequireRole>
           } />

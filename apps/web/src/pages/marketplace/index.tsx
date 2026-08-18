@@ -11,6 +11,7 @@ import { useContainers, useSnackbar, useAuth, useIsMobile, useLive } from '../..
 import { LoginForm } from '../../lib/auth'
 import { containers, orders, messages as messagesApi, customBuilds as customBuildsApi, depots as depotsApi, sellers as sellersApi, meetPoints as meetPointsApi, photoUrl, hasGrant, type MeetPoint, type Container, type ContainerGrade, type ContainerSize, type ContainerCondition, type CustomBuild, type Depot, type Seller } from '../../lib/api'
 import { SupplierFleet } from './SupplierFleet'
+import { InspectionsPortal } from './Inspections'
 import SupplierPortalPage from '../supplier'
 import ShipperReviewPage from '../shipper'
 import { GRADE_META } from '../../lib/specs'
@@ -140,18 +141,25 @@ export default function MarketplacePage() {
   // supplier → My Containers + Damage Claims, shipper → Claims Review.
   // 'shop' is the regular marketplace; its state is kept (display:none)
   // while another portal is open so filters/cart survive the switch.
-  const [portal, setPortal] = useState<'shop' | 'fleet' | 'supplier' | 'shipper' | 'marketing'>('shop')
+  const [portal, setPortal] = useState<'shop' | 'fleet' | 'supplier' | 'shipper' | 'marketing' | 'inspections'>('shop')
   // Marketing is open to the grant AND to admins — SteelBox Co. HQ manages
   // campaigns on the resellers' behalf from the same tab.
   const canMarketing = hasGrant(user, 'marketing') || user?.role === 'admin'
+  // Inspector rights on the desk: an inspector, an admin, or a driver an
+  // admin granted claims access. Damage review is desk work as much as
+  // field work — big photos, the estimate document, a real keyboard.
+  const canInspect = user?.role === 'inspector' || user?.role === 'admin'
+    || (user?.role === 'driver' && (user?.roles || []).includes('claims'))
+  const canClaimHere = user?.role === 'admin' || (user?.roles || []).includes('claims')
   // Signing out (or losing the grant) drops any open portal back to the shop.
   useEffect(() => {
     if (portal === 'shop') return
     const okay = portal === 'shipper' ? hasGrant(user, 'shipper')
       : portal === 'marketing' ? canMarketing
+      : portal === 'inspections' ? canInspect
       : hasGrant(user, 'supplier')
     if (!okay) setPortal('shop')
-  }, [user, portal, canMarketing])
+  }, [user, portal, canMarketing, canInspect])
   // Signing in from the profile sheet closes it and lands on the marketplace
   // (with any granted portal tabs now visible) instead of showing the
   // account menu.
@@ -467,13 +475,14 @@ export default function MarketplacePage() {
       {/* ── Portal strip — one sign-in, every granted portal as a tab.
              Light-blue band so it reads as its own layer, not part of the
              page; text-only labels per the 2D-simple iconography rule. ── */}
-      {(hasGrant(user, 'supplier') || hasGrant(user, 'shipper') || canMarketing) && (
+      {(hasGrant(user, 'supplier') || hasGrant(user, 'shipper') || canMarketing || canInspect) && (
         <div style={{ background: 'var(--primary-cont, #E3F0FF)', borderBottom: '2px solid var(--primary)', padding: '0 16px', display: 'flex', gap: '6px', overflowX: 'auto', position: 'sticky', top: 0, zIndex: 40 }}>
           {([
             { key: 'shop' as const, label: 'Marketplace', show: true },
             { key: 'fleet' as const, label: 'My Containers', show: hasGrant(user, 'supplier') },
             { key: 'supplier' as const, label: 'Damage Claims', show: hasGrant(user, 'supplier') },
             { key: 'shipper' as const, label: 'Claims Review', show: hasGrant(user, 'shipper') },
+            { key: 'inspections' as const, label: 'Inspections', show: canInspect },
             { key: 'marketing' as const, label: 'Marketing', show: canMarketing },
           ]).filter(t => t.show).map(t => (
             <button key={t.key} onClick={() => setPortal(t.key)} style={{
@@ -495,6 +504,7 @@ export default function MarketplacePage() {
       )}
       {portal === 'supplier' && <SupplierPortalPage embedded />}
       {portal === 'shipper' && <ShipperReviewPage embedded />}
+      {portal === 'inspections' && <InspectionsPortal user={user} canClaim={canClaimHere} toast={toast} />}
       {portal === 'marketing' && user && (
         <main style={{ maxWidth: '1080px', margin: '0 auto', padding: '22px 16px 80px' }}>
           <MarketingPortal user={user} onToast={toast} />

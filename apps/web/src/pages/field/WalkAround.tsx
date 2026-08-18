@@ -227,35 +227,64 @@ export function WalkAround({ container, inspectorName, finalGrader = false, onDo
     jumpTop()
   }
 
-  // ── The end of the walk decides: findings queue it, a clean walk grades it ──
+  // Everything the walk learned, written the same way from every exit — the
+  // answers matter as much as the photos to whoever reads this next.
+  const walkRecord = (extra: Partial<Container>): Partial<Container> => ({
+    inspectionFindings: JSON.stringify(findings),
+    inspectionAnswers: JSON.stringify(answers),
+    ...extra,
+  })
+
+  // ── The end of the walk ──
+  // A driver who found damage doesn't grade and isn't asked to: the summary
+  // offers exactly two ways on — back a stop, or hand it to an inspector.
+  // Nothing is written until they choose. An inspector IS the destination,
+  // so their own findings are recorded and they grade on the next screen.
   const queueOrGrade = async (all: DamageFinding[]) => {
+    if (all.length > 0 && !finalGrader) return   // summary takes it from here
     setBusy(true)
     try {
-      // Findings are recorded either way — what differs is who grades next.
       if (all.length > 0) {
         const summary = all.map(f => [f.reasons.join(', '), f.note].filter(Boolean).join(' — ') || f.question).join('; ')
-        const updated = await containersApi.update(unit.id, {
-          // An inspector's own findings don't queue the unit to themselves;
-          // they grade it on the next screen and the hold never applies.
-          inspectionRequired: !finalGrader,
+        const updated = await containersApi.update(unit.id, walkRecord({
+          inspectionRequired: false,
           inspectionReason: summary,
           inspectionFlaggedBy: inspectorName,
           inspectionFindings: JSON.stringify(all),
-          inspectionKind: finalGrader ? '' : 'damage',
-        } as Partial<Container>)
+          inspectionKind: '',
+        }) as Partial<Container>)
         setUnit(updated)
-        if (!finalGrader) {
-          setQueued(true)
-          clearSession(saveKey)
-          onDone(updated, true)
-          return
-        }
       }
       const f = await analyzeContainerPhotos(unit)
       setFeatures(f)
       setResult(gradeContainer(f, answers))
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Could not close out the walk-around')
+    } finally { setBusy(false) }
+  }
+
+  // The driver's one way on from a walk that found something: hand the whole
+  // walk — photos, answers and findings — to an inspector, and get back to
+  // the job. The unit waits off the marketplace until they've graded it.
+  const handOffFindings = async () => {
+    if (busy || findings.length === 0) return
+    setBusy(true)
+    try {
+      const summary = findings.map(f => [f.reasons.join(', '), f.note].filter(Boolean).join(' — ') || f.question).join('; ')
+      const updated = await containersApi.update(unit.id, walkRecord({
+        inspectionRequired: true,
+        inspectionReason: summary,
+        inspectionFlaggedBy: inspectorName,
+        inspectionKind: 'damage',
+      }) as Partial<Container>)
+      setUnit(updated)
+      setQueued(true)
+      clearSession(saveKey)
+      toast(`${unit.sku} sent to an inspector — ${findings.length} finding${findings.length === 1 ? '' : 's'} on file`)
+      onDone(updated, true)
+      onHome()
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not send this to an inspector — try again')
     } finally { setBusy(false) }
   }
 
@@ -267,12 +296,12 @@ export function WalkAround({ container, inspectorName, finalGrader = false, onDo
     setBusy(true)
     try {
       const proposed = result ? ` — model proposed ${gradeLabel(result.grade, result.sub)}` : ''
-      const updated = await containersApi.update(unit.id, {
+      const updated = await containersApi.update(unit.id, walkRecord({
         inspectionRequired: true,
         inspectionReason: `Second opinion requested by ${inspectorName}${proposed}`,
         inspectionFlaggedBy: inspectorName,
         inspectionKind: 'opinion',
-      } as Partial<Container>)
+      }) as Partial<Container>)
       setUnit(updated); setQueued(true); setHandoff(true)
       clearSession(saveKey)
       toast(`${unit.sku} sent to an inspector for the final grade`)
@@ -287,11 +316,11 @@ export function WalkAround({ container, inspectorName, finalGrader = false, onDo
     if (!result || busy) return
     setBusy(true)
     try {
-      const updated = await containersApi.update(unit.id, {
+      const updated = await containersApi.update(unit.id, walkRecord({
         grade: result.grade, conditionScore: result.sub, aiGraded: true,
         inspectorName, inspectedAt: new Date().toISOString(),
         inspectionRequired: false,
-      } as Partial<Container>)
+      }) as Partial<Container>)
       setUnit(updated)
       clearSession(saveKey)
       toast(`${unit.sku} graded ${gradeLabel(result.grade, result.sub)} — applied to the listing`)
@@ -328,13 +357,64 @@ export function WalkAround({ container, inspectorName, finalGrader = false, onDo
     </div>
   )
 
-  // ── Summary: queued for an inspector, or the clean-walk grade ──
+  // ── Summary ──
+  // A driver who found damage gets no grade and no third option: go back a
+  // stop, or send the walk to an inspector. A clean walk gets the model's
+  // grade (and the option to hand that call over anyway).
   if (at >= STATIONS.length) {
     const meta = result ? GRADE_META[result.grade] : null
+    const handingOff = findings.length > 0 && !finalGrader && !queued
+    const findingList = (
+      <div style={card}>
+        <div style={cardTitle}>What you found · {findings.length}</div>
+        {findings.map((f, i) => (
+          <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '9px 0', borderTop: i ? `1px solid ${DIV}` : 'none' }}>
+            {f.photo
+              ? <img src={photoUrl(f.photo)} alt={f.reasons.join(', ')} style={{ width: '64px', height: '48px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0 }} />
+              : <span style={{ width: '64px', height: '48px', borderRadius: '8px', background: '#F4F6FA', flexShrink: 0 }} />}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '12.5px', fontWeight: 700, color: f.level === 'major' ? RED : INK }}>
+                {f.station} · {f.reasons.join(', ') || f.question}
+                {f.level === 'major' && <span style={{ marginLeft: '6px', fontSize: '10px', background: '#FDECEA', color: RED, borderRadius: '999px', padding: '2px 7px' }}>STRUCTURAL</span>}
+              </div>
+              {f.note && <div style={{ fontSize: '11.5px', color: INK2, marginTop: '2px', lineHeight: 1.4 }}>{f.note}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
     return (
       <div style={{ paddingBottom: '90px' }}>
         {header}
-        {queued ? (
+        {handingOff ? (
+          <>
+            <div style={{ ...card, background: '#FFF8E1', borderColor: '#F2C94C' }}>
+              <div style={{ display: 'flex', gap: '11px', alignItems: 'flex-start' }}>
+                <span style={{ flexShrink: 0, color: AMBER, marginTop: '1px' }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
+                </span>
+                <div>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: INK }}>Damage reported — an inspector grades this one</div>
+                  <div style={{ fontSize: '12.5px', color: INK2, lineHeight: 1.55, marginTop: '3px' }}>
+                    You found {findings.length} thing{findings.length === 1 ? '' : 's'} on this unit, so it isn't graded here.
+                    Your photos, answers and notes all go with it. Go back a stop if something needs changing.
+                  </div>
+                </div>
+              </div>
+            </div>
+            {findingList}
+            <div style={{ margin: '0 12px' }}>
+              <button onClick={handOffFindings} disabled={busy}
+                style={{ width: '100%', padding: '16px', borderRadius: '999px', border: 'none', background: GO, color: '#fff', fontSize: '15px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                {busy ? 'Sending…' : 'Send to inspector →'}
+              </button>
+              <div style={{ fontSize: '11px', color: INK2, textAlign: 'center', marginTop: '9px', lineHeight: 1.5 }}>
+                The unit stays off the marketplace until an inspector verifies the damage and grades it.
+                You'll go straight back to the job.
+              </div>
+            </div>
+          </>
+        ) : queued ? (
           <>
             <div style={{ ...card, background: '#FFF8E1', borderColor: '#F2C94C' }}>
               <div style={{ display: 'flex', gap: '11px', alignItems: 'flex-start' }}>
@@ -346,32 +426,13 @@ export function WalkAround({ container, inspectorName, finalGrader = false, onDo
                     {handoff ? 'Sent to an inspector' : 'Queued for inspection'}
                   </div>
                   <div style={{ fontSize: '12.5px', color: INK2, lineHeight: 1.55, marginTop: '3px' }}>
-                    {handoff
-                      ? <>The walk-around came back clean — an inspector makes the final call on the grade.
-                          Your photos and answers go with it. The unit waits off the marketplace until they've graded it.</>
-                      : <>You reported {findings.length} finding{findings.length === 1 ? '' : 's'}, so this unit isn't graded here —
-                          an inspector verifies the damage and grades it. It stays off the marketplace until then.</>}
+                    The walk went with it — every photo, answer and note. The unit waits off the
+                    marketplace until an inspector grades it.
                   </div>
                 </div>
               </div>
             </div>
-            {findings.length > 0 && <div style={card}>
-              <div style={cardTitle}>What you reported</div>
-              {findings.map((f, i) => (
-                <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '9px 0', borderTop: i ? `1px solid ${DIV}` : 'none' }}>
-                  {f.photo
-                    ? <img src={photoUrl(f.photo)} alt={f.reasons.join(', ')} style={{ width: '64px', height: '48px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0 }} />
-                    : <span style={{ width: '64px', height: '48px', borderRadius: '8px', background: '#F4F6FA', flexShrink: 0 }} />}
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '12.5px', fontWeight: 700, color: f.level === 'major' ? RED : INK }}>
-                      {f.station} · {f.reasons.join(', ') || f.question}
-                      {f.level === 'major' && <span style={{ marginLeft: '6px', fontSize: '10px', background: '#FDECEA', color: RED, borderRadius: '999px', padding: '2px 7px' }}>STRUCTURAL</span>}
-                    </div>
-                    {f.note && <div style={{ fontSize: '11.5px', color: INK2, marginTop: '2px', lineHeight: 1.4 }}>{f.note}</div>}
-                  </div>
-                </div>
-              ))}
-            </div>}
+            {findings.length > 0 && findingList}
             <div style={{ margin: '0 12px' }}>
               <button onClick={onExit} style={{ width: '100%', padding: '15px', borderRadius: '999px', border: 'none', background: GREEN, color: '#fff', fontSize: '14px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
                 Done — back to the job
@@ -396,24 +457,7 @@ export function WalkAround({ container, inspectorName, finalGrader = false, onDo
               <div style={{ fontSize: '17px', fontWeight: 700, color: INK }}>This container is a {gradeLabel(result.grade, result.sub)}</div>
               <div style={{ fontSize: '12px', color: INK2, marginTop: '3px' }}>{meta!.label} · {result.score}/100 overall</div>
             </div>
-            {findings.length > 0 && (
-              <div style={card}>
-                <div style={cardTitle}>What you found</div>
-                {findings.map((f, i) => (
-                  <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '8px 0', borderTop: i ? `1px solid ${DIV}` : 'none' }}>
-                    {f.photo
-                      ? <img src={photoUrl(f.photo)} alt={f.reasons.join(', ')} style={{ width: '58px', height: '44px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0 }} />
-                      : <span style={{ width: '58px', height: '44px', borderRadius: '8px', background: '#F4F6FA', flexShrink: 0 }} />}
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: '12px', fontWeight: 700, color: f.level === 'major' ? RED : INK }}>
-                        {f.station} · {f.reasons.join(', ') || f.question}
-                      </div>
-                      {f.note && <div style={{ fontSize: '11px', color: INK2, marginTop: '1px' }}>{f.note}</div>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            {findings.length > 0 && findingList}
             <div style={{ margin: '0 12px' }}>
               <button onClick={applyGrade} disabled={busy}
                 style={{ width: '100%', padding: '15px', borderRadius: '999px', border: 'none', background: '#E65100', color: '#fff', fontSize: '14px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
@@ -565,7 +609,10 @@ export function WalkAround({ container, inspectorName, finalGrader = false, onDo
       {/* Next — sticky INSIDE the app frame, so it tracks the phone-width
           column instead of spanning the whole desktop window. */}
       <div style={{ position: 'sticky', bottom: '78px', zIndex: 5, padding: '12px 12px 4px', margin: '4px 0 0', background: 'linear-gradient(180deg, rgba(248,249,255,0) 0%, #F8F9FF 34%)' }}>
-        <button onClick={next} disabled={busy}
+        {/* aria-disabled, not disabled: tapping a greyed Next still explains
+            what the station is waiting for (a toast), which is more use than
+            a dead button — but assistive tech and tests need to be told. */}
+        <button onClick={next} disabled={busy} aria-disabled={!!blocked}
           style={{
             width: '100%', padding: '16px', borderRadius: '999px', border: 'none',
             background: blocked ? '#DCDFE8' : GO, color: blocked ? '#8A8FA0' : '#fff',

@@ -426,11 +426,22 @@ try {
   const inspector = (await api('/auth/login', { method: 'POST', body: { email: 'inspector@test.dev', password: 'test1234' } })).body.token
   const fieldDriver = (await api('/auth/login', { method: 'POST', body: { email: 'walkaround@test.dev', password: 'test1234' } })).body.token
   check('inspector and driver both sign in', !!inspector && !!fieldDriver && drvAcct.status === 201)
+  // 'adjuster' was the old name for this role; it is gone, not aliased.
+  const legacyRole = await api('/users', { method: 'POST', token: admin, body: { email: 'legacy@test.dev', password: 'test1234', role: 'adjuster', name: 'Legacy Al' } })
+  check('the retired adjuster role is refused, not aliased', legacyRole.status === 201 && legacyRole.body?.role === 'customer')
 
   // A unit with the full photo set — so the hold is the only thing keeping it
   // out of 'available' when the promotion rule would otherwise fire.
   const held = containers.find(c => c.status === 'available' && (c.photos || []).filter(Boolean).length >= 8
     && ![unit.id, dmgUnit.id, clUnit.id].includes(c.id))
+  // An inspector reading someone else's walk needs the answers too, not just
+  // the photos — they ride on the container next to the findings.
+  const walkAnswers = JSON.stringify({ doors: 0, structure: 1, rust: 2, floor: 0, light: 0 })
+  const walkSaved = await api(`/containers/${held.id}`, { method: 'PATCH', token: fieldDriver, body: { inspectionAnswers: walkAnswers } })
+  check('the walk\u2019s station answers are recorded on the unit', walkSaved.status === 200 && walkSaved.body?.inspectionAnswers === walkAnswers)
+  const walkReadBack = (await api('/containers', { token: inspector })).body.find(c => c.id === held.id)
+  check('and an inspector reads them back', JSON.parse(walkReadBack.inspectionAnswers || '{}').rust === 2)
+
   const flag = await api(`/containers/${held.id}`, { method: 'PATCH', token: fieldDriver, body: { inspectionRequired: true, inspectionReason: 'Bent — rear rail bowed' } })
   check('a driver can report damage from the walk-around', flag.status === 200 && flag.body?.inspectionRequired === true)
   check('reporting stamps who flagged it and when', flag.body?.inspectionFlaggedBy === 'Ray Okonkwo' && !!flag.body?.inspectionFlaggedAt)

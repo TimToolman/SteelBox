@@ -18,17 +18,18 @@ Anyone browsing the marketplace before signing in.
 
 | # | Feature | Steps | Expect | Coverage |
 |---|---|---|---|---|
-| G-1 | Delivery-ZIP prompt | Open /shop in a fresh tab | ZIP prompt appears once per session; enter a ZIP or pick Nationwide Search; it never re-appears this session | Manual only |
-| G-2 | Left rail order | Look at the left rail top-to-bottom | Zip Destination → Sort By → divider → Filters/Reset header → Size → Grade…; Reset clears only the filters below it, never ZIP or sort | Auto — smoke-batch |
-| G-3 | Card hover magnifier | Hover any container card (desktop) | Card lifts, magnifying-glass circle fades in over the photo; clicking anywhere opens the detail | Auto — smoke-batch |
-| G-4 | Detail gallery | Open any unit | Tall hero (~280–440px); thumbnail strip below with the active shot ringed + underlined, others dimmed until hover | Auto — smoke-batch + smoke-viewer |
-| G-5 | Control cluster | Look under the hero image | ‹ previous · zoom-out · level% · zoom-in · next ›, centred under the image; clicking the level resets to fit | Auto — smoke-batch |
-| G-6 | Zoom in place | Scroll / pinch / double-tap the hero; drag while zoomed | Zooms up to 6× without leaving the page; drag pans; switching shots resets zoom | Auto — smoke-viewer |
-| G-7 | Full-screen viewer | Click the hero photo (or the Full screen pill) | Viewer opens with the same cluster + thumb strip UNDER the image; counter + shot name at the bottom by the controls; Close (✕) on the image box’s top-right | Auto — smoke-batch + smoke-viewer |
-| G-8 | Keyboard | In the viewer press ← → + − 0 Esc | Arrows move the photo ONLY (the container behind must not change); +/− zoom; 0 fits; Esc closes and page scroll returns | Auto — smoke-viewer |
-| G-9 | Show 3D View | Click the pill at the viewer’s top right | Viewer closes; gallery lands on the 3D slot (drag to rotate when no AI render exists) | Auto — smoke-batch |
-| G-10 | Damaged unit photos | Open a D-grade unit; tap a photo in the red "sold as-is" strip | Damage photos open in the same full-screen viewer | Manual only |
-| G-11 | Buy/Rent + price card | Toggle Buy/Rent; scroll the detail | Price switches; the price card stays visible (sticky); ZIP check answers territory/relay | Manual only |
+| G-1 | Hero on a phone | Open the home page on a phone | The headline sits right under the nav — no live-inventory badge, one short line of copy, and How It Works reachable on the first screen | Auto — smoke-admin |
+| G-2 | Delivery-ZIP prompt | Open /shop in a fresh tab | ZIP prompt appears once per session; enter a ZIP or pick Nationwide Search; it never re-appears this session | Manual only |
+| G-3 | Left rail order | Look at the left rail top-to-bottom | Zip Destination → Sort By → divider → Filters/Reset header → Size → Grade…; Reset clears only the filters below it, never ZIP or sort | Auto — smoke-batch |
+| G-4 | Card hover magnifier | Hover any container card (desktop) | Card lifts, magnifying-glass circle fades in over the photo; clicking anywhere opens the detail | Auto — smoke-batch |
+| G-5 | Detail gallery | Open any unit | Tall hero (~280–440px); thumbnail strip below with the active shot ringed + underlined, others dimmed until hover | Auto — smoke-batch + smoke-viewer |
+| G-6 | Control cluster | Look under the hero image | ‹ previous · zoom-out · level% · zoom-in · next ›, centred under the image; clicking the level resets to fit | Auto — smoke-batch |
+| G-7 | Zoom in place | Scroll / pinch / double-tap the hero; drag while zoomed | Zooms up to 6× without leaving the page; drag pans; switching shots resets zoom | Auto — smoke-viewer |
+| G-8 | Full-screen viewer | Click the hero photo (or the Full screen pill) | Viewer opens with the same cluster + thumb strip UNDER the image; counter + shot name at the bottom by the controls; Close (✕) on the image box’s top-right | Auto — smoke-batch + smoke-viewer |
+| G-9 | Keyboard | In the viewer press ← → + − 0 Esc | Arrows move the photo ONLY (the container behind must not change); +/− zoom; 0 fits; Esc closes and page scroll returns | Auto — smoke-viewer |
+| G-10 | Show 3D View | Click the pill at the viewer’s top right | Viewer closes; gallery lands on the 3D slot (drag to rotate when no AI render exists) | Auto — smoke-batch |
+| G-11 | Damaged unit photos | Open a D-grade unit; tap a photo in the red "sold as-is" strip | Damage photos open in the same full-screen viewer | Manual only |
+| G-12 | Buy/Rent + price card | Toggle Buy/Rent; scroll the detail | Price switches; the price card stays visible (sticky); ZIP check answers territory/relay | Manual only |
 
 ## CU · Customer
 
@@ -58,12 +59,14 @@ Field crew: pickups, deliveries, photo documentation. May inspect, never require
 | D-5 | Middle answer | Pick the cosmetic option | What/where drill-down appears; photo optional | Auto — smoke-walk |
 | D-6 | Worst answer | Pick the capped option | A photo of the damage is REQUIRED before Next unlocks | Auto — smoke-walk |
 | D-7 | Going back | Answer a station, go forward, come back | Answers, reasons, note and photo all restored; changing them re-records | Auto — smoke-walkfix |
-| D-8 | Finding → inspector | Finish a walk with any finding | No grade offered — the unit queues for an inspector; banner reads "Damage reported"; the unit drops off the marketplace | Auto — smoke-walk + api |
-| D-9 | Clean walk | Finish with no findings | Model’s grade offered — Apply, or "Send to Inspector" for a second opinion; both return to the home screen | Auto — smoke-handoff |
-| D-10 | Report damage | On the job screen tap Report damage | Optional photo allowed (not required); reasons + note; report appends to the unit’s inspection reason; can report repeatedly | Auto — smoke-round |
-| D-11 | Schedule moved | Look at the bottom nav | No Schedule tab — it lives under Profile → Schedule & availability | Auto — smoke-round |
-| D-12 | Claims need a grant | Look for a Damage claims area | Absent until an admin ticks "Damage claims" on the account; the API refuses too | Auto — smoke-rbac + api |
-| D-13 | Camera reload survival | Mid-job, open Report damage, pick a reason + note + photo — then let the phone camera reload the page (or reload by hand) | You land BACK on the same job with the sheet open and the reason, note and photo intact — never on the home screen. The same holds mid-walk-around and mid-estimate | Auto — smoke-mobile |
+| D-8 | Finding → inspector | Finish a walk with any finding | No grade offered and no third option: only "← Previous" and "Send to inspector". Nothing is written until you send | Auto — smoke-inspections |
+| D-9 | Back to the task | Send to inspector (or apply a grade on a clean walk) | You land back on the JOB, standing on the Load step — not the home screen | Auto — smoke-inspections |
+| D-10 | No damage queue | Open Inspections as a plain driver | Needs inspection and Reviewed only — Damage review needs inspector rights | Auto — smoke-inspections |
+| D-11 | Clean walk | Finish with no findings | Model’s grade offered — Apply, or "Send to Inspector" for a second opinion; both return to the home screen | Auto — smoke-handoff |
+| D-12 | Report damage | On the job screen tap Report damage | Optional photo allowed (not required); reasons + note; report appends to the unit’s inspection reason; can report repeatedly | Auto — smoke-round |
+| D-13 | Schedule moved | Look at the bottom nav | No Schedule tab — it lives under Profile → Schedule & availability | Auto — smoke-round |
+| D-14 | Claims need a grant | Look for a Damage claims area | Absent until an admin ticks "Damage claims" on the account; the API refuses too | Auto — smoke-rbac + api |
+| D-15 | Camera reload survival | Mid-job, open Report damage, pick a reason + note + photo — then let the phone camera reload the page (or reload by hand) | You land BACK on the same job with the sheet open and the reason, note and photo intact — never on the home screen. The same holds mid-walk-around and mid-estimate | Auto — smoke-mobile |
 
 ## I · Inspector
 
@@ -72,12 +75,15 @@ Final grader. Verifies field-crew findings, releases holds, raises claims.
 
 | # | Feature | Steps | Expect | Coverage |
 |---|---|---|---|---|
-| I-1 | Inspections queue | Open the Inspections tab | Held units listed with the crew’s findings; finding photos open the full-screen viewer | Auto — smoke-viewer |
-| I-2 | Same walk, final say | Walk a held unit | Identical 8-station walk; the inspector’s findings are recorded but never re-queue to an inspector | Auto — smoke-claimws |
-| I-3 | Hold release | Finish the walk and apply the grade | Hold clears; the unit re-promotes to the marketplace once its 8 photos exist | Auto — api |
-| I-4 | Claim gate | Try "open a damage claim" on a unit with no photographed finding | Not offered — the screen says to walk the unit and photograph the damage first | Auto — api + smoke-walk |
-| I-5 | Claim evidence | Open a claim from a photographed finding | The walk-around photos ride in as the claim’s evidence, captioned by reason | Auto — api |
-| I-6 | Inspector sends to supplier | Complete Review → Estimate → Send on a claim | Send goes to the SUPPLIER (who owns the line relationship); Submit-to-Shipper is not offered | Auto — smoke-claimws + smoke-round |
+| I-1 | Three queues | Open the Inspections tab | Pills: Needs inspection · Damage review · Reviewed, each with a count | Auto — smoke-inspections |
+| I-2 | Reading a walk | Damage review → open a held unit | Who walked it, what they answered at EVERY station (clean answers included), the damage they reported with notes, and every photo that walk produced | Auto — smoke-inspections |
+| I-3 | Original inspection | Needs inspection → open a unit | "No inspection on file — this one is yours": a driver moved it without inspecting, so the first inspection happens here | Auto — smoke-inspections |
+| I-4 | Reviewed queue | Open Reviewed | Previously inspected units, plus claims in flight with the estimate upload | Auto — smoke-claims |
+| I-5 | Same walk, final say | Walk a held unit | Identical 8-station walk; the inspector’s findings are recorded but never re-queue to an inspector | Auto — smoke-claimws |
+| I-6 | Hold release | Finish the walk and apply the grade | Hold clears; the unit re-promotes to the marketplace once its 8 photos exist | Auto — api |
+| I-7 | Claim gate | Try "open a damage claim" on a unit with no photographed finding | Not offered — the screen says to walk the unit and photograph the damage first | Auto — api + smoke-walk |
+| I-8 | Claim evidence | Open a claim from a photographed finding | The walk-around photos ride in as the claim’s evidence, captioned by reason | Auto — api |
+| I-9 | Inspector sends to supplier | Complete Review → Estimate → Send on a claim | Send goes to the SUPPLIER (who owns the line relationship); Submit-to-Shipper is not offered | Auto — smoke-claimws + smoke-round |
 
 ## SU · Supplier
 
@@ -176,8 +182,7 @@ End-to-end flows that cross portals.
 | Types | `cd apps/web && npx tsc --noEmit` | clean |
 | Demo build | `cd apps/web && VITE_DEMO_STATIC=1 npm run build` | clean |
 | API suite (api) | `cd apps/api && node test.mjs  (throwaway DATA_DIR)` | 205 checks |
-| Mobile sweep | `node apps/web/e2e/smoke-mobile.mjs — camera round-trip reload survival on every field-app capture flow, plus picker hygiene (see apps/web/e2e/README.md)` | 16 checks |
-| Browser sweeps | `Playwright vs the built demo: smoke-batch · smoke-viewer · smoke-lightbox · smoke-round · smoke-claimws · smoke-walk · smoke-rbac · smoke-walkfix · smoke-photos · smoke-handoff — being re-materialized into apps/web/e2e/ (they previously ran from scratch space)` | 262 checks |
+| Browser sweeps | `node apps/web/e2e/run-all.mjs — smoke-admin · smoke-claims · smoke-inspections · smoke-mobile · smoke-viewer, all against the built demo (see apps/web/e2e/README.md)` | 139 checks |
 
 Playwright notes for whoever extends the sweeps: dismiss (or pre-seed
 `sessionStorage.sbx_zip_prompted`) before hovering marketplace cards; admin left-nav

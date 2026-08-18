@@ -72,9 +72,9 @@ function demoUser(overrides: Partial<AuthUser> = {}): AuthUser {
 function accountFor(email: string): Partial<AuthUser> | null {
   let norm = String(email || '').trim().toLowerCase()
   // Demo-only extra account: the inspector role — lands in the field app
-  // with access to the AI condition-grading flow. The old adjuster@ address
+  // with access to the AI condition-grading flow.
   // still works; it was the same role under its previous name.
-  if (norm === 'inspector@mvpcontainer.com' || norm === 'adjuster@mvpcontainer.com') {
+  if (norm === 'inspector@mvpcontainer.com') {
     // Carries the 'claims' grant an admin would tick, so the demo shows the
     // claim workspace; a driver without it sees inspections only.
     return { email: norm, role: 'inspector', name: 'Container Inspector', roles: ['marketplace', 'claims'] }
