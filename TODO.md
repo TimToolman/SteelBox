@@ -221,6 +221,42 @@ Recurring billing, once the till works.
 - [ ] ROI per reseller × ZIP zone × channel; scheduled executive email.
 - [ ] Optional HubSpot **read-only** mirror if the team wants a familiar CRM UI.
 
+## Aarcadian partnership — supply, consignment, damage split
+
+Runs alongside the phases above, on the partner's calendar rather than ours.
+Rationale and the full term-sheet breakdown: `AARCADIAN-AGREEMENT.md`.
+MOU is at v0.3 (`SteelBox-Aarcadian-MOU-v0.3.docx`) — non-binding.
+
+**Paper (blocks nothing technical, but blocks the relationship):**
+
+- [ ] Mutual NDA + IP assignment signed **before** the workflow design sessions — MOU §6
+      asks Aarcadian to help design the repair→estimate→shipper flow, and contributed
+      design with no assignment clause is a claim waiting to happen.
+- [ ] Settle the three MOU §9 questions in one working session: the 50/50 basis
+      (recovery vs. estimate — recommendation is recovery plus a fixed inspection fee),
+      repair-yard selection and the estimate approval threshold, and whether the 45-mile
+      free radius covers gate-buys.
+- [ ] Counsel drafts the master agreement + Schedule A (supply & consignment),
+      Schedule B (damage, estimates, 50/50), Schedule C (platform licence).
+
+**Build — what the agreement promises that the platform can't do yet:**
+
+- [ ] **Consignment ownership** on containers: owned vs. held-on-consignment, the
+      consignor of record, and title passing at a named moment. Gated on the Postgres
+      move in P1 for the same reason payments are.
+- [ ] **Settlement ledger** — what is owed to the consignor per sold unit, when it was
+      paid, and a statement either side can pull. Today the money side stops at the order.
+- [ ] **Damage split fields** on claims: split basis, amount recovered from the line,
+      amount paid out and to whom. `estimateAmount` alone can't settle a 50/50.
+- [ ] **Transfer stations** as a location type holding another party's inventory —
+      depots exist, stations don't.
+- [ ] **Supplier access audit trail** — who at the supplier viewed or changed what,
+      which is what makes the Schedule C licence enforceable.
+- [x] As-is damaged listings: grade `D` with 1–5 severity, damage photos on the listing
+      and a pre-filled discount ladder, kept distinct from `R` (Refurbished). The shared
+      grade badge now renders `D` instead of falling back to an unlabelled grey chip —
+      2026-08-18
+
 ## Explicitly NOT doing (and why)
 - [ ] ~~GoHighLevel / HubSpot as system of record~~ — a second copy of contacts and consent
       to reconcile; GHL's sub-account model fights our reseller/territory data.

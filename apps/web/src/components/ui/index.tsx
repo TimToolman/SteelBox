@@ -7,7 +7,7 @@ import React, { useEffect, useRef } from 'react'
 
 // ── Types ──────────────────────────────────────────────────
 
-export type GradeKey = 'A' | 'B' | 'C' | 'R' | 'X'
+export type GradeKey = 'A' | 'B' | 'C' | 'R' | 'X' | 'D'
 export type StatusKey =
   | 'available'
   | 'sale_in_progress'
@@ -33,6 +33,7 @@ const GRADE_COLORS: Record<GradeKey, string> = {
   C: '#D97706',
   R: '#6D28D9',
   X: '#374151',
+  D: '#B3261E',
 }
 
 const GRADE_LABELS: Record<GradeKey, string> = {
@@ -41,6 +42,7 @@ const GRADE_LABELS: Record<GradeKey, string> = {
   C: 'Wind & Watertight',
   R: 'Refurbished',
   X: 'Custom Build',
+  D: 'Damaged — sold as-is',
 }
 
 interface GradeBadgeProps {
