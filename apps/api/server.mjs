@@ -104,7 +104,7 @@ const SCHEMAS = {
     // customEta/customBuildName only apply to custom-build orders
     // (status custom_in_progress): the promised completion date + which
     // catalog build the unit is being fabricated as.
-    headers: ['id','sku','guid','stockNumber','size','grade','condition','color','status','buyPrice','rentMonthly','photos','photoCount','has360','depotLocation','bayNumber','inspectorName','inspectedAt','deliveryIncluded','listingType','createdAt','purchaseCost','conditionScore','customEta','customBuildName','aiGraded','supplierId','damagePhotos','damageSeverity','preDamagePrice','inspectionRequired','inspectionReason','inspectionFlaggedBy','inspectionFlaggedAt','inspectionFindings','inspectionKind'],
+    headers: ['id','sku','guid','stockNumber','size','grade','condition','color','status','buyPrice','rentMonthly','photos','photoCount','has360','depotLocation','bayNumber','inspectorName','inspectedAt','deliveryIncluded','listingType','createdAt','purchaseCost','conditionScore','customEta','customBuildName','aiGraded','supplierId','damagePhotos','damageSeverity','preDamagePrice','inspectionRequired','inspectionReason','inspectionFlaggedBy','inspectionFlaggedAt','inspectionFindings','inspectionKind','inspectionAnswers'],
     types: {
       buyPrice: 'number', rentMonthly: 'numberOrNull', photoCount: 'number', purchaseCost: 'number', conditionScore: 'number',
       has360: 'boolean', deliveryIncluded: 'boolean', aiGraded: 'boolean', inspectionRequired: 'boolean',
@@ -1308,17 +1308,16 @@ async function handleRequest(req, res) {
     // Resolve the signed-in user (if any) once for the whole request.
     const user = currentUser(req)
     const denied = (status = 401, message = 'Sign in required') => send(res, status, { message })
-    // 'inspector' (container condition grader; 'adjuster' is the legacy name
-    // for the same role) carries driver-level access: field-app reads plus
-    // container updates from the grading flow. Drivers get the inverse — they
-    // MAY inspect and grade, they're just never required to.
+    // 'inspector' (the container condition grader) carries driver-level
+    // access: field-app reads plus container updates from the grading flow.
+    // Drivers get the inverse — they MAY inspect and grade, they're just
+    // never required to.
     // Effective roles = primary role + portal grants (supplier/shipper), so a
     // customer granted the supplier portal passes hasRole('supplier').
     // 'marketplace' is a sign-in gate, not a permission, so it's excluded.
-    const INSPECTOR_ROLES = ['inspector', 'adjuster']
     const hasRole = (...roles) => !!user &&
       (roles.includes(user.role)
-        || (INSPECTOR_ROLES.includes(user.role) && (roles.includes('driver') || roles.includes('inspector')))
+        || (user.role === 'inspector' && roles.includes('driver'))
         || (user.role === 'driver' && roles.includes('inspector'))
         || grantsOf(user).some(g => g !== 'marketplace' && roles.includes(g)))
 
@@ -1542,7 +1541,7 @@ async function handleRequest(req, res) {
         if (!body.password || String(body.password).length < 8) return send(res, 400, { message: 'Password must be at least 8 characters' })
         const rec = {
           id: uid('usr'), email, passwordHash: hashPassword(body.password),
-          role: ['admin', 'driver', 'inspector', 'adjuster', 'customer', 'supplier', 'shipper'].includes(body.role) ? body.role : 'customer',
+          role: ['admin', 'driver', 'inspector', 'customer', 'supplier', 'shipper'].includes(body.role) ? body.role : 'customer',
           name: body.name || email, phone: body.phone || '',
           driverId: body.driverId || '', customerId: body.customerId || '',
           // Portal grants: marketplace (base) + supplier/shipper portals, with
@@ -1589,7 +1588,7 @@ async function handleRequest(req, res) {
         if (body.shipperId != null) patch.shipperId = body.shipperId
         // Re-homing an account to another reseller is HQ-only.
         if (body.sellerId != null && !tenant) patch.sellerId = body.sellerId
-        if (['admin', 'driver', 'inspector', 'adjuster', 'customer', 'supplier', 'shipper'].includes(body.role)) patch.role = body.role
+        if (['admin', 'driver', 'inspector', 'customer', 'supplier', 'shipper'].includes(body.role)) patch.role = body.role
         if (body.active != null) patch.active = body.active === true
         if (body.password) {
           if (String(body.password).length < 8) return send(res, 400, { message: 'Password must be at least 8 characters' })

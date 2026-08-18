@@ -130,9 +130,29 @@
   only in React.
 
 - Browser sweeps live IN THE REPO at `apps/web/e2e/` (see its README
-  for the run recipe) — sweeps kept in scratch space were lost to an
-  environment reset once. `smoke-mobile.mjs` is the first committed
-  suite; add new sweeps there, not to /tmp.
+  for the run recipe and the suite map) — an earlier set kept in scratch
+  space was lost to an environment reset. `node e2e/run-all.mjs` runs
+  them all. Add new sweeps there, never to /tmp.
+
+- Three inspection queues, one rule each, shared by the field app's
+  Inspections tab and the marketplace's Inspections portal:
+  `inspectionRequired` → **damage** (a walk found something),
+  else `aiGraded` → **reviewed**, else **initial** (nobody has walked
+  it — a driver only moved it, so the inspector runs the original
+  inspection). The damage queue needs inspector rights (role
+  `inspector`, admin, or a driver with the `claims` grant); a plain
+  driver grades units and never reviews reported damage.
+
+- A walk records `inspectionAnswers` (JSON, keyed by
+  INSPECTOR_QUESTIONS key) next to `inspectionFindings`, because an
+  inspector reading someone else's walk needs the answers, not just the
+  photos. `answersOf()` / `walkedBy()` in lib/api.ts read them back;
+  no answers and no findings means nobody has inspected the unit.
+
+- A driver who finds damage never grades: the walk ends with exactly
+  two ways on — back a stop, or Send to inspector — and nothing is
+  written until they choose. Both outcomes return to the job at its
+  Load step, not the home screen.
 
 - The full manual + automated regression plan lives in `TESTPLAN.md`
   — keep it current when flows change; the tester team runs it by hand.

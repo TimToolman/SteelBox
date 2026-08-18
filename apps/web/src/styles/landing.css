@@ -140,6 +140,21 @@
   background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.10) 0 1px, rgba(255,255,255,0) 1px 7px, rgba(0,0,0,.10) 7px 8px, rgba(255,255,255,0) 8px 14px);
 }
 .ld-hero-inner { position: relative; z-index: 2; max-width: 880px; margin: 0 auto; padding: 62px 20px 66px; transform: translate3d(0, var(--ld-par-fg), 0); }
+/* On a phone the headline should be the first thing under the nav, not a
+   screenful down. Padding and the gaps between hero rows all tighten. */
+@media (max-width: 640px) {
+  /* The 88vh stage with vertically-centred copy is what leaves a phone
+     staring at empty steel: on a small screen the hero is exactly as tall
+     as what it says, starting right under the nav. */
+  .ld-hero--portal { min-height: 0; align-items: flex-start; }
+  .ld-hero-inner { padding: 22px 18px 30px; }
+  .ld-hero--portal h1 { line-height: 1.06; }
+  .ld-hero--portal .ld-hero-sub { margin-top: 12px; }
+  .ld-hero-ctas { margin-top: 16px; }
+  .ld-searchbar { margin-top: 20px; }
+  .ld-hero-trust { margin-top: 18px; gap: 8px 18px; }
+  .ld-hero-tagline { margin-top: 10px; }
+}
 /* Live-status badge */
 .ld-hero-badge {
   display: inline-flex; align-items: center; gap: 9px; margin-bottom: 22px;

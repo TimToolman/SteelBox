@@ -258,18 +258,17 @@ function Hero({ tenant }: { tenant: Tenant }) {
         <div className="ld-hero-texture" />
       </div>
       <div className="ld-hero-inner">
-        <div className="ld-hero-badge ld-rise ld-rise--1">
-          <i aria-hidden="true" />Live inventory · Real photos · AI-verified grades
-        </div>
-        <h1 className="ld-rise ld-rise--2">
+        {/* The headline leads. The badge that used to sit above it repeated
+            what the checklist below already says, and on a phone it pushed
+            the promise a third of the way down the screen. */}
+        <h1 className="ld-rise ld-rise--1">
           Pick It. See It.{' '}
           <span className="ld-hero-accent">Price It. Track It.</span>
         </h1>
-        <p className="ld-hero-sub ld-rise ld-rise--3">
-          Your exact container — real photos, AI-verified grade, an all-in price to your ZIP,
-          and tracked delivery in 3–5 days. No stock photos. No call-for-quote. No mystery.
+        <p className="ld-hero-sub ld-rise ld-rise--2">
+          Your exact container — real photos, an all-in price to your ZIP, delivered in 3–5 days.
         </p>
-        <form className="ld-searchbar ld-rise ld-rise--4" onSubmit={submit}>
+        <form className="ld-searchbar ld-rise ld-rise--3" onSubmit={submit}>
           <label htmlFor="hero-zip" style={{ position: 'absolute', left: '-9999px' }}>Delivery ZIP code</label>
           <input
             id="hero-zip" ref={zipRef} inputMode="numeric" pattern="[0-9]{5}"
