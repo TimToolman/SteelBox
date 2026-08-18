@@ -17,7 +17,7 @@
 
 import React, { useMemo, useState } from 'react'
 import {
-  claims as claimsApi, photoUrl, fileToDataUrl, findingsOf,
+  claims as claimsApi, photoUrl, fileToDataUrl, findingsOf, claimEvents,
   type DamageClaim, type Container, type DamageFinding,
 } from '../../lib/api'
 import { damageLabel, SEVERITY_WORD } from '../../lib/grading'
@@ -41,9 +41,13 @@ const pickDoc = (): Promise<File | null> => new Promise(resolve => {
   el.click()
 })
 
-export function ClaimWorkspace({ claim, unit, onClaim, onClose, toast }: {
+export function ClaimWorkspace({ claim, unit, role = 'supplier', onClaim, onClose, toast }: {
   claim: DamageClaim
   unit?: Container | null          // the unit, for its documentation photos
+  // Who is working it. An inspector reviews and prices, then hands it to the
+  // supplier — the supplier owns the relationship with the shipping line and
+  // is the one who files.
+  role?: 'supplier' | 'inspector'
   onClaim: (c: DamageClaim) => void
   onClose: () => void
   toast: (m: string) => void
@@ -62,6 +66,7 @@ export function ClaimWorkspace({ claim, unit, onClaim, onClose, toast }: {
   const reasons = claim.photoReasons || []
   const notes = claim.photoNotes || []
   const findings: DamageFinding[] = useMemo(() => findingsOf(unit), [unit])
+  const timeline = useMemo(() => claimEvents(claim), [claim])
   const unitPhotos = (unit?.photos || []).filter(Boolean)
 
   const money = Number(amount) || 0
@@ -110,6 +115,14 @@ export function ClaimWorkspace({ claim, unit, onClaim, onClose, toast }: {
       onClaim(updated)
       toast(`Submitted to ${claim.shipperName} — document, .zip and sign-in link all sent`)
     } catch (e) { toast(e instanceof Error ? e.message : 'Could not submit the claim') } finally { setBusy('') }
+  }
+  const handToSupplier = async () => {
+    setBusy('handoff')
+    try {
+      const updated = await claimsApi.share(claim.id, 'handoff')
+      onClaim(updated)
+      toast(`Sent to ${claim.supplierName} — they submit it to ${claim.shipperName}`)
+    } catch (e) { toast(e instanceof Error ? e.message : 'Could not hand it over') } finally { setBusy('') }
   }
   const downloadZip = async () => {
     setBusy('zip')
@@ -258,6 +271,22 @@ export function ClaimWorkspace({ claim, unit, onClaim, onClose, toast }: {
             </div>
           )}
 
+          {/* Who did what, when — read here with the evidence rather than
+              scattered down a list of claims. */}
+          {timeline.length > 0 && (
+            <div style={card}>
+              <div style={label}>Audit timeline</div>
+              {timeline.map((e, i) => (
+                <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'baseline', padding: '4px 0', fontSize: '11.5px', borderTop: i ? `1px solid ${DIV}` : 'none' }}>
+                  <span style={{ fontFamily: 'monospace', color: INK3, flexShrink: 0, width: '118px' }}>
+                    {new Date(e.t).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                  </span>
+                  <span style={{ color: INK, lineHeight: 1.45 }}>{e.text} <span style={{ color: INK3 }}>— {e.actor}</span></span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <button onClick={toEstimate} style={primary(BLUE)}>Reviewed — add the estimate →</button>
         </>
       )}
@@ -330,15 +359,28 @@ export function ClaimWorkspace({ claim, unit, onClaim, onClose, toast }: {
             </button>
           </div>
 
-          <button onClick={submit} disabled={!!busy} style={action(GREEN)}>
-            <span style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: INK }}>
-              {busy === 'submit' ? 'Submitting…' : 'Submit to Shipper'}
-            </span>
-            <span style={{ display: 'block', fontSize: '11.5px', color: INK2, lineHeight: 1.5, marginTop: '2px' }}>
-              The formal filing. Emails {claim.shipperName} the document, the .zip and a sign-in link, and moves the
-              claim to awaiting their decision.
-            </span>
-          </button>
+          {/* An inspector prices it and hands it over; the supplier files it. */}
+          {role === 'inspector' ? (
+            <button onClick={handToSupplier} disabled={!!busy} style={action(GREEN)}>
+              <span style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: INK }}>
+                {busy === 'handoff' ? 'Sending…' : `Send to ${claim.supplierName}`}
+              </span>
+              <span style={{ display: 'block', fontSize: '11.5px', color: INK2, lineHeight: 1.5, marginTop: '2px' }}>
+                Hands the reviewed, priced claim to the supplier — they own the relationship with
+                {' '}{claim.shipperName} and file it from here.
+              </span>
+            </button>
+          ) : (
+            <button onClick={submit} disabled={!!busy} style={action(GREEN)}>
+              <span style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: INK }}>
+                {busy === 'submit' ? 'Submitting…' : 'Submit to Shipper'}
+              </span>
+              <span style={{ display: 'block', fontSize: '11.5px', color: INK2, lineHeight: 1.5, marginTop: '2px' }}>
+                The formal filing. Emails {claim.shipperName} the document, the .zip and a sign-in link, and moves the
+                claim to awaiting their decision.
+              </span>
+            </button>
+          )}
 
           <button onClick={downloadZip} disabled={!!busy} style={action(BLUE)}>
             <span style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: INK }}>

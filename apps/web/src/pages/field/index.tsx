@@ -196,7 +196,6 @@ function BottomNav({ active, onNav, unread = 0 }: { active: Screen; onNav: (s: S
   const items: { id: Screen; label: string; icon: string; badge?: number }[] = [
     { id: 'dashboard', label: 'Home', icon: 'home' },
     { id: 'jobs',      label: 'Pickups & Returns', icon: 'truck' },
-    { id: 'schedule',  label: 'Schedule', icon: 'calendar' },
     { id: 'grade',     label: 'Inspections', icon: 'star' },
     { id: 'inbox',     label: 'Inbox', icon: 'inbox', badge: unread },
     { id: 'profile',   label: 'Profile', icon: 'user' },
@@ -1611,6 +1610,7 @@ export default function FieldAppPage() {
         me={me}
         orders={orderList}
         onUpdated={() => { loadMe().catch(() => {}); fetchOrders().catch(() => {}) }}
+        onSchedule={() => goTo('schedule')}
         toast={toast}
       />
     ),
@@ -1628,7 +1628,8 @@ export default function FieldAppPage() {
   }
 
   // Camera/review/success and the job flow all belong to the Pickups & Returns tab.
-  const navActive: Screen = ['review', 'success', 'flow', 'camera', 'walk', 'gradeReview'].includes(screen) ? 'jobs' : screen
+  const navActive: Screen = ['review', 'success', 'flow', 'camera', 'walk', 'gradeReview'].includes(screen) ? 'jobs'
+    : screen === 'schedule' ? 'profile' : screen
 
   return (
     <div style={page}>

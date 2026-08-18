@@ -963,17 +963,21 @@ export interface RepairShop {
 // The supplier-facing tracker follows these stages in order; the last two
 // are terminal outcomes of the supplier's retail-or-wholesale decision.
 export type ClaimStatus =
-  | 'awaiting_inspection'   // field inspector documents the damage
-  | 'awaiting_estimate'     // supplier attaches the repair estimate
+  // 'awaiting_inspection' is legacy: a claim is now raised only once an
+  // inspection is done and submitted, so it opens at the estimate. Rows
+  // filed before that still resolve, they just aren't produced any more.
+  | 'awaiting_inspection'
+  | 'awaiting_estimate'     // review the evidence, price the repair
   | 'awaiting_shipper'      // shipping line reviews the estimate
   | 'awaiting_decision'     // supplier decides: repair (retail) or sell as damaged
   | 'repair_scheduled'      // booked with an approved repair shop
   | 'sell_as_damaged'       // listed on the marketplace as grade D
   | 'closed'
 
+// The pipeline a claim actually travels. The inspection happens BEFORE a
+// claim exists, so it is not a stage here.
 export const CLAIM_STAGES: { key: ClaimStatus; label: string }[] = [
-  { key: 'awaiting_inspection', label: 'Awaiting inspection' },
-  { key: 'awaiting_estimate', label: 'Awaiting estimate' },
+  { key: 'awaiting_estimate', label: 'Review & estimate' },
   { key: 'awaiting_shipper', label: 'Awaiting shipper approval' },
   { key: 'awaiting_decision', label: 'Awaiting supplier decision — retail or wholesale' },
 ]
@@ -1192,7 +1196,7 @@ export const claims = {
     request<DamageClaim>(`/claims/${id}/photos/${slot}`, { method: 'DELETE' }),
   // Email the shipper the claim packet, a login link, or the packaged .zip;
   // all land on the audit timeline and re-arm the shipper-viewed stamp.
-  share: (id: string, mode: 'packet' | 'link' | 'package' | 'document' | 'submit') =>
+  share: (id: string, mode: 'packet' | 'link' | 'package' | 'document' | 'submit' | 'handoff') =>
     request<DamageClaim>(`/claims/${id}/share`, { method: 'POST', body: JSON.stringify({ mode }) }),
   // Signed 30-day download link for the whole claim file (photos + summary).
   packageLink: (id: string) =>

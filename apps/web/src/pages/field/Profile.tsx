@@ -41,10 +41,11 @@ function Tile({ label, value, sub }: { label: string; value: React.ReactNode; su
   )
 }
 
-export function DriverProfileScreen({ me, orders, onUpdated, toast }: {
+export function DriverProfileScreen({ me, orders, onUpdated, onSchedule, toast }: {
   me: Driver | null
   orders: Order[]
   onUpdated: () => void
+  onSchedule?: () => void      // the week's availability lives under Profile
   toast: (m: string) => void
 }) {
   const [saving, setSaving] = useState(false)
@@ -166,6 +167,26 @@ export function DriverProfileScreen({ me, orders, onUpdated, toast }: {
           <div style={{ marginTop: '3px' }}><Stars value={avgRating} /> <span style={{ fontSize: '12px', fontWeight: 700 }}>{avgRating.toFixed(1)}</span> <span style={{ fontSize: '11px', color: INK2 }}>({rated.length ? `${rated.length} customer rating${rated.length === 1 ? '' : 's'}` : 'career'})</span></div>
         </div>
       </div>
+
+      {/* The week — a driver's own hours belong with their own details, not
+          in the bottom nav beside the day's work. */}
+      {onSchedule && (
+        <div style={{ margin: '0 12px 10px' }}>
+          <button onClick={onSchedule}
+            style={{ width: '100%', padding: '14px', borderRadius: '14px', border: `1.5px solid ${DIV}`, background: '#fff', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '11px', textAlign: 'left' }}>
+            <span style={{ flexShrink: 0, width: '36px', height: '36px', borderRadius: '11px', background: '#EEF2FF', display: 'grid', placeItems: 'center', color: BLUE }}>
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="16" rx="2.5" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>
+            </span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: INK }}>Schedule & availability</span>
+              <span style={{ display: 'block', fontSize: '11.5px', color: INK2, marginTop: '1px' }}>Your jobs this week and the days you can drive</span>
+            </span>
+            <span style={{ flexShrink: 0, color: INK2 }}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5l7 7-7 7" /></svg>
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Stats */}
       <div style={card}>

@@ -17,7 +17,7 @@ import { Snackbar } from '../../components/ui'
 import { ClaimTimeline, ClaimPacket, ClaimPackageActions, photoCaption } from '../supplier/claimkit'
 import { FilterRail, FilterGroup, ChipRow, Chip, useSetFilter, railSelect, PeriodFilter, PERIOD_ALL, periodPasses, type Period } from '../../components/filters'
 
-const INK = '#0D0E12', INK2 = '#44474F', INK3 = '#6B7280', DIV = '#E2E4E9', RED = '#B3261E', GREEN = '#1B7A5A'
+const INK = '#0D0E12', INK2 = '#44474F', INK3 = '#6B7280', DIV = '#E2E4E9', BLUE = '#0057B8', RED = '#B3261E', GREEN = '#1B7A5A'
 const card: React.CSSProperties = { background: '#fff', border: `1px solid ${DIV}`, borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,.06)' }
 
 // embedded: rendered as a tab inside the marketplace (single sign-in) — the
@@ -29,6 +29,21 @@ export default function ShipperReviewPage({ embedded = false }: { embedded?: boo
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
   const [packet, setPacket] = useState<DamageClaim | null>(null)
+  // Claims this session has actually opened and read.
+  const [reviewed, setReviewed] = useState<Set<string>>(new Set())
+
+  // Opens the whole claim — every photo, damage, note and the estimate — in
+  // its own tab, and marks it read so the decision buttons appear.
+  const openReview = async (c: DamageClaim) => {
+    setBusy(c.id)
+    try {
+      const { url } = await claimsApi.documentLink(c.id)
+      window.open(url, '_blank', 'noopener')
+      setReviewed(prev => new Set(prev).add(c.id))
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not open the claim')
+    } finally { setBusy(null) }
+  }
   const [digest, setDigest] = useState<AuthUser['digestFreq']>(user?.digestFreq || 'per_container')
   // Deep link from a share email: /shipper?claim=CLM-0003 pins that claim first
   const wanted = new URLSearchParams(window.location.search).get('claim')
@@ -144,16 +159,32 @@ export default function ShipperReviewPage({ embedded = false }: { embedded?: boo
             )}
             <div style={{ fontSize: '11px', color: INK3, marginTop: '6px' }}>Inspected {c.inspectedAt ? new Date(c.inspectedAt).toLocaleDateString() : '—'} by {c.inspectorName || '—'}</div>
 
-            <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
-              <button onClick={() => setPacket(c)} style={{ padding: '9px 16px', borderRadius: '999px', border: `1.5px solid ${DIV}`, background: '#fff', color: INK2, fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>📄 Claim packet (PDF)</button>
-              <ClaimPackageActions claim={c} toast={toast} />
-              <input value={notes[c.id] ?? ''} onChange={e => setNotes(p => ({ ...p, [c.id]: e.target.value }))} placeholder="Decision notes (optional)"
-                style={{ flex: 1, minWidth: '220px', padding: '9px 12px', border: `1.5px solid ${DIV}`, borderRadius: '10px', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }} />
-              <button onClick={() => decide(c, 'approved')} disabled={busy === c.id}
-                style={{ padding: '9px 18px', borderRadius: '999px', border: 'none', background: GREEN, color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>Approve estimate</button>
-              <button onClick={() => decide(c, 'rejected')} disabled={busy === c.id}
-                style={{ padding: '9px 18px', borderRadius: '999px', border: 'none', background: RED, color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>Reject</button>
-            </div>
+            {/* Approving is money out the door, so it follows an actual read:
+                the whole claim has to be opened before the buttons unlock. */}
+            {!reviewed.has(c.id) ? (
+              <div style={{ marginTop: '12px', padding: '13px 15px', background: '#FFF8E1', border: '1.5px solid #F2C94C', borderRadius: '12px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: INK }}>Review the claim before deciding</div>
+                <div style={{ fontSize: '12px', color: INK2, lineHeight: 1.5, margin: '3px 0 10px' }}>
+                  Photos, damages, notes and the repair estimate — one page. Approving or rejecting
+                  unlocks once you've opened it.
+                </div>
+                <button onClick={() => openReview(c)} disabled={busy === c.id}
+                  style={{ padding: '10px 18px', borderRadius: '999px', border: 'none', background: BLUE, color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {busy === c.id ? 'Opening…' : 'Open the full claim →'}
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontSize: '11.5px', fontWeight: 700, color: GREEN }}>✓ Reviewed</span>
+                <button onClick={() => openReview(c)} style={{ padding: '9px 16px', borderRadius: '999px', border: `1.5px solid ${DIV}`, background: '#fff', color: INK2, fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>Read it again</button>
+                <input value={notes[c.id] ?? ''} onChange={e => setNotes(p => ({ ...p, [c.id]: e.target.value }))} placeholder="Decision notes (optional)"
+                  style={{ flex: 1, minWidth: '200px', padding: '9px 12px', border: `1.5px solid ${DIV}`, borderRadius: '10px', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }} />
+                <button onClick={() => decide(c, 'approved')} disabled={busy === c.id}
+                  style={{ padding: '9px 18px', borderRadius: '999px', border: 'none', background: GREEN, color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>Approve estimate</button>
+                <button onClick={() => decide(c, 'rejected')} disabled={busy === c.id}
+                  style={{ padding: '9px 18px', borderRadius: '999px', border: 'none', background: RED, color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>Reject</button>
+              </div>
+            )}
             <ClaimTimeline claim={c} />
           </div>
         ))}

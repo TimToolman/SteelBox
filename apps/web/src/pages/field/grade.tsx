@@ -484,6 +484,7 @@ function DamageInspection({ inspectorName, toast, containers, openClaimId, onOpe
   return (
     <ClaimWorkspace
       claim={claim}
+      role="inspector"
       unit={containers.find(c => c.id === claim.containerId || c.sku === claim.containerSku) ?? null}
       onClaim={c => { setClaim(c); refresh() }}
       onClose={() => { setClaim(null); refresh() }}

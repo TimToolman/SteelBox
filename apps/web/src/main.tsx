@@ -7,6 +7,7 @@ import MarketplacePage from './pages/marketplace'
 import AdminPage from './pages/admin/index'
 import SupplierPortalPage from './pages/supplier/index'
 import ShipperReviewPage from './pages/shipper/index'
+import ClaimPage from './pages/claim/index'
 import FieldAppPage from './pages/field/index'
 import { AuthProvider, RequireRole } from './lib/auth'
 import { resolveTenant } from './tenant'
@@ -49,6 +50,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Route path="/shipper" element={
             <RequireRole roles={['shipper', 'admin']} title="Shipper Claims Review">
               <ShipperReviewPage />
+            </RequireRole>
+          } />
+          {/* One claim, full page, its own tab — supplier, inspector or admin */}
+          <Route path="/claim" element={
+            <RequireRole roles={['supplier', 'driver', 'inspector', 'adjuster', 'admin']} title="Damage Claim">
+              <ClaimPage />
             </RequireRole>
           } />
           <Route path="/field" element={

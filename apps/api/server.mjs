@@ -3093,7 +3093,7 @@ async function handleRequest(req, res) {
           vesselRef: String(body.vesselRef || ''),
           // Raised off a completed inspection, so it skips straight to the
           // estimate with the severity the inspection already established.
-          status: body.severity ? 'awaiting_estimate' : 'awaiting_inspection',
+          status: 'awaiting_estimate',
           severity: Number(body.severity) || 0, photos: [], notes: String(body.notes || ''),
           estimateAmount: 0, estimateNotes: '',
           shipperDecision: '', shipperNotes: '', shipperDecidedAt: null,
@@ -3162,11 +3162,16 @@ async function handleRequest(req, res) {
         // the supplier — they're the one holding the estimate.
         if (!hasRole('admin', 'supplier') && !fieldClaims()) return denied(user ? 403 : 401, 'Supplier access, or the claims grant, required')
         const body = await readBody(req)
-        const mode = ['packet', 'package', 'document', 'submit'].includes(body.mode) ? body.mode : 'link'
+        const mode = ['packet', 'package', 'document', 'submit', 'handoff'].includes(body.mode) ? body.mode : 'link'
         const shipperUser = readTable('users').find(x => x.shipperId === claim.shipperId)
-        const to = shipperUser?.email || readTable('shippers').find(x => x.id === claim.shipperId)?.email
+        // A hand-off goes to the supplier who owns the unit, not to the line.
+        const supplierUser = readTable('users').find(x => x.supplierId === claim.supplierId)
+        const to = mode === 'handoff'
+          ? (supplierUser?.email || readTable('suppliers').find(x => x.id === claim.supplierId)?.email)
+          : (shipperUser?.email || readTable('shippers').find(x => x.id === claim.shipperId)?.email)
         const loginUrl = `${SITE_ORIGIN}/shipper?claim=${claim.claimNumber}`
         const SUBJECT = {
+          handoff: `Claim ready to submit — ${claim.containerSku} (${claim.claimNumber})`,
           submit: `Damage claim for your review — ${claim.containerSku} (${claim.claimNumber})`,
           document: `Claim document — ${claim.containerSku} (${claim.claimNumber})`,
           package: `Claim packet — ${claim.containerSku} (${claim.claimNumber})`,
@@ -3174,7 +3179,13 @@ async function handleRequest(req, res) {
           link: `Estimate to review — ${claim.containerSku} (${claim.claimNumber})`,
         }
         const money = `$${Number(claim.estimateAmount || 0).toLocaleString()}`
+        const supplierUrl = `${SITE_ORIGIN}/claim?id=${claim.id}`
         const BODY = {
+          // Inspector → supplier: reviewed and priced, ready for them to file.
+          handoff: `${user?.name || 'The inspector'} has reviewed and priced the damage claim for ${claim.containerSku} (${claim.claimNumber}) — it is ready for you to submit to ${claim.shipperName}.\n\n`
+            + `Damage severity: D\u00b7${claim.severity}\nRepair estimate: ${money}${claim.estimateShop ? ` (${claim.estimateShop})` : ''}\n`
+            + `${claim.estimateNotes ? `Scope: ${claim.estimateNotes}\n` : ''}${claim.notes ? `Note: ${claim.notes}\n` : ''}\n`
+            + `Open the claim: ${supplierUrl}\nRead it as one page: ${documentUrl(claim)}`,
           // The formal submission: everything the line needs, three ways in.
           submit: `${claim.supplierName} is submitting a damage claim against ${claim.shipperName} for ${claim.containerSku} (${claim.claimNumber}).\n\n`
             + `Damage severity: D·${claim.severity}\nRepair estimate: ${money}${claim.estimateShop ? ` (${claim.estimateShop})` : ''}\n`
@@ -3193,8 +3204,11 @@ async function handleRequest(req, res) {
               : `${claim.supplierName} requests your review of a $${Number(claim.estimateAmount).toLocaleString()} repair estimate for ${claim.containerSku}.\n\nSign in to review and decide: ${loginUrl}`),
           'claim', claim.id)
         claim.sharedAt = new Date().toISOString()
-        const HOW = { submit: 'claim submitted to the line', document: 'claim document link', package: 'claim package .zip', packet: 'claim packet', link: 'login link' }
-        addClaimEvent(claim, user.name || claim.supplierName, `Estimate shared with ${claim.shipperName} by email (${HOW[mode] || HOW.link})`)
+        const HOW = { handoff: 'handed to the supplier to submit', submit: 'claim submitted to the line', document: 'claim document link', package: 'claim package .zip', packet: 'claim packet', link: 'login link' }
+        addClaimEvent(claim, user?.name || claim.supplierName,
+          mode === 'handoff'
+            ? `Reviewed and priced — handed to ${claim.supplierName} to submit`
+            : `Estimate shared with ${claim.shipperName} by email (${HOW[mode] || HOW.link})`)
         // Submitting is the formal handoff — it moves the claim's stage too.
         if (mode === 'submit' && claim.status === 'awaiting_estimate') claim.status = 'awaiting_shipper'
         all[idx] = claim
