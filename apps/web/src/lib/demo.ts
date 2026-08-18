@@ -70,9 +70,12 @@ function demoUser(overrides: Partial<AuthUser> = {}): AuthUser {
 // email matches no seeded or session-created account.
 function accountFor(email: string): Partial<AuthUser> | null {
   let norm = String(email || '').trim().toLowerCase()
-  // Demo-only extra account: the container adjuster role — lands in the
-  // field app with access to the AI condition-grading flow.
-  if (norm === 'adjuster@mvpcontainer.com') return { email: norm, role: 'adjuster', name: 'Container Adjuster' }
+  // Demo-only extra account: the inspector role — lands in the field app
+  // with access to the AI condition-grading flow. The old adjuster@ address
+  // still works; it was the same role under its previous name.
+  if (norm === 'inspector@mvpcontainer.com' || norm === 'adjuster@mvpcontainer.com') {
+    return { email: norm, role: 'inspector', name: 'Container Inspector' }
+  }
   // The walk-up demo shopper from the tester guide.
   if (norm === 'demo@mvpcontainers.com') return { email: norm, role: 'customer', name: 'Demo Customer' }
   // Forgive the near-miss for the seeded supplier (.co → .com rename).
@@ -770,6 +773,22 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
       if (i === -1) throw new Error('Not found')
       delete body.password
       rows[i] = { ...rows[i], ...body }
+      // Containers carry the inspection hold (mirrors the API server): damage
+      // reported on a walk-around pulls a listable unit back to draft, and an
+      // inspector's grade releases it so the photo count re-promotes it.
+      if (col === 'containers') {
+        const c = rows[i]
+        if (body.inspectionRequired === true) {
+          c.inspectionFlaggedBy = body.inspectionFlaggedBy || storedUser()?.name || 'Field crew'
+          c.inspectionFlaggedAt = body.inspectionFlaggedAt || new Date().toISOString()
+          if (c.status === 'available' || c.status === 'draft') c.status = 'draft'
+        } else if (body.aiGraded === true || body.inspectedAt) {
+          c.inspectionRequired = false
+          c.inspectionReason = ''
+        }
+        const shots = Array.isArray(c.photos) ? (c.photos as string[]).filter(Boolean).length : 0
+        if (!c.inspectionRequired && c.status === 'draft' && Math.max(Number(c.photoCount) || 0, shots) >= 8) c.status = 'available'
+      }
       return ok(rows[i])
     }
     if (method === 'DELETE' && rid) {

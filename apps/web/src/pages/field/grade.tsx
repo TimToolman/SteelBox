@@ -1,8 +1,8 @@
 // ============================================================
-// Field App — AI Grade screen (drivers & container adjusters)
+// Field App — AI Grade screen (inspectors, and drivers who inspect)
 //
 // Pick a unit → the vision model reads its uploaded photo set →
-// answer the five adjuster questions → the combined model
+// answer the five inspector questions → the combined model
 // proposes a condition grade + 1–5 sub-score → apply, which
 // writes grade / conditionScore / aiGraded / inspectorName /
 // inspectedAt back to the shared container record that the
@@ -14,7 +14,7 @@ import { containers as containersApi, claims as claimsApi, photoUrl, SHOT_LABELS
 import { DamageCollect } from './DamageCollect'
 import { GRADE_META } from '../../lib/specs'
 import {
-  ADJUSTER_QUESTIONS, analyzeContainerPhotos, analyzePhotoList, gradeContainer, assessDamage,
+  INSPECTOR_QUESTIONS, analyzeContainerPhotos, analyzePhotoList, gradeContainer, assessDamage,
   gradeLabel, damageLabel, SEVERITY_WORD,
   type GradeResult, type DamageResult, type PhotoFeatures,
 } from '../../lib/grading'
@@ -50,9 +50,10 @@ interface GradeScreenProps {
 }
 
 export function GradeScreen({ containers, inspectorName, toast, onApplied }: GradeScreenProps) {
-  // Two separate inspection buckets: retail grading (the unit's saleable
-  // condition) and damage claims (sea-freight damage evidence for the
-  // shipper/insurance pipeline). Photos and results never mix.
+  // Two separate inspection buckets: inspection required (the unit's saleable
+  // condition — it can't list until this is done) and damage claims
+  // (sea-freight damage evidence for the shipper/insurance pipeline).
+  // Photos and results never mix.
   const [bucket, setBucket] = useState<'retail' | 'damage'>('retail')
   const [query, setQuery] = useState('')
   const [unit, setUnit] = useState<Container | null>(null)
@@ -64,13 +65,17 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
   const [applying, setApplying] = useState(false)
 
   // Units that CAN be graded: at least one documentation photo uploaded.
+  // Units a driver flagged on the walk-around sort to the top — they are
+  // held off the marketplace until someone here grades them.
   const gradable = useMemo(() => {
     const q = query.trim().toLowerCase()
+    const rank = (c: Container) => c.inspectionRequired ? 0 : c.aiGraded ? 2 : 1
     return containers
       .filter(c => (c.photos || []).filter(Boolean).length > 0)
       .filter(c => !q || c.sku.toLowerCase().includes(q) || (c.depotLocation || '').toLowerCase().includes(q))
-      .sort((a, b) => (a.aiGraded === b.aiGraded ? a.sku.localeCompare(b.sku) : a.aiGraded ? 1 : -1))
+      .sort((a, b) => rank(a) - rank(b) || a.sku.localeCompare(b.sku))
   }, [containers, query])
+  const heldCount = gradable.filter(c => c.inspectionRequired).length
 
   const start = async (c: Container) => {
     setUnit(c); setFeatures(null); setAnswers({}); setResult(null); setAnalyzeProg([0, (c.photos || []).filter(Boolean).length])
@@ -84,6 +89,7 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
   const apply = async () => {
     if (!unit || !result || applying) return
     setApplying(true)
+    const wasHeld = !!unit.inspectionRequired
     try {
       await containersApi.update(unit.id, {
         grade: result.grade,
@@ -91,8 +97,12 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
         aiGraded: true,
         inspectorName,
         inspectedAt: new Date().toISOString(),
+        // The inspection is done — the unit may list again.
+        inspectionRequired: false,
       } as Partial<Container>)
-      toast(`${unit.sku} graded ${gradeLabel(result.grade, result.sub)} — applied to the listing`)
+      toast(wasHeld
+        ? `${unit.sku} graded ${gradeLabel(result.grade, result.sub)} — released to the marketplace`
+        : `${unit.sku} graded ${gradeLabel(result.grade, result.sub)} — applied to the listing`)
       onApplied()
       setUnit(null); setResult(null); setFeatures(null)
     } catch (e) {
@@ -104,7 +114,7 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
 
   const bucketTabs = (
     <div style={{ display: 'flex', gap: '4px', margin: '0 12px 10px', background: '#EEF2FF', border: `1px solid ${DIV}`, borderRadius: '999px', padding: '3px' }}>
-      {([['retail', 'Retail grading'], ['damage', 'Damage claims']] as const).map(([k, label]) => (
+      {([['retail', 'Inspection Required'], ['damage', 'Damage claims']] as const).map(([k, label]) => (
         <button key={k} onClick={() => setBucket(k)}
           style={{ flex: 1, padding: '8px 0', borderRadius: '999px', border: 'none', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: bucket === k ? '#fff' : 'transparent', color: bucket === k ? (k === 'damage' ? '#B3261E' : BLUE) : INK2, boxShadow: bucket === k ? '0 1px 4px rgba(26,28,46,.1)' : 'none' }}>
           {label}
@@ -137,6 +147,17 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
           </div>
         </div>
         {bucketTabs}
+        {heldCount > 0 && (
+          <div style={{ margin: '0 12px 10px', background: '#FFF8E1', border: '1.5px solid #F2C94C', borderRadius: '14px', padding: '11px 13px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+            <span style={{ flexShrink: 0, color: '#7B4F00', marginTop: '1px' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
+            </span>
+            <div style={{ fontSize: '12px', color: INK2, lineHeight: 1.5 }}>
+              <b style={{ color: INK }}>{heldCount} unit{heldCount === 1 ? '' : 's'} held off the marketplace</b> — damage was
+              reported on a walk-around. Grading one here releases it back to the listing.
+            </div>
+          </div>
+        )}
         <div style={{ margin: '0 12px 10px' }}>
           <input
             value={query} onChange={e => setQuery(e.target.value)} placeholder="Search SKU or depot…"
@@ -160,8 +181,16 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
                 <div style={{ fontSize: '11px', color: INK2, marginTop: '2px' }}>
                   {(c.photos || []).filter(Boolean).length} photos · {c.depotLocation || '—'}
                 </div>
+                {c.inspectionRequired && (
+                  <div style={{ fontSize: '11px', color: '#B3261E', marginTop: '3px', lineHeight: 1.4 }}>
+                    {c.inspectionReason || 'Damage reported'}
+                    {c.inspectionFlaggedBy ? <span style={{ color: INK2 }}> · {c.inspectionFlaggedBy}</span> : null}
+                  </div>
+                )}
               </div>
-              {c.aiGraded
+              {c.inspectionRequired
+                ? <span style={{ flexShrink: 0, background: '#FDECEA', color: '#B3261E', borderRadius: '999px', padding: '4px 10px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.4px' }}>HELD</span>
+                : c.aiGraded
                 ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
                     <span style={{ background: meta.color, color: '#fff', borderRadius: '6px', padding: '3px 8px', fontSize: '11px', fontWeight: 700 }}>{gradeLabel(c.grade, c.conditionScore)}</span>
                   </span>
@@ -217,10 +246,10 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
       {/* Step 2 — the five questions */}
       <div style={card}>
         <div style={{ fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '4px' }}>
-          2 · Walk-around — {answered}/{ADJUSTER_QUESTIONS.length} answered
+          2 · Walk-around — {answered}/{INSPECTOR_QUESTIONS.length} answered
         </div>
-        {ADJUSTER_QUESTIONS.map((q, qi) => (
-          <div key={q.key} style={{ padding: '10px 0', borderBottom: qi < ADJUSTER_QUESTIONS.length - 1 ? `1px solid ${DIV}` : 'none' }}>
+        {INSPECTOR_QUESTIONS.map((q, qi) => (
+          <div key={q.key} style={{ padding: '10px 0', borderBottom: qi < INSPECTOR_QUESTIONS.length - 1 ? `1px solid ${DIV}` : 'none' }}>
             <div style={{ fontSize: '13px', fontWeight: 700, color: INK }}>{qi + 1}. {q.title}</div>
             <div style={{ fontSize: '11px', color: INK2, margin: '2px 0 8px', lineHeight: 1.45 }}>{q.detail}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -243,9 +272,9 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
         <div style={{ margin: '0 12px' }}>
           <button
             onClick={compute}
-            disabled={!features || answered < ADJUSTER_QUESTIONS.length}
-            style={{ width: '100%', padding: '15px', borderRadius: '999px', border: 'none', fontSize: '14px', fontWeight: 700, cursor: features && answered === ADJUSTER_QUESTIONS.length ? 'pointer' : 'not-allowed', background: features && answered === ADJUSTER_QUESTIONS.length ? BLUE : '#EEF2FF', color: features && answered === ADJUSTER_QUESTIONS.length ? '#fff' : INK2 }}>
-            {!features ? 'Analyzing photos…' : answered < ADJUSTER_QUESTIONS.length ? `Answer ${ADJUSTER_QUESTIONS.length - answered} more question${ADJUSTER_QUESTIONS.length - answered > 1 ? 's' : ''}` : 'Run grading model'}
+            disabled={!features || answered < INSPECTOR_QUESTIONS.length}
+            style={{ width: '100%', padding: '15px', borderRadius: '999px', border: 'none', fontSize: '14px', fontWeight: 700, cursor: features && answered === INSPECTOR_QUESTIONS.length ? 'pointer' : 'not-allowed', background: features && answered === INSPECTOR_QUESTIONS.length ? BLUE : '#EEF2FF', color: features && answered === INSPECTOR_QUESTIONS.length ? '#fff' : INK2 }}>
+            {!features ? 'Analyzing photos…' : answered < INSPECTOR_QUESTIONS.length ? `Answer ${INSPECTOR_QUESTIONS.length - answered} more question${INSPECTOR_QUESTIONS.length - answered > 1 ? 's' : ''}` : 'Run grading model'}
           </button>
         </div>
       ) : (
@@ -326,7 +355,7 @@ export function FlowGradeCard({ container, features, setFeatures, answers, setAn
       <div style={{ fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '8px' }}>
         AI condition rating · photos {features ? '✓ analyzed' : prog[1] ? `${prog[0]}/${prog[1]}…` : '— none on file'}
       </div>
-      {ADJUSTER_QUESTIONS.map((q, qi) => (
+      {INSPECTOR_QUESTIONS.map((q, qi) => (
         <div key={q.key} style={{ padding: '8px 0', borderBottom: `1px solid ${DIV}` }}>
           <div style={{ fontSize: '12px', fontWeight: 700, color: INK, marginBottom: '6px' }}>{qi + 1}. {q.title}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
@@ -346,7 +375,7 @@ export function FlowGradeCard({ container, features, setFeatures, answers, setAn
           and the next tap is right here, not back at the top of the screen. */}
       <button onClick={() => ready && onFinished()} disabled={!ready}
         style={{ width: '100%', marginTop: '12px', padding: '14px', borderRadius: '999px', border: 'none', fontSize: '14px', fontWeight: 700, cursor: ready ? 'pointer' : 'not-allowed', background: ready ? BLUE : '#EEF2FF', color: ready ? '#fff' : INK2, boxShadow: ready ? '0 3px 10px rgba(0,87,184,.25)' : 'none' }}>
-        {ready ? 'Finished — review the grade' : !features ? 'Analyzing photos…' : `Answer ${ADJUSTER_QUESTIONS.length - answered} more question${ADJUSTER_QUESTIONS.length - answered === 1 ? '' : 's'}`}
+        {ready ? 'Finished — review the grade' : !features ? 'Analyzing photos…' : `Answer ${INSPECTOR_QUESTIONS.length - answered} more question${INSPECTOR_QUESTIONS.length - answered === 1 ? '' : 's'}`}
       </button>
     </div>
   )
@@ -447,7 +476,7 @@ function DamageInspection({ inspectorName, toast, containers }: { inspectorName:
 
   const photosOn = (claim?.photos || []).filter(Boolean).length
   const answered = Object.keys(answers).length
-  const canRun = photosOn >= 2 && answered === ADJUSTER_QUESTIONS.length
+  const canRun = photosOn >= 2 && answered === INSPECTOR_QUESTIONS.length
 
   const run = async () => {
     if (!claim || !canRun) return
@@ -567,10 +596,10 @@ function DamageInspection({ inspectorName, toast, containers }: { inspectorName:
       {/* The five questions */}
       <div style={card}>
         <div style={{ fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '4px' }}>
-          2 · Walk-around — {answered}/{ADJUSTER_QUESTIONS.length} answered
+          2 · Walk-around — {answered}/{INSPECTOR_QUESTIONS.length} answered
         </div>
-        {ADJUSTER_QUESTIONS.map((q, qi) => (
-          <div key={q.key} style={{ padding: '8px 0', borderBottom: qi < ADJUSTER_QUESTIONS.length - 1 ? `1px solid ${DIV}` : 'none' }}>
+        {INSPECTOR_QUESTIONS.map((q, qi) => (
+          <div key={q.key} style={{ padding: '8px 0', borderBottom: qi < INSPECTOR_QUESTIONS.length - 1 ? `1px solid ${DIV}` : 'none' }}>
             <div style={{ fontSize: '12px', fontWeight: 700, color: INK, marginBottom: '6px' }}>{qi + 1}. {q.title}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
               {q.options.map((o, oi) => {
@@ -592,7 +621,7 @@ function DamageInspection({ inspectorName, toast, containers }: { inspectorName:
         <div style={{ margin: '0 12px' }}>
           <button onClick={run} disabled={!canRun}
             style={{ width: '100%', padding: '15px', borderRadius: '999px', border: 'none', fontSize: '14px', fontWeight: 700, cursor: canRun ? 'pointer' : 'not-allowed', background: canRun ? RED : '#EEF2FF', color: canRun ? '#fff' : INK2 }}>
-            {photosOn < 2 ? `Capture ${2 - photosOn} more photo${photosOn === 1 ? '' : 's'}` : answered < ADJUSTER_QUESTIONS.length ? `Answer ${ADJUSTER_QUESTIONS.length - answered} more question${ADJUSTER_QUESTIONS.length - answered === 1 ? '' : 's'}` : 'Determine damage severity'}
+            {photosOn < 2 ? `Capture ${2 - photosOn} more photo${photosOn === 1 ? '' : 's'}` : answered < INSPECTOR_QUESTIONS.length ? `Answer ${INSPECTOR_QUESTIONS.length - answered} more question${INSPECTOR_QUESTIONS.length - answered === 1 ? '' : 's'}` : 'Determine damage severity'}
           </button>
         </div>
       ) : (

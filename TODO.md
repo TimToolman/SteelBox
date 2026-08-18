@@ -55,6 +55,11 @@ Working list toward go-live. Updated 2026-07-15.
 
 ## Shipped
 
+- [x] Report damage from the walk-around — the photo-documentation step offers
+      Inspection Required (held off the marketplace until an inspector grades it)
+      or a Damage Claim; grading releases the hold. "Retail grading" is now the
+      "Inspection Required" queue, and the adjuster role is the Inspector role —
+      drivers may inspect, they're just never required to — 2026-08-18
 - [x] Damage collection as its own photo type — reason-first capture (Bent, Hole,
       Rust, Scrape, Warped…), per-photo notes, and the whole claim packaged as a
       .zip (download, email to the shipping line, or a signed share link that needs

@@ -316,6 +316,43 @@ try {
   const shpForbidden = await api('/shippers', { method: 'POST', token: mvpAdmin, body: { name: 'Rogue Line' } })
   check('reseller admin cannot edit the directory', shpForbidden.status === 403)
 
+  // ── Walk-around damage report → inspection hold ──
+  // A driver spots damage while shooting the saleable photo set. Reporting it
+  // pulls the unit off the marketplace until an inspector grades it.
+  console.log('Inspection hold')
+  const insAcct = await api('/users', { method: 'POST', token: admin, body: { email: 'inspector@test.dev', password: 'test1234', role: 'inspector', name: 'Ivy Nakamura' } })
+  check('inspector role accepted on an account', insAcct.status === 201 && insAcct.body?.role === 'inspector')
+  const drvAcct = await api('/users', { method: 'POST', token: admin, body: { email: 'walkaround@test.dev', password: 'test1234', role: 'driver', name: 'Ray Okonkwo' } })
+  const inspector = (await api('/auth/login', { method: 'POST', body: { email: 'inspector@test.dev', password: 'test1234' } })).body.token
+  const fieldDriver = (await api('/auth/login', { method: 'POST', body: { email: 'walkaround@test.dev', password: 'test1234' } })).body.token
+  check('inspector and driver both sign in', !!inspector && !!fieldDriver && drvAcct.status === 201)
+
+  // A unit with the full photo set — so the hold is the only thing keeping it
+  // out of 'available' when the promotion rule would otherwise fire.
+  const held = containers.find(c => c.status === 'available' && (c.photos || []).filter(Boolean).length >= 8
+    && ![unit.id, dmgUnit.id, clUnit.id].includes(c.id))
+  const flag = await api(`/containers/${held.id}`, { method: 'PATCH', token: fieldDriver, body: { inspectionRequired: true, inspectionReason: 'Bent — rear rail bowed' } })
+  check('a driver can report damage from the walk-around', flag.status === 200 && flag.body?.inspectionRequired === true)
+  check('reporting stamps who flagged it and when', flag.body?.inspectionFlaggedBy === 'Ray Okonkwo' && !!flag.body?.inspectionFlaggedAt)
+  check('a reported unit drops off the marketplace', flag.body?.status === 'draft')
+  const stillHeld = (await api(`/containers/${held.id}`)).body
+  check('the hold survives a full photo set', stillHeld.status === 'draft' && stillHeld.photos.filter(Boolean).length >= 8)
+  const priceEdit = await api(`/containers/${held.id}`, { method: 'PATCH', token: admin, body: { buyPrice: 3400 } })
+  check('an unrelated edit does not release the hold', priceEdit.body?.status === 'draft' && priceEdit.body?.inspectionRequired === true)
+
+  const graded = await api(`/containers/${held.id}`, { method: 'PATCH', token: inspector, body: { grade: 'B', conditionScore: 4, aiGraded: true, inspectorName: 'Ivy Nakamura', inspectedAt: new Date().toISOString() } })
+  check('the inspector clears the hold by grading it', graded.status === 200 && graded.body?.inspectionRequired === false)
+  check('grading releases the unit back to the marketplace', graded.body?.status === 'available' && graded.body?.grade === 'B')
+
+  // The other track: sea-freight damage the field crew files a claim for.
+  const claimUnit = containers.find(c => c.status === 'available' && ![unit.id, dmgUnit.id, clUnit.id, held.id].includes(c.id))
+  const fieldClaim = await api('/claims', { method: 'POST', token: fieldDriver, body: { containerId: claimUnit.id, notes: 'Hole — left panel, fist-sized' } })
+  check('the field crew can open a damage claim', fieldClaim.status === 201 && fieldClaim.body?.notes.includes('left panel'))
+  const claimHold = await api(`/containers/${claimUnit.id}`, { method: 'PATCH', token: fieldDriver, body: { inspectionRequired: true, inspectionReason: 'Hole — left panel' } })
+  check('a claimed unit is held the same way', claimHold.body?.status === 'draft' && claimHold.body?.inspectionRequired === true)
+  const custDenied = await api(`/containers/${claimUnit.id}`, { method: 'PATCH', token: customer, body: { inspectionRequired: false } })
+  check('a shopper cannot release a held unit', custDenied.status === 403 || custDenied.status === 401)
+
   // ── Multi-role portal grants behind the single marketplace login ──
   console.log('Portal grants')
   const buyerUsers = (await api('/users', { token: admin })).body

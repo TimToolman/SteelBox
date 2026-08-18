@@ -10,7 +10,8 @@ import { useSnackbar, useAuth, useFavicon, useLive } from '../../hooks'
 import { Snackbar, ProgressRing } from '../../components/ui'
 import { GradeScreen, FlowGradeCard, GradeReviewScreen } from './grade'
 import { DriverProfileScreen } from './Profile'
-import { gradeContainer, gradeLabel, ADJUSTER_QUESTIONS, type PhotoFeatures } from '../../lib/grading'
+import { ReportDamageSheet } from './ReportDamage'
+import { gradeContainer, gradeLabel, INSPECTOR_QUESTIONS, type PhotoFeatures } from '../../lib/grading'
 import { activity, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, containers as containersApi, availability as availabilityApi, messages as messagesApi, customers as customersApi, orders as ordersApi, parseTrucks, parseWorkHours, encodeWorkHours, photoUrl, fileToDataUrl, cutoutContainer, type ActivityEvent, type Depot, type Driver, type SchedJob, type DayHours, type Availability, type Message, type Customer, type Container, type Order } from '../../lib/api'
 
 // Fallback driver when an admin opens the field app (admin accounts have no
@@ -314,10 +315,11 @@ export default function FieldAppPage() {
   const [aiFeatures, setAiFeatures] = useState<PhotoFeatures[] | null>(null)
   const [aiAnswers, setAiAnswers] = useState<Record<string, number>>({})
   const [aiApplying, setAiApplying] = useState(false)
-  const aiResult = aiFeatures && Object.keys(aiAnswers).length === ADJUSTER_QUESTIONS.length
+  const aiResult = aiFeatures && Object.keys(aiAnswers).length === INSPECTOR_QUESTIONS.length
     ? gradeContainer(aiFeatures, aiAnswers)
     : null
   const [inspectorNotes, setInspectorNotes] = useState('')  // optional notes attached to the photo submission
+  const [reportDamage, setReportDamage] = useState(false)   // walk-around damage report sheet
   const { toast, message, open: snackOpen, close: snackClose } = useSnackbar()
 
   const doneCount = shots.filter(s => s.done).length
@@ -529,6 +531,8 @@ export default function FieldAppPage() {
       await containersApi.update(job.containerId || job.sku, {
         grade: aiResult.grade, conditionScore: aiResult.sub, aiGraded: true,
         inspectorName: user?.name || 'Field Inspector', inspectedAt: new Date().toISOString(),
+        // A driver who does inspect releases their own hold.
+        inspectionRequired: false,
       } as Partial<Container>)
       fetchContainers().catch(() => {})
       setCondScore(aiResult.sub)
@@ -941,8 +945,42 @@ export default function FieldAppPage() {
               </div>
             )}
 
+            {/* Damage found on the walk-around. The saleable photo set is shot
+                before loading, which is exactly when damage gets noticed —
+                reporting it here holds the unit off the marketplace instead of
+                letting it list as if nothing were wrong. */}
+            {(step?.key === 'photos12' || step?.key === 'photo1') && (
+              flowCont?.inspectionRequired ? (
+                <div style={{ margin: '0 12px 10px', background: '#FFF8E1', border: '1.5px solid #F2C94C', borderRadius: '16px', padding: '13px 14px', display: 'flex', gap: '11px', alignItems: 'flex-start' }}>
+                  <span style={{ flexShrink: 0, color: '#7B4F00', marginTop: '1px' }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
+                  </span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#1A1C2E' }}>Damage reported — inspection required</div>
+                    <div style={{ fontSize: '11.5px', color: '#44475A', lineHeight: 1.5, marginTop: '2px' }}>
+                      {flowCont.inspectionReason || 'Held for inspection'}
+                      {flowCont.inspectionFlaggedBy ? ` · reported by ${flowCont.inspectionFlaggedBy}` : ''}.
+                      This unit stays off the marketplace until an inspector grades it.
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ margin: '0 12px 10px' }}>
+                  <button onClick={() => setReportDamage(true)}
+                    style={{ width: '100%', padding: '13px', borderRadius: '14px', border: '1.5px solid #F0B8B2', background: '#fff', color: '#B3261E', fontFamily: "'Google Sans', sans-serif", fontSize: '13.5px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
+                    Report damage on this unit
+                  </button>
+                  <div style={{ fontSize: '11px', color: '#44475A', textAlign: 'center', marginTop: '7px', lineHeight: 1.5 }}>
+                    Send it to Inspection Required or open a damage claim — either way it comes off
+                    the marketplace until it's inspected.
+                  </div>
+                </div>
+              )
+            )}
+
             {/* Condition scoring — the AI model rates the unit from its photo
-                documentation + the adjuster's five answers ("this container
+                documentation + the inspector's five answers ("this container
                 is a B·4"); the step CTA applies the verdict to the listing. */}
             {step?.key === 'score' && (
               <FlowGradeCard
@@ -1509,7 +1547,7 @@ export default function FieldAppPage() {
     review:    renderReview(),
     success:   renderSuccess(),
     schedule:  renderSchedule(),
-    // Drivers and container adjusters rate units from their photo set + a
+    // Inspectors — and drivers who inspect — rate units from their photo set + a
     // 5-question walk-around; the model writes grade + 1–5 sub-score back
     // to the shared container record.
     grade: (
@@ -1552,6 +1590,16 @@ export default function FieldAppPage() {
         {screens[screen]}
       </div>
       <BottomNav active={navActive} onNav={goTo} unread={unreadCount} />
+      {reportDamage && activeJob && (
+        <ReportDamageSheet
+          container={containerList.find(c => c.id === activeJob.containerId || c.sku === activeJob.sku) ?? null}
+          sku={activeJob.sku}
+          reportedBy={me?.name || 'Field crew'}
+          toast={toast}
+          onClose={() => setReportDamage(false)}
+          onReported={() => { setReportDamage(false); fetchContainers().catch(() => {}) }}
+        />
+      )}
       <Snackbar message={message} open={snackOpen} onClose={snackClose} />
     </div>
   )
