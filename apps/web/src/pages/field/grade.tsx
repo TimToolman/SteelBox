@@ -10,15 +10,14 @@
 // ============================================================
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { containers as containersApi, claims as claimsApi, photoUrl, findingsOf, SHOT_LABELS, CLAIM_STAGES, type Container, type DamageClaim } from '../../lib/api'
-import { DamageCollect } from './DamageCollect'
-import { ReportDamageSheet } from './ReportDamage'
-import { UnitPhotoStrip } from './UnitPhotos'
+import { claims as claimsApi, photoUrl, findingsOf, CLAIM_STAGES, type Container, type DamageClaim } from '../../lib/api'
+import { ClaimWorkspace } from './ClaimWorkspace'
+import { WalkAround } from './WalkAround'
 import { GRADE_META } from '../../lib/specs'
 import {
-  INSPECTOR_QUESTIONS, analyzeContainerPhotos, analyzePhotoList, gradeContainer, assessDamage,
-  gradeLabel, damageLabel, SEVERITY_WORD,
-  type GradeResult, type DamageResult, type PhotoFeatures,
+  INSPECTOR_QUESTIONS, analyzeContainerPhotos,
+  gradeLabel, damageLabel,
+  type GradeResult, type PhotoFeatures,
 } from '../../lib/grading'
 
 const INK = '#1A1C2E', INK2 = '#44475A', DIV = '#E1E2EC', BLUE = '#0057B8', RED = '#B3261E', AMBER = '#7B4F00'
@@ -59,13 +58,6 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
   const [bucket, setBucket] = useState<'retail' | 'damage'>('retail')
   const [query, setQuery] = useState('')
   const [unit, setUnit] = useState<Container | null>(null)
-  // Wizard phases: analyzing photos → questions → result
-  const [features, setFeatures] = useState<PhotoFeatures[] | null>(null)
-  const [analyzeProg, setAnalyzeProg] = useState<[number, number]>([0, 0])
-  const [answers, setAnswers] = useState<Record<string, number>>({})
-  const [result, setResult] = useState<GradeResult | null>(null)
-  const [applying, setApplying] = useState(false)
-  const [reporting, setReporting] = useState(false)   // report-damage sheet
   const [claiming, setClaiming] = useState(false)     // opening a claim off a verified finding
 
   // What the walk-around recorded, station by station.
@@ -83,7 +75,11 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
       const summary = findings.length
         ? findings.map(f => [f.reasons.join(', '), f.note].filter(Boolean).join(' — ') || f.question).join('; ')
         : (unit.inspectionReason || 'Damage verified by the inspector')
-      await claimsApi.create({ containerId: unit.id, notes: summary })
+      // The inspection already established how bad it is — a claim raised off
+      // it starts at the estimate rather than asking the same questions again.
+      const majors = findings.filter(f => f.level === 'major').length
+      const severity = majors >= 2 ? 5 : majors === 1 ? 4 : findings.length >= 2 ? 3 : 2
+      await claimsApi.create({ containerId: unit.id, notes: summary, severity, inspectorName, inspectedAt: new Date().toISOString() })
       toast(`Claim opened for ${unit.sku} — collect the evidence under Damage claims`)
       onApplied()
     } catch (e) {
@@ -104,45 +100,9 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
   }, [containers, query])
   const heldCount = gradable.filter(c => c.inspectionRequired).length
 
-  const reanalyze = async (c: Container) => {
-    setFeatures(null); setAnalyzeProg([0, (c.photos || []).filter(Boolean).length])
-    const f = await analyzeContainerPhotos(c, (done, total) => setAnalyzeProg([done, total]))
-    setFeatures(f)
-  }
-
-  const start = async (c: Container) => {
-    setUnit(c); setAnswers({}); setResult(null)
-    await reanalyze(c)
-  }
-
-  const answered = Object.keys(answers).length
-  const compute = () => { if (features) setResult(gradeContainer(features, answers)) }
-
-  const apply = async () => {
-    if (!unit || !result || applying) return
-    setApplying(true)
-    const wasHeld = !!unit.inspectionRequired
-    try {
-      await containersApi.update(unit.id, {
-        grade: result.grade,
-        conditionScore: result.sub,
-        aiGraded: true,
-        inspectorName,
-        inspectedAt: new Date().toISOString(),
-        // The inspection is done — the unit may list again.
-        inspectionRequired: false,
-      } as Partial<Container>)
-      toast(wasHeld
-        ? `${unit.sku} graded ${gradeLabel(result.grade, result.sub)} — released to the marketplace`
-        : `${unit.sku} graded ${gradeLabel(result.grade, result.sub)} — applied to the listing`)
-      onApplied()
-      setUnit(null); setResult(null); setFeatures(null)
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not save the grade — try again')
-    } finally {
-      setApplying(false)
-    }
-  }
+  // Opening a unit hands it straight to the walk-around, which does its own
+  // photo analysis.
+  const start = (c: Container) => setUnit(c)
 
   const bucketTabs = (
     <div style={{ display: 'flex', gap: '4px', margin: '0 12px 10px', background: '#EEF2FF', border: `1px solid ${DIV}`, borderRadius: '999px', padding: '3px' }}>
@@ -235,36 +195,26 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
     )
   }
 
-  const meta = result ? GRADE_META[result.grade] : null
-
-  // ── Wizard ──
+  // ── The inspection itself is the same guided walk the driver runs ──
+  // Same 8 stops, same questions, same photo rules — an inspector just
+  // happens to be the final say, so findings don't queue back to them.
   return (
     <div style={{ paddingBottom: '90px' }}>
-      <div style={{ padding: '16px 12px 10px', display: 'flex', alignItems: 'baseline', gap: '10px' }}>
-        <button onClick={() => setUnit(null)} style={{ fontSize: '13px', fontWeight: 600, color: BLUE, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>← Units</button>
-        <div style={{ fontFamily: 'monospace', fontSize: '15px', fontWeight: 700, color: INK }}>{unit.sku}</div>
-        <div style={{ fontSize: '11px', color: INK2 }}>{unit.size}</div>
-      </div>
-
-      {/* What the field crew already reported on this unit, and the way to add
-          to it — an inspector walking the unit finds things too. */}
       {unit.inspectionRequired && (
-        <div style={{ ...card, background: '#FFF8E1', borderColor: '#F2C94C', display: 'flex', gap: '11px', alignItems: 'flex-start' }}>
+        <div style={{ ...card, background: '#FFF8E1', borderColor: '#F2C94C', display: 'flex', gap: '11px', alignItems: 'flex-start', marginTop: '14px' }}>
           <span style={{ flexShrink: 0, color: AMBER, marginTop: '1px' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
           </span>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: '13px', fontWeight: 700, color: INK }}>
-              {secondOpinion ? 'Sent for a second opinion' : 'Damage reported — verify before grading'}
+              {secondOpinion ? 'Sent for a second opinion' : 'Damage reported by the field crew'}
             </div>
             <div style={{ fontSize: '11.5px', color: INK2, lineHeight: 1.5, marginTop: '2px' }}>
-              {secondOpinion
-                ? <>{unit.inspectionReason || 'The walk-around was clean — the field crew asked for the grade to be made here.'} Held off the marketplace until you grade it.</>
-                : <>{unit.inspectionFlaggedBy ? `Reported by ${unit.inspectionFlaggedBy}` : 'Reported by the field crew'}.
-                    Held off the marketplace — applying a grade below releases it.</>}
+              {unit.inspectionReason || 'Held for inspection'}
+              {unit.inspectionFlaggedBy ? ` · ${unit.inspectionFlaggedBy}` : ''}.
+              Walk it yourself below — finishing the walk grades it and releases the hold.
             </div>
-            {/* Each finding as it was recorded, at the stop it was found */}
-            {findings.length > 0 ? findings.map((f, i) => (
+            {findings.map((f, i) => (
               <div key={i} style={{ display: 'flex', gap: '9px', alignItems: 'flex-start', marginTop: '9px', paddingTop: '9px', borderTop: `1px solid #F2C94C` }}>
                 {f.photo
                   ? <img src={photoUrl(f.photo)} alt={f.reasons.join(', ')} style={{ width: '62px', height: '46px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0 }} />
@@ -277,147 +227,31 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
                   {f.note && <div style={{ fontSize: '11px', color: INK2, marginTop: '1px', lineHeight: 1.4 }}>{f.note}</div>}
                 </div>
               </div>
-            )) : (
-              <div style={{ fontSize: '11.5px', color: INK, marginTop: '6px' }}>{unit.inspectionReason || 'Damage reported'}</div>
+            ))}
+            {/* Verified damage becomes a claim from here — never from the
+                driver's job screen, and never on a second-opinion hold. */}
+            {!secondOpinion && (
+              <button onClick={raiseClaim} disabled={claiming}
+                style={{ marginTop: '11px', padding: '9px 14px', borderRadius: '999px', border: `1.5px solid ${RED}`, background: '#fff', color: RED, fontSize: '12px', fontWeight: 700, cursor: claiming ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                {claiming ? 'Opening…' : 'Verified — open a damage claim'}
+              </button>
             )}
-            {/* The claim call is the inspector's, made with the unit in front
-                of them — it is never raised from the driver's job screen. A
-                second-opinion hold has no damage to claim for. */}
-            {!secondOpinion && <>
-            <button onClick={raiseClaim} disabled={claiming}
-              style={{ marginTop: '11px', padding: '9px 14px', borderRadius: '999px', border: `1.5px solid ${RED}`, background: '#fff', color: RED, fontSize: '12px', fontWeight: 700, cursor: claiming ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
-              {claiming ? 'Opening…' : 'Verified — open a damage claim'}
-            </button>
-            <div style={{ fontSize: '10.5px', color: INK2, marginTop: '5px', lineHeight: 1.45 }}>
-              Only if it's sea-freight damage worth money back from the line. Evidence photos are
-              collected under Damage claims.
-            </div>
-            </>}
           </div>
         </div>
       )}
-      <div style={{ margin: '0 12px 10px' }}>
-        <button onClick={() => setReporting(true)}
-          style={{ width: '100%', padding: '12px', borderRadius: '14px', border: `1.5px solid #F0B8B2`, background: '#fff', color: RED, fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
-          {unit.inspectionRequired ? 'Report more damage' : 'Report damage on this unit'}
-        </button>
-      </div>
-      {reporting && (
-        <ReportDamageSheet
-          container={unit} sku={unit.sku} reportedBy={inspectorName} toast={toast}
-          onClose={() => setReporting(false)}
-          onReported={async () => {
-            setReporting(false)
-            // Pull the unit back so the report banner shows what was just added.
-            try { setUnit(await containersApi.get(unit.id)) } catch { /* list refresh still runs */ }
-            onApplied()
-          }}
-        />
-      )}
 
-      {/* Step 1 — photo analysis. The inspector shoots and retakes here
-          exactly like the driver does in the job flow: a slot they don't like
-          is one tap from a fresh photo, and the model re-reads the set. */}
-      <div style={card}>
-        <div style={{ fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '10px' }}>
-          1 · Photos & analysis {features ? '· complete' : `· reading ${analyzeProg[0]}/${analyzeProg[1]}`}
-        </div>
-        <UnitPhotoStrip container={unit} inspectorName={inspectorName} toast={toast}
-          onContainer={c => { setUnit(c); setResult(null); reanalyze(c) }} />
-        <div style={{ fontSize: '11px', color: INK2, marginTop: '8px', lineHeight: 1.5 }}>
-          Capture or retake any shot — the model re-reads the set each time.
-        </div>
-        {features && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', marginTop: '10px' }}>
-            {gradeContainer(features, {}).factors.slice(0, 3).map(f => (
-              <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: '11px', color: INK2, width: '150px', flexShrink: 0 }}>{f.label.replace(' (photos)', '')}</span>
-                <ScoreBar score={f.score} />
-                <span style={{ fontFamily: 'monospace', fontSize: '11px', fontWeight: 700, color: INK, width: '28px', textAlign: 'right' }}>{f.score}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Step 2 — the five questions */}
-      <div style={card}>
-        <div style={{ fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '4px' }}>
-          2 · Walk-around — {answered}/{INSPECTOR_QUESTIONS.length} answered
-        </div>
-        {INSPECTOR_QUESTIONS.map((q, qi) => (
-          <div key={q.key} style={{ padding: '10px 0', borderBottom: qi < INSPECTOR_QUESTIONS.length - 1 ? `1px solid ${DIV}` : 'none' }}>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: INK }}>{qi + 1}. {q.title}</div>
-            <div style={{ fontSize: '11px', color: INK2, margin: '2px 0 8px', lineHeight: 1.45 }}>{q.detail}</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {q.options.map((o, oi) => {
-                const on = answers[q.key] === oi
-                return (
-                  <button key={oi} onClick={() => { setAnswers(p => ({ ...p, [q.key]: oi })); setResult(null) }}
-                    style={{ textAlign: 'left', padding: '9px 12px', borderRadius: '10px', fontSize: '12px', fontWeight: on ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit', border: `1.5px solid ${on ? BLUE : DIV}`, background: on ? '#D6E4FF' : '#fff', color: on ? BLUE : INK2 }}>
-                    {o.label}{o.capGrade ? ' ⚠' : ''}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Step 3 — model result */}
-      {!result ? (
-        <div style={{ margin: '0 12px' }}>
-          <button
-            onClick={compute}
-            disabled={!features || answered < INSPECTOR_QUESTIONS.length}
-            style={{ width: '100%', padding: '15px', borderRadius: '999px', border: 'none', fontSize: '14px', fontWeight: 700, cursor: features && answered === INSPECTOR_QUESTIONS.length ? 'pointer' : 'not-allowed', background: features && answered === INSPECTOR_QUESTIONS.length ? BLUE : '#EEF2FF', color: features && answered === INSPECTOR_QUESTIONS.length ? '#fff' : INK2 }}>
-            {!features ? 'Analyzing photos…' : answered < INSPECTOR_QUESTIONS.length ? `Answer ${INSPECTOR_QUESTIONS.length - answered} more question${INSPECTOR_QUESTIONS.length - answered > 1 ? 's' : ''}` : 'Run grading model'}
-          </button>
-        </div>
-      ) : (
-        <div style={card}>
-          <div style={{ fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '12px' }}>3 · Model result</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px' }}>
-            <div style={{ width: '64px', height: '64px', borderRadius: '14px', background: meta!.color, display: 'grid', placeItems: 'center', color: '#fff', flexShrink: 0 }}>
-              <span style={{ fontSize: '30px', fontWeight: 700 }}>{result.grade}</span>
-            </div>
-            <div>
-              <div style={{ fontSize: '16px', fontWeight: 700, color: INK }}>
-                Grade {gradeLabel(result.grade, result.sub)} — {meta!.label}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                <SubPips sub={result.sub} color={meta!.color} />
-                <span style={{ fontSize: '11px', color: INK2 }}>{result.sub}/5 within grade · {result.score}/100 overall</span>
-              </div>
-              {result.capped && (
-                <div style={{ fontSize: '11px', color: '#B3261E', fontWeight: 600, marginTop: '4px' }}>
-                  ⚠ Structural finding capped this unit at grade C
-                </div>
-              )}
-            </div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', marginBottom: '14px' }}>
-            {result.factors.map(f => (
-              <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: '11px', color: INK2, width: '150px', flexShrink: 0 }} title={f.note}>{f.label}</span>
-                <ScoreBar score={f.score} />
-                <span style={{ fontFamily: 'monospace', fontSize: '11px', fontWeight: 700, color: INK, width: '28px', textAlign: 'right' }}>{f.score}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{ fontSize: '11px', color: INK2, lineHeight: 1.5, marginBottom: '12px' }}>
-            Photos {Math.round(result.photoScore)}/100 (40%) + walk-around {result.answerScore}/100 (60%).
-            Applying updates the listing that customers and the admin portal see.
-          </div>
-          <button onClick={apply} disabled={applying}
-            style={{ width: '100%', padding: '15px', borderRadius: '999px', border: 'none', fontSize: '14px', fontWeight: 700, cursor: 'pointer', background: '#E65100', color: '#fff', boxShadow: '0 3px 10px rgba(230,81,0,.3)' }}>
-            {applying ? 'Applying…' : `Apply grade ${gradeLabel(result.grade, result.sub)} to ${unit.sku}`}
-          </button>
-        </div>
-      )}
+      <WalkAround
+        container={unit}
+        inspectorName={inspectorName}
+        finalGrader
+        toast={toast}
+        onExit={() => setUnit(null)}
+        onHome={() => setUnit(null)}
+        onDone={() => onApplied()}
+      />
     </div>
   )
+
 }
 
 // ── Inline grading card for the pickup/return job flow ─────
@@ -557,11 +391,6 @@ export function GradeReviewScreen({ sku, result, applying, onApprove, onBack }: 
 function DamageInspection({ inspectorName, toast, containers }: { inspectorName: string; toast: (m: string) => void; containers: Container[] }) {
   const [claims, setClaims] = useState<DamageClaim[]>([])
   const [claim, setClaim] = useState<DamageClaim | null>(null)
-  const [answers, setAnswers] = useState<Record<string, number>>({})
-  const [result, setResult] = useState<DamageResult | null>(null)
-  const [applying, setApplying] = useState(false)
-  // Damage photos live in their own screen, not inline with the wizard.
-  const [collecting, setCollecting] = useState(false)
 
   const refresh = () => claimsApi.list().then(setClaims).catch(() => {})
   useEffect(() => { refresh() }, [])
@@ -570,174 +399,56 @@ function DamageInspection({ inspectorName, toast, containers }: { inspectorName:
     CLAIM_STAGES.find(x => x.key === st)?.label
     ?? (st === 'repair_scheduled' ? 'Repair scheduled' : st === 'sell_as_damaged' ? 'Listed as damaged' : 'Closed')
 
-  const photosOn = (claim?.photos || []).filter(Boolean).length
-  const answered = Object.keys(answers).length
-  const canRun = photosOn >= 2 && answered === INSPECTOR_QUESTIONS.length
-
-  const run = async () => {
-    if (!claim || !canRun) return
-    const feats = await analyzePhotoList(claim.photos || [])
-    setResult(assessDamage(feats, answers))
-  }
-
-  const apply = async () => {
-    if (!claim || !result || applying) return
-    setApplying(true)
-    try {
-      await claimsApi.update(claim.id, {
-        severity: result.severity,
-        status: 'awaiting_estimate',
-        inspectorName,
-        inspectedAt: new Date().toISOString(),
-      })
-      toast(`${claim.containerSku} damage assessed ${damageLabel(result.severity)} — claim moved to Awaiting estimate`)
-      setClaim(null); setResult(null); setAnswers({})
-      refresh()
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not save the assessment')
-    } finally { setApplying(false) }
-  }
-
-  // ── Claim queue ──
   if (!claim) {
-    const queue = claims.filter(c => c.status === 'awaiting_inspection')
-    const rest = claims.filter(c => c.status !== 'awaiting_inspection')
+    // Every open claim is workable now — a claim is raised after an
+    // inspection, so what's left is reading it, pricing it and sending it.
+    const open = claims.filter(c => c.status !== 'closed')
+    const done = claims.filter(c => c.status === 'closed')
     const thumbFor = (c: DamageClaim) => {
       const unit = containers.find(x => x.id === c.containerId)
       return c.photos?.filter(Boolean)[0] || unit?.photos?.filter(Boolean)[0]
     }
+    const row = (c: DamageClaim, dim = false) => (
+      <button key={c.id} onClick={() => setClaim(c)}
+        style={{ ...card, width: 'calc(100% - 24px)', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', opacity: dim ? 0.65 : 1 }}>
+        <div style={{ width: '64px', height: '48px', borderRadius: '10px', background: 'linear-gradient(135deg,#E8C5C5,#D49797)', overflow: 'hidden', flexShrink: 0, display: 'grid', placeItems: 'center' }}>
+          {thumbFor(c) && <img src={photoUrl(thumbFor(c))} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: 700, color: INK }}>{c.containerSku} <span style={{ color: INK2, fontWeight: 400 }}>· {c.claimNumber}</span></div>
+          <div style={{ fontSize: '11px', color: INK2, marginTop: '2px' }}>{stageLabel(c.status)}{c.estimateAmount ? ` · $${c.estimateAmount.toLocaleString()}` : ''}</div>
+        </div>
+        {c.severity > 0
+          ? <span style={{ flexShrink: 0, background: RED, color: '#fff', borderRadius: '6px', padding: '3px 8px', fontSize: '11px', fontWeight: 700 }}>{damageLabel(c.severity)}</span>
+          : <span style={{ flexShrink: 0, background: '#FDECEA', color: RED, borderRadius: '999px', padding: '4px 10px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.4px' }}>REVIEW</span>}
+      </button>
+    )
     return (
       <div>
         <div style={{ margin: '0 12px 10px', fontSize: '12px', color: INK2, lineHeight: 1.5 }}>
-          Sea-freight damage claims waiting on a field inspection. Capture the damage
-          evidence, answer the five questions, and the model sets severity D·1–D·5.
+          Claims are raised after an inspection, so the photos, damages and notes are already
+          on file. Open one to review the evidence, add the repair estimate, and send it to the line.
         </div>
-        {queue.length === 0 && (
-          <div style={{ ...card, textAlign: 'center', color: INK2, fontSize: '13px' }}>No claims awaiting inspection.</div>
+        {open.length === 0 && (
+          <div style={{ ...card, textAlign: 'center', color: INK2, fontSize: '13px' }}>No open claims.</div>
         )}
-        {queue.map(c => (
-          <button key={c.id} onClick={() => { setClaim(c); setAnswers({}); setResult(null) }}
-            style={{ ...card, width: 'calc(100% - 24px)', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
-            <div style={{ width: '64px', height: '48px', borderRadius: '10px', background: 'linear-gradient(135deg,#E8C5C5,#D49797)', overflow: 'hidden', flexShrink: 0, display: 'grid', placeItems: 'center' }}>
-              {thumbFor(c) && <img src={photoUrl(thumbFor(c))} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: 700, color: INK }}>{c.containerSku} <span style={{ color: INK2, fontWeight: 400 }}>· {c.claimNumber}</span></div>
-              <div style={{ fontSize: '11px', color: INK2, marginTop: '2px' }}>{c.supplierName} vs {c.shipperName}{c.vesselRef ? ` · ${c.vesselRef}` : ''}</div>
-            </div>
-            <span style={{ flexShrink: 0, background: '#FDECEA', color: RED, borderRadius: '999px', padding: '4px 10px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.4px' }}>INSPECT</span>
-          </button>
-        ))}
-        {rest.length > 0 && <div style={{ margin: '14px 12px 6px', fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px' }}>In the pipeline</div>}
-        {rest.map(c => (
-          <div key={c.id} style={{ ...card, display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: 'monospace', fontSize: '12px', fontWeight: 700, color: INK }}>{c.containerSku} <span style={{ color: INK2, fontWeight: 400 }}>· {c.claimNumber}</span></div>
-              <div style={{ fontSize: '11px', color: INK2, marginTop: '2px' }}>{stageLabel(c.status)}</div>
-            </div>
-            {c.severity > 0 && <span style={{ background: RED, color: '#fff', borderRadius: '6px', padding: '3px 8px', fontSize: '11px', fontWeight: 700, flexShrink: 0 }}>{damageLabel(c.severity)}</span>}
-          </div>
-        ))}
+        {open.map(c => row(c))}
+        {done.length > 0 && <div style={{ margin: '14px 12px 6px', fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px' }}>Closed</div>}
+        {done.map(c => row(c, true))}
       </div>
     )
   }
 
-  // ── Damage collection — its own screen, not a card in the wizard ──
-  if (collecting) {
-    return (
-      <DamageCollect
-        claim={claim}
-        onClaim={c => { setClaim(c); setResult(null) }}
-        onBack={() => setCollecting(false)}
-        toast={toast}
-      />
-    )
-  }
-
-  // ── Inspection wizard ──
+  // ── The claim workspace ──
+  // A claim is opened after an inspection, so the photos, reasons and notes
+  // already exist. From here it is read, priced and sent — never collected.
   return (
-    <div>
-      <div style={{ padding: '0 12px 10px', display: 'flex', alignItems: 'baseline', gap: '10px' }}>
-        <button onClick={() => setClaim(null)} style={{ fontSize: '13px', fontWeight: 600, color: BLUE, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>← Claims</button>
-        <div style={{ fontFamily: 'monospace', fontSize: '15px', fontWeight: 700, color: INK }}>{claim.containerSku}</div>
-        <div style={{ fontSize: '11px', color: INK2 }}>{claim.claimNumber}</div>
-      </div>
-
-      {/* Damage evidence — collected in its own area, tagged by reason */}
-      <div style={card}>
-        <div style={{ fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '10px' }}>
-          1 · Damage evidence · {photosOn} photo{photosOn === 1 ? '' : 's'} (min 2)
-        </div>
-        {photosOn > 0 && (
-          <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '6px' }}>
-            {(claim.photos || []).filter(Boolean).map((u, i) => (
-              <div key={i} style={{ flexShrink: 0, width: '86px' }}>
-                <img src={photoUrl(u)} alt={(claim.photoReasons || [])[i] || 'Damage'}
-                  style={{ width: '86px', height: '64px', objectFit: 'cover', borderRadius: '8px', display: 'block' }} />
-                <div style={{ fontSize: '9.5px', fontWeight: 800, color: RED, marginTop: '3px' }}>{(claim.photoReasons || [])[i] || 'Damage'}</div>
-              </div>
-            ))}
-          </div>
-        )}
-        <button onClick={() => setCollecting(true)}
-          style={{ width: '100%', marginTop: photosOn ? '6px' : 0, padding: '13px', borderRadius: '12px', border: 'none', background: RED, color: '#fff', fontSize: '13.5px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-          {photosOn ? 'Open damage collection →' : 'Collect damage photos →'}
-        </button>
-        <div style={{ fontSize: '11px', color: INK2, marginTop: '8px', lineHeight: 1.5 }}>
-          Damage photos are their own collection — tagged by reason and packaged with the claim,
-          separate from the retail photo set.
-        </div>
-      </div>
-
-      {/* The five questions */}
-      <div style={card}>
-        <div style={{ fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '4px' }}>
-          2 · Walk-around — {answered}/{INSPECTOR_QUESTIONS.length} answered
-        </div>
-        {INSPECTOR_QUESTIONS.map((q, qi) => (
-          <div key={q.key} style={{ padding: '8px 0', borderBottom: qi < INSPECTOR_QUESTIONS.length - 1 ? `1px solid ${DIV}` : 'none' }}>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: INK, marginBottom: '6px' }}>{qi + 1}. {q.title}</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-              {q.options.map((o, oi) => {
-                const on = answers[q.key] === oi
-                return (
-                  <button key={oi} onClick={() => { setAnswers(p => ({ ...p, [q.key]: oi })); setResult(null) }}
-                    style={{ textAlign: 'left', padding: '8px 11px', borderRadius: '9px', fontSize: '12px', fontWeight: on ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit', border: `1.5px solid ${on ? RED : DIV}`, background: on ? '#FDECEA' : '#fff', color: on ? RED : INK2 }}>
-                    {o.label}{o.capGrade ? ' ⚠' : ''}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Severity verdict + apply */}
-      {!result ? (
-        <div style={{ margin: '0 12px' }}>
-          <button onClick={run} disabled={!canRun}
-            style={{ width: '100%', padding: '15px', borderRadius: '999px', border: 'none', fontSize: '14px', fontWeight: 700, cursor: canRun ? 'pointer' : 'not-allowed', background: canRun ? RED : '#EEF2FF', color: canRun ? '#fff' : INK2 }}>
-            {photosOn < 2 ? `Capture ${2 - photosOn} more photo${photosOn === 1 ? '' : 's'}` : answered < INSPECTOR_QUESTIONS.length ? `Answer ${INSPECTOR_QUESTIONS.length - answered} more question${INSPECTOR_QUESTIONS.length - answered === 1 ? '' : 's'}` : 'Determine damage severity'}
-          </button>
-        </div>
-      ) : (
-        <div style={card}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px' }}>
-            <div style={{ width: '64px', height: '64px', borderRadius: '14px', background: RED, display: 'grid', placeItems: 'center', color: '#fff', flexShrink: 0 }}>
-              <span style={{ fontSize: '22px', fontWeight: 700 }}>{damageLabel(result.severity)}</span>
-            </div>
-            <div>
-              <div style={{ fontSize: '15px', fontWeight: 700, color: INK }}>Damage severity {damageLabel(result.severity)} — {SEVERITY_WORD[result.severity]}</div>
-              <div style={{ fontSize: '11px', color: INK2, marginTop: '3px' }}>Condition {result.score}/100 · photos {Math.round(result.photoScore)} + walk-around {result.answerScore}</div>
-              {result.structural && <div style={{ fontSize: '11px', color: RED, fontWeight: 600, marginTop: '3px' }}>⚠ Structural finding — severity floored at D·3</div>}
-            </div>
-          </div>
-          <button onClick={apply} disabled={applying}
-            style={{ width: '100%', padding: '15px', borderRadius: '999px', border: 'none', fontSize: '14px', fontWeight: 700, cursor: 'pointer', background: '#E65100', color: '#fff', boxShadow: '0 3px 10px rgba(230,81,0,.3)' }}>
-            {applying ? 'Saving…' : `Save ${damageLabel(result.severity)} — send claim to estimate`}
-          </button>
-        </div>
-      )}
-    </div>
+    <ClaimWorkspace
+      claim={claim}
+      unit={containers.find(c => c.id === claim.containerId || c.sku === claim.containerSku) ?? null}
+      onClaim={c => { setClaim(c); refresh() }}
+      onClose={() => { setClaim(null); refresh() }}
+      toast={toast}
+    />
   )
 }

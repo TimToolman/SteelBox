@@ -21,6 +21,7 @@ import {
 import { GRADE_META, DAMAGE_DISCOUNT } from '../../lib/specs'
 import { FilterRail, FilterGroup, ChipRow, Chip, useSetFilter, railSelect, PeriodFilter, PERIOD_ALL, periodPasses, type Period } from '../../components/filters'
 import { ClaimTimeline, ClaimPacket, ClaimPackageActions, photoCaption } from './claimkit'
+import { ClaimWorkspace } from '../field/ClaimWorkspace'
 import { gradeLabel, damageLabel, SEVERITY_WORD } from '../../lib/grading'
 import { Snackbar } from '../../components/ui'
 import { useSnackbar } from '../../hooks'
@@ -73,6 +74,7 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
   const [rep, setRep] = useState<Record<string, { shopId: string; date: string }>>({})
   const [askPrice, setAskPrice] = useState<Record<string, string>>({})
   const [packet, setPacket] = useState<DamageClaim | null>(null)
+  const [workspace, setWorkspace] = useState<DamageClaim | null>(null)
   const [digest, setDigest] = useState<AuthUser['digestFreq']>(user?.digestFreq || 'per_container')
 
   const supplierId = user?.supplierId || ''
@@ -318,9 +320,10 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
                   )}
                   {c.status === 'awaiting_estimate' && (
                     <>
-                      <input value={est[c.id]?.amount ?? ''} onChange={e => setEst(p => ({ ...p, [c.id]: { amount: e.target.value, notes: p[c.id]?.notes ?? '' } }))} placeholder="Repair estimate $" type="number" style={{ ...inp, width: '150px' }} />
-                      <input value={est[c.id]?.notes ?? ''} onChange={e => setEst(p => ({ ...p, [c.id]: { amount: p[c.id]?.amount ?? '', notes: e.target.value } }))} placeholder="Estimate notes (shop, scope)" style={{ ...inp, flex: 1, minWidth: '180px' }} />
-                      <button onClick={() => submitEstimate(c)} style={btn(BLUE)}>Submit to {c.shipperName}</button>
+                      {/* The full workspace: read the evidence, price it, send
+                          it. Same three steps the inspector works through. */}
+                      <button onClick={() => setWorkspace(c)} style={btn(BLUE)}>Open claim workspace →</button>
+                      <span style={{ fontSize: '11.5px', color: INK3 }}>Review the evidence, add the estimate and the shop's document, then submit.</span>
                     </>
                   )}
                   {c.status === 'awaiting_shipper' && (
@@ -411,6 +414,23 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
         </section>
       </main>
       {packet && <ClaimPacket claim={packet} onClose={() => setPacket(null)} />}
+      {/* The claim workspace, over the fleet — the same review → estimate →
+          send an inspector works through in the field app. */}
+      {workspace && (
+        <div onClick={() => { setWorkspace(null); refresh() }}
+          style={{ position: 'fixed', inset: 0, zIndex: 880, background: 'rgba(13,14,18,.5)', overflowY: 'auto', display: 'flex', justifyContent: 'center', padding: '20px 12px' }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: '620px', height: 'fit-content', background: '#F8F9FF', borderRadius: '18px', boxShadow: '0 20px 60px rgba(0,0,0,.35)', overflow: 'hidden' }}>
+            <ClaimWorkspace
+              claim={workspace}
+              unit={fleet.find(u => u.id === workspace.containerId || u.sku === workspace.containerSku) ?? null}
+              onClaim={c => { setWorkspace(c); refresh() }}
+              onClose={() => { setWorkspace(null); refresh() }}
+              toast={toast}
+            />
+          </div>
+        </div>
+      )}
       <Snackbar message={message} open={snackOpen} onClose={snackClose} />
     </div>
   )

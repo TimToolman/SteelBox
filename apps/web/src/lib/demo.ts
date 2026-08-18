@@ -202,6 +202,52 @@ async function photoBytes(u: string): Promise<{ bytes: Uint8Array; ext: string }
   } catch { return null }
 }
 
+// The printable claim document, mirroring the API's page.
+function claimDocumentHtml(claim: Row): string {
+  const esc = (v: unknown) => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
+  const src = (u: string) => u.startsWith('data:') ? u : u.startsWith('/photos/') ? `${location.origin}${import.meta.env.BASE_URL}demo-photos/${u.slice('/photos/'.length)}` : u
+  const photos = ((claim.photos as string[] | undefined) ?? []).filter(Boolean)
+  const reasons = (claim.photoReasons as string[] | undefined) ?? []
+  const notes = (claim.photoNotes as string[] | undefined) ?? []
+  let events: { t: string; actor: string; text: string }[] = []
+  try { events = JSON.parse(String(claim.events || '[]')) } catch { events = [] }
+  const money = (n: unknown) => n ? `$${Number(n).toLocaleString()}` : '—'
+  const plates = photos.map((u, i) => `<figure><img src="${esc(src(u))}" alt="${esc(reasons[i] || 'Damage')}"><figcaption><b>${i + 1}. ${esc(reasons[i] || 'Damage')}</b>${notes[i] ? ` — ${esc(notes[i])}` : ''}</figcaption></figure>`).join('')
+  const timeline = events.map(e => `<tr><td>${esc(new Date(e.t).toLocaleString())}</td><td>${esc(e.actor)}</td><td>${esc(e.text)}</td></tr>`).join('')
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Claim ${esc(claim.claimNumber)} — ${esc(claim.containerSku)}</title>
+<style>*{box-sizing:border-box}body{font:14px/1.55 system-ui,Arial,sans-serif;color:#12141c;max-width:860px;margin:0 auto;padding:28px 22px 60px;background:#fff}
+h1{font-size:26px;margin:0 0 2px}h2{font-size:12px;text-transform:uppercase;letter-spacing:1.1px;color:#5b6b7e;margin:30px 0 10px;border-bottom:1px solid #e3e6ec;padding-bottom:6px}
+.sub{color:#5b6b7e;font-size:13px}.kv{display:grid;grid-template-columns:190px 1fr;gap:6px 16px;font-size:13px}.kv div:nth-child(odd){color:#5b6b7e}
+table{width:100%;border-collapse:collapse;font-size:12.5px}th,td{text-align:left;padding:7px 9px;border-bottom:1px solid #e3e6ec;vertical-align:top}
+th{background:#f4f6fa;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:#5b6b7e}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+figure{margin:0;break-inside:avoid}figure img{width:100%;aspect-ratio:4/3;object-fit:contain;background:#eef1f6;border-radius:8px;display:block;border:1px solid #e3e6ec}
+figcaption{font-size:11px;color:#5b6b7e;margin-top:4px;line-height:1.4}
+.est{display:flex;gap:18px;flex-wrap:wrap}.est .amt{font-size:30px;font-weight:800}
+.bar{position:sticky;top:0;background:#fff;border-bottom:1px solid #e3e6ec;margin:-28px -22px 20px;padding:12px 22px;display:flex;gap:10px;align-items:center}
+.bar button{padding:9px 18px;border-radius:999px;border:none;background:#0057B8;color:#fff;font-size:13px;font-weight:700;cursor:pointer}
+@media print{.bar{display:none}body{padding:0;max-width:none}}</style></head><body>
+<div class="bar"><button onclick="window.print()">Print / Save as PDF</button><span class="sub">Photos, damages, notes and the estimate — one page.</span></div>
+<h1>Sea-freight damage claim ${esc(claim.claimNumber)}</h1>
+<div class="sub">Container ${esc(claim.containerSku)}${claim.vesselRef ? ` · Voyage ${esc(claim.vesselRef)}` : ''} · Claimant <b>${esc(claim.supplierName)}</b> against <b>${esc(claim.shipperName)}</b></div>
+<h2>Claim details</h2><div class="kv">
+<div>Container</div><div>${esc(claim.containerSku)}</div>
+<div>Shipping line</div><div>${esc(claim.shipperName)}</div>
+<div>Vessel reference</div><div>${esc(claim.vesselRef) || '—'}</div>
+<div>Damage severity</div><div>D·${esc(claim.severity)}</div>
+<div>Status</div><div>${esc(claim.status)}</div>
+<div>Inspected by</div><div>${esc(claim.inspectorName) || '—'}</div>
+</div>
+${claim.notes ? `<h2>Inspector's note</h2><p>${esc(claim.notes)}</p>` : ''}
+<h2>Repair estimate</h2><div class="est"><div><div class="amt">${money(claim.estimateAmount)}</div><div class="sub">${esc(claim.estimateShop) || 'Repair shop not named'}</div></div>
+<div style="flex:1;min-width:220px">${claim.estimateNotes ? `<div>${esc(claim.estimateNotes)}</div>` : '<div class="sub">No scope notes.</div>'}
+${claim.estimateDocUrl ? `<div style="margin-top:8px"><a href="${esc(src(String(claim.estimateDocUrl)))}">Repair-shop estimate document</a></div>` : ''}</div></div>
+<h2>Damage evidence (${photos.length})</h2>${plates ? `<div class="grid">${plates}</div>` : '<p class="sub">No photos on file.</p>'}
+${timeline ? `<h2>Chain of custody</h2><table><tr><th>When</th><th>Who</th><th>What</th></tr>${timeline}</table>` : ''}
+<p class="sub" style="margin-top:30px;border-top:1px solid #e3e6ec;padding-top:10px">Generated ${new Date().toLocaleString()} · National SteelBox damage-claim system.</p>
+</body></html>`
+}
+
 async function demoClaimPackageUrl(claim: Row): Promise<string> {
   const folder = `claim-${claim.claimNumber}`
   const files: { name: string; data: Uint8Array }[] = [{ name: `${folder}/summary.html`, data: new TextEncoder().encode(claimSummaryHtml(claim)) }]
@@ -364,8 +410,9 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
       containerId: cont.id, containerSku: cont.sku,
       supplierId: sup?.id || '', supplierName: (sup?.name as string) || '',
       shipperId: shp?.id || '', shipperName: (shp?.name as string) || '',
-      vesselRef: String(body.vesselRef || ''), status: 'awaiting_inspection',
-      severity: 0, photos: [], notes: String(body.notes || ''),
+      vesselRef: String(body.vesselRef || ''),
+      status: body.severity ? 'awaiting_estimate' : 'awaiting_inspection',
+      severity: Number(body.severity) || 0, photos: [], notes: String(body.notes || ''),
       estimateAmount: 0, estimateNotes: '', shipperDecision: '', shipperNotes: '',
       shipperDecidedAt: null, repairShopId: '', repairShopName: '', repairDate: '',
       decision: '', inspectorName: '', inspectedAt: null, createdAt: new Date().toISOString(),
@@ -424,15 +471,43 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
     return ok({ url: await demoClaimPackageUrl(c), expiresInDays: 30 })
   }
 
+  // The claim as a printable document. No server here, so the page is built
+  // in the browser and handed back as a blob: URL — it opens and prints.
+  const docLink = route.match(/^\/claims\/([^/]+)\/document-link$/)
+  if (docLink && method === 'GET') {
+    const c = db.claims.find(x => x.id === docLink[1])
+    if (!c) throw new Error('Claim not found')
+    const blob = new Blob([claimDocumentHtml(c)], { type: 'text/html' })
+    return ok({ url: URL.createObjectURL(blob), expiresInDays: 30 })
+  }
+
+  // Repair-shop estimate upload — the data URL is the URL in demo mode.
+  const estDoc = route.match(/^\/claims\/([^/]+)\/estimate-doc$/)
+  if (estDoc && method === 'POST') {
+    const c = db.claims.find(x => x.id === estDoc[1])
+    if (!c) throw new Error('Claim not found')
+    const b = body as { dataUrl?: string; estimateShop?: string }
+    if (!String(b.dataUrl || '').startsWith('data:')) throw new Error('dataUrl must be a base64 image or PDF')
+    c.estimateDocUrl = b.dataUrl
+    if (b.estimateShop !== undefined) c.estimateShop = b.estimateShop
+    claimEvent(c, storedUser()?.name || 'Inspector', `Repair-shop estimate attached${b.estimateShop ? ` (${b.estimateShop})` : ''}`)
+    return ok(c)
+  }
+
   // Share the estimate with the shipping line (pretend email + audit event)
   const shareRoute = route.match(/^\/claims\/([^/]+)\/share$/)
   if (shareRoute && method === 'POST') {
     const c = db.claims.find(x => x.id === shareRoute[1])
     if (!c) throw new Error('Claim not found')
     const raw = (body as { mode?: string }).mode
-    const mode = raw === 'packet' ? 'claim packet' : raw === 'package' ? 'full claim package (.zip)' : 'login link'
+    const HOW: Record<string, string> = {
+      submit: 'claim submitted to the line', document: 'claim document link',
+      package: 'full claim package (.zip)', packet: 'claim packet', link: 'login link',
+    }
     c.sharedAt = new Date().toISOString()
-    claimEvent(c, storedUser()?.name || 'Supplier', `Estimate shared with ${c.shipperName} by email (${mode})`)
+    claimEvent(c, storedUser()?.name || 'Supplier', `Estimate shared with ${c.shipperName} by email (${HOW[String(raw)] || HOW.link})`)
+    // Submitting is the formal handoff — it moves the claim's stage too.
+    if (raw === 'submit' && c.status === 'awaiting_estimate') c.status = 'awaiting_shipper'
     return ok(c)
   }
 

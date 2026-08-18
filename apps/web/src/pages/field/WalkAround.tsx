@@ -68,9 +68,12 @@ const pickImage = (): Promise<File | null> => new Promise(resolve => {
   input.click()
 })
 
-export function WalkAround({ container, inspectorName, onDone, onExit, onHome, toast }: {
+export function WalkAround({ container, inspectorName, finalGrader = false, onDone, onExit, onHome, toast }: {
   container: Container
   inspectorName: string
+  // An inspector IS the destination — findings get recorded, but the walk
+  // still ends at the grade card rather than queuing the unit to themselves.
+  finalGrader?: boolean
   onDone: (updated: Container, queued: boolean) => void
   onExit: () => void
   onHome: () => void          // the unit is settled — the driver's day moves on
@@ -221,22 +224,28 @@ export function WalkAround({ container, inspectorName, onDone, onExit, onHome, t
   const queueOrGrade = async (all: DamageFinding[]) => {
     setBusy(true)
     try {
+      // Findings are recorded either way — what differs is who grades next.
       if (all.length > 0) {
         const summary = all.map(f => [f.reasons.join(', '), f.note].filter(Boolean).join(' — ') || f.question).join('; ')
         const updated = await containersApi.update(unit.id, {
-          inspectionRequired: true,
+          // An inspector's own findings don't queue the unit to themselves;
+          // they grade it on the next screen and the hold never applies.
+          inspectionRequired: !finalGrader,
           inspectionReason: summary,
           inspectionFlaggedBy: inspectorName,
           inspectionFindings: JSON.stringify(all),
-          inspectionKind: 'damage',
+          inspectionKind: finalGrader ? '' : 'damage',
         } as Partial<Container>)
-        setUnit(updated); setQueued(true)
-        onDone(updated, true)
-      } else {
-        const f = await analyzeContainerPhotos(unit)
-        setFeatures(f)
-        setResult(gradeContainer(f, answers))
+        setUnit(updated)
+        if (!finalGrader) {
+          setQueued(true)
+          onDone(updated, true)
+          return
+        }
       }
+      const f = await analyzeContainerPhotos(unit)
+      setFeatures(f)
+      setResult(gradeContainer(f, answers))
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Could not close out the walk-around')
     } finally { setBusy(false) }
@@ -272,6 +281,7 @@ export function WalkAround({ container, inspectorName, onDone, onExit, onHome, t
       const updated = await containersApi.update(unit.id, {
         grade: result.grade, conditionScore: result.sub, aiGraded: true,
         inspectorName, inspectedAt: new Date().toISOString(),
+        inspectionRequired: false,
       } as Partial<Container>)
       setUnit(updated)
       toast(`${unit.sku} graded ${gradeLabel(result.grade, result.sub)} — applied to the listing`)
@@ -365,19 +375,43 @@ export function WalkAround({ container, inspectorName, onDone, onExit, onHome, t
         ) : (
           <>
             <div style={{ ...card, textAlign: 'center' }}>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: GREEN, textTransform: 'uppercase', letterSpacing: '0.8px' }}>Clean walk-around — no damage reported</div>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: findings.length ? RED : GREEN, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                {findings.length
+                  ? `${findings.length} finding${findings.length === 1 ? '' : 's'} recorded — grade it with those in mind`
+                  : 'Clean walk-around — no damage reported'}
+              </div>
               <div style={{ width: '68px', height: '68px', borderRadius: '16px', background: meta!.color, display: 'grid', placeItems: 'center', color: '#fff', margin: '12px auto 8px' }}>
                 <span style={{ fontSize: '32px', fontWeight: 700 }}>{result.grade}</span>
               </div>
               <div style={{ fontSize: '17px', fontWeight: 700, color: INK }}>This container is a {gradeLabel(result.grade, result.sub)}</div>
               <div style={{ fontSize: '12px', color: INK2, marginTop: '3px' }}>{meta!.label} · {result.score}/100 overall</div>
             </div>
+            {findings.length > 0 && (
+              <div style={card}>
+                <div style={cardTitle}>What you found</div>
+                {findings.map((f, i) => (
+                  <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '8px 0', borderTop: i ? `1px solid ${DIV}` : 'none' }}>
+                    {f.photo
+                      ? <img src={photoUrl(f.photo)} alt={f.reasons.join(', ')} style={{ width: '58px', height: '44px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0 }} />
+                      : <span style={{ width: '58px', height: '44px', borderRadius: '8px', background: '#F4F6FA', flexShrink: 0 }} />}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: f.level === 'major' ? RED : INK }}>
+                        {f.station} · {f.reasons.join(', ') || f.question}
+                      </div>
+                      {f.note && <div style={{ fontSize: '11px', color: INK2, marginTop: '1px' }}>{f.note}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             <div style={{ margin: '0 12px' }}>
               <button onClick={applyGrade} disabled={busy}
                 style={{ width: '100%', padding: '15px', borderRadius: '999px', border: 'none', background: '#E65100', color: '#fff', fontSize: '14px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
                 {busy ? 'Applying…' : `Approve — apply grade ${gradeLabel(result.grade, result.sub)}`}
               </button>
-              {/* The driver never has to be the one who calls it. */}
+              {/* The driver never has to be the one who calls it. An inspector
+                  already is that person, so they get no hand-off. */}
+              {!finalGrader && <>
               <button onClick={sendToInspector} disabled={busy}
                 style={{ width: '100%', marginTop: '9px', padding: '14px', borderRadius: '999px', border: `1.5px solid ${DIV}`, background: '#fff', color: BLUE, fontSize: '13.5px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
                 Not sure — send to an inspector
@@ -385,6 +419,7 @@ export function WalkAround({ container, inspectorName, onDone, onExit, onHome, t
               <div style={{ fontSize: '11px', color: INK2, textAlign: 'center', marginTop: '8px', lineHeight: 1.5 }}>
                 An inspector grades it instead. The unit waits off the marketplace until they do.
               </div>
+              </>}
             </div>
           </>
         )}

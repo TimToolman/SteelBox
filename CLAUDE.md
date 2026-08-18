@@ -36,7 +36,9 @@
   (`capGrade`) answer **requires** a photo before Next unlocks. The walk
   decides its own outcome — any finding queues the unit for an inspector
   (no grade proposed, no choice offered) and a clean walk offers the
-  model's grade on the spot.
+  model's grade, or a hand-off to an inspector, on the spot. The
+  Inspections queue runs the identical walk with `finalGrader`, so an
+  inspector's own findings are recorded but never queue back to them.
 - Inspection hold: findings set `containers.inspectionRequired` (+
   `inspectionReason` / `inspectionFlaggedBy` / `inspectionFlaggedAt` /
   `inspectionFindings`, a JSON `DamageFinding[]`). While it's set the
@@ -47,6 +49,18 @@
   but are never required to. **Sea-freight claims are the inspector's
   call** — raised from Inspections after verifying, never from the
   driver's job screen.
+
+- A **damage claim comes after an inspection** — nothing is collected in
+  it. `pages/field/ClaimWorkspace.tsx` is three steps: review every photo
+  and recorded finding → a required note + estimate value + the repair
+  shop's own uploaded document → send. Four ways out: `share` mode
+  `'submit'` (the formal filing; also advances the stage), the `.zip`,
+  `share` mode `'document'` (emails the printable page), and a `mailto:`
+  link so it sends from the user's own address.
+  `GET /claims/:id/document.html?t=…` is that page — photos captioned by
+  reason, notes, estimate and chain of custody, print-to-PDF in the
+  browser (the API stays dependency-free). Shared by the field app and
+  the supplier portal.
 
 - Damage evidence is its own photo collection, never the retail 8-shot
   set: `claims.photos` appends, index-aligned with `photoReasons` and
