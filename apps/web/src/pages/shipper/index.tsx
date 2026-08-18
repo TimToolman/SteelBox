@@ -11,10 +11,10 @@
 
 import React, { useEffect, useState } from 'react'
 import { useAuth, useSnackbar } from '../../hooks'
-import { claims as claimsApi, prefs as prefsApi, photoUrl, DAMAGE_SHOT_LABELS, type DamageClaim, type AuthUser } from '../../lib/api'
+import { claims as claimsApi, prefs as prefsApi, photoUrl, type DamageClaim, type AuthUser } from '../../lib/api'
 import { damageLabel, SEVERITY_WORD } from '../../lib/grading'
 import { Snackbar } from '../../components/ui'
-import { ClaimTimeline, ClaimPacket } from '../supplier/claimkit'
+import { ClaimTimeline, ClaimPacket, ClaimPackageActions, photoCaption } from '../supplier/claimkit'
 import { FilterRail, FilterGroup, ChipRow, Chip, useSetFilter, railSelect, PeriodFilter, PERIOD_ALL, periodPasses, type Period } from '../../components/filters'
 
 const INK = '#0D0E12', INK2 = '#44474F', INK3 = '#6B7280', DIV = '#E2E4E9', RED = '#B3261E', GREEN = '#1B7A5A'
@@ -135,8 +135,9 @@ export default function ShipperReviewPage({ embedded = false }: { embedded?: boo
               <div style={{ display: 'flex', gap: '6px', marginTop: '10px', overflowX: 'auto' }}>
                 {(c.photos || []).map((u, i) => u ? (
                   <div key={i} style={{ flexShrink: 0 }}>
-                    <img src={photoUrl(u)} alt={DAMAGE_SHOT_LABELS[i] ?? `Photo ${i + 1}`} style={{ width: '108px', height: '80px', objectFit: 'cover', borderRadius: '8px', display: 'block' }} />
-                    <div style={{ fontSize: '9px', color: INK3, marginTop: '2px' }}>{DAMAGE_SHOT_LABELS[i] ?? ''}</div>
+                    <img src={photoUrl(u)} alt={photoCaption(c, i)} style={{ width: '108px', height: '80px', objectFit: 'cover', borderRadius: '8px', display: 'block' }} />
+                    <div style={{ fontSize: '9px', fontWeight: 700, color: INK2, marginTop: '2px', maxWidth: '108px' }}>{photoCaption(c, i)}</div>
+                    {c.photoNotes?.[i] && <div style={{ fontSize: '9px', color: INK3, maxWidth: '108px', lineHeight: 1.3 }}>{c.photoNotes[i]}</div>}
                   </div>
                 ) : null)}
               </div>
@@ -145,6 +146,7 @@ export default function ShipperReviewPage({ embedded = false }: { embedded?: boo
 
             <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
               <button onClick={() => setPacket(c)} style={{ padding: '9px 16px', borderRadius: '999px', border: `1.5px solid ${DIV}`, background: '#fff', color: INK2, fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>📄 Claim packet (PDF)</button>
+              <ClaimPackageActions claim={c} toast={toast} />
               <input value={notes[c.id] ?? ''} onChange={e => setNotes(p => ({ ...p, [c.id]: e.target.value }))} placeholder="Decision notes (optional)"
                 style={{ flex: 1, minWidth: '220px', padding: '9px 12px', border: `1.5px solid ${DIV}`, borderRadius: '10px', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }} />
               <button onClick={() => decide(c, 'approved')} disabled={busy === c.id}

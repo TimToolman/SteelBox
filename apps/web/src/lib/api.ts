@@ -963,6 +963,14 @@ export const CLAIM_STAGES: { key: ClaimStatus; label: string }[] = [
 
 // Damage evidence gets its own photo slots — never mixed into the unit's
 // retail 8-shot gallery.
+// Quick reasons a field adjuster taps when collecting damage evidence.
+// Kept short so the whole set fits one thumb-reachable row set on a phone.
+export const DAMAGE_REASONS = [
+  'Bent', 'Hole', 'Rust', 'Scrape', 'Warped', 'Dent',
+  'Crack', 'Water damage', 'Missing part', 'Door / seal', 'Floor', 'Other',
+] as const
+export type DamageReason = typeof DAMAGE_REASONS[number]
+
 export const DAMAGE_SHOT_LABELS = [
   'Wide shot of unit', 'Damage close-up 1', 'Damage close-up 2',
   'Damage close-up 3', 'Doors & seals', 'Interior at damage',
@@ -980,7 +988,9 @@ export interface DamageClaim {
   vesselRef: string            // voyage/BOL reference for the arbitration file
   status: ClaimStatus
   severity: number             // D·1 (minor) – D·5 (severe), set at inspection
-  photos: string[]             // damage evidence, DAMAGE_SHOT_LABELS slots
+  photos: string[]             // damage evidence — its own collection, appended
+  photoReasons?: string[]      // quick reason per photo (Bent, Hole, Rust…)
+  photoNotes?: string[]        // optional free note per photo
   notes: string
   estimateAmount: number       // supplier's repair estimate (USD)
   estimateNotes: string
@@ -1133,14 +1143,19 @@ export const claims = {
     request<DamageClaim>('/claims', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<DamageClaim>) =>
     request<DamageClaim>(`/claims/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  uploadPhoto: (id: string, data: { slot: number; label?: string; dataUrl: string }) =>
+  // Damage evidence: omit `slot` to append the next shot. `reason` is the
+  // quick tag (Bent, Hole, Rust…) that names the file inside the package.
+  uploadPhoto: (id: string, data: { slot?: number; label?: string; reason?: string; note?: string; dataUrl: string }) =>
     request<DamageClaim>(`/claims/${id}/photos`, { method: 'POST', body: JSON.stringify(data) }),
   deletePhoto: (id: string, slot: number) =>
     request<DamageClaim>(`/claims/${id}/photos/${slot}`, { method: 'DELETE' }),
-  // Email the shipper the claim packet or their login link; both land on the
-  // audit timeline and re-arm the shipper-viewed stamp.
-  share: (id: string, mode: 'packet' | 'link') =>
+  // Email the shipper the claim packet, a login link, or the packaged .zip;
+  // all land on the audit timeline and re-arm the shipper-viewed stamp.
+  share: (id: string, mode: 'packet' | 'link' | 'package') =>
     request<DamageClaim>(`/claims/${id}/share`, { method: 'POST', body: JSON.stringify({ mode }) }),
+  // Signed 30-day download link for the whole claim file (photos + summary).
+  packageLink: (id: string) =>
+    request<{ url: string; expiresInDays: number }>(`/claims/${id}/package-link`),
 }
 
 // Per-user notification preference for claim activity.

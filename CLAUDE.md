@@ -28,6 +28,13 @@
   `users.roles` (`marketplace` = sign-in master switch, plus
   `supplier` / `shipper`).
 
+- Damage evidence is its own photo collection, never the retail 8-shot
+  set: `claims.photos` appends, index-aligned with `photoReasons` and
+  `photoNotes`. `GET /claims/:id/package.zip?t=…` streams the whole claim
+  (summary + photos named by reason) behind an HMAC-signed token; the
+  demo builds the identical archive in the browser and hands back a
+  `blob:` URL.
+
 - Home-page redesign in progress (Aug 2026): the pre-redesign page is
   frozen at `apps/web/snapshots/landing-v1/` (restore steps in its
   README; source commit `e59b5ec`). Keep that snapshot untouched while

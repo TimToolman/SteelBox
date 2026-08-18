@@ -20,7 +20,7 @@ import {
 } from '../../lib/api'
 import { GRADE_META, DAMAGE_DISCOUNT } from '../../lib/specs'
 import { FilterRail, FilterGroup, ChipRow, Chip, useSetFilter, railSelect, PeriodFilter, PERIOD_ALL, periodPasses, type Period } from '../../components/filters'
-import { ClaimTimeline, ClaimPacket } from './claimkit'
+import { ClaimTimeline, ClaimPacket, ClaimPackageActions, photoCaption } from './claimkit'
 import { gradeLabel, damageLabel, SEVERITY_WORD } from '../../lib/grading'
 import { Snackbar } from '../../components/ui'
 import { useSnackbar } from '../../hooks'
@@ -161,10 +161,12 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
     } catch (err) { toast(err instanceof Error ? err.message : 'Could not list the unit') }
   }
 
-  const share = async (c: DamageClaim, mode: 'packet' | 'link') => {
+  const share = async (c: DamageClaim, mode: 'packet' | 'link' | 'package') => {
     try {
       await claimsApi.share(c.id, mode)
-      toast(mode === 'packet' ? `Claim packet emailed to ${c.shipperName}` : `Login link emailed to ${c.shipperName} — their sign-in will land on the audit trail`)
+      toast(mode === 'packet' ? `Claim packet emailed to ${c.shipperName}`
+        : mode === 'package' ? `Full claim package (.zip) emailed to ${c.shipperName}`
+        : `Login link emailed to ${c.shipperName} — their sign-in will land on the audit trail`)
       refresh()
     } catch (err) { toast(err instanceof Error ? err.message : 'Could not share') }
   }
@@ -301,7 +303,10 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
                 {(c.photos || []).filter(Boolean).length > 0 && (
                   <div style={{ display: 'flex', gap: '5px', marginTop: '10px', overflowX: 'auto' }}>
                     {(c.photos || []).filter(Boolean).map((u, i) => (
-                      <img key={i} src={photoUrl(u)} alt={`Damage ${i + 1}`} style={{ width: '76px', height: '56px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0 }} />
+                      <div key={i} style={{ flexShrink: 0, width: '76px' }}>
+                        <img src={photoUrl(u)} alt={photoCaption(c, i)} style={{ width: '76px', height: '56px', objectFit: 'cover', borderRadius: '8px', display: 'block' }} />
+                        <div style={{ fontSize: '9px', fontWeight: 800, color: RED, marginTop: '2px' }}>{photoCaption(c, i)}</div>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -326,6 +331,8 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
                       </span>
                       <button onClick={() => setPacket(c)} style={ghost}>📄 Claim packet (PDF)</button>
                       <button onClick={() => share(c, 'packet')} style={btn(BLUE)}>✉️ Email packet</button>
+                      <button onClick={() => share(c, 'package')} style={btn('#1B7A5A')}>✉️ Email full package (.zip)</button>
+                      <ClaimPackageActions claim={c} toast={toast} />
                       <button onClick={() => share(c, 'link')} style={btn('#0E7490')}>✉️ Email login link</button>
                       <button onClick={() => copyShipperLink(c)} style={ghost}>🔗 Copy login link</button>
                     </>

@@ -202,6 +202,36 @@ try {
   const pref = await api('/auth/me', { method: 'PATCH', token: shipper, body: { digestFreq: 'weekly' } })
   check('digest preference saved', pref.status === 200 && pref.body?.digestFreq === 'weekly')
 
+  // ── Damage photos as their own reason-tagged collection ──
+  console.log('Damage collection + packaging')
+  const dmgPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+  const shot1 = await api(`/claims/${claimId}/photos`, { method: 'POST', token: admin, body: { dataUrl: dmgPng, reason: 'Bent', note: 'Top rail, door end' } })
+  check('damage photo appends with its reason', shot1.status === 200 && shot1.body?.photos?.length === 1 && shot1.body?.photoReasons?.[0] === 'Bent' && shot1.body?.photoNotes?.[0] === 'Top rail, door end')
+  const shot2 = await api(`/claims/${claimId}/photos`, { method: 'POST', token: admin, body: { dataUrl: dmgPng, reason: 'Hole' } })
+  const shot3 = await api(`/claims/${claimId}/photos`, { method: 'POST', token: admin, body: { dataUrl: dmgPng, reason: 'Rust' } })
+  check('collection keeps appending in order', shot3.body?.photos?.length === 3 && shot3.body?.photoReasons?.join(',') === 'Bent,Hole,Rust')
+  const delShot = await api(`/claims/${claimId}/photos/1`, { method: 'DELETE', token: admin })
+  check('removing a shot drops its reason with it', delShot.body?.photos?.length === 2 && delShot.body?.photoReasons?.join(',') === 'Bent,Rust')
+
+  // Package: a real .zip with the summary + one file per photo
+  const linkRes = await api(`/claims/${claimId}/package-link`, { token: supplier })
+  check('package link issued', linkRes.status === 200 && /package\.zip\?t=\d+\./.test(linkRes.body?.url || ''))
+  const signed = new URL(linkRes.body.url).search
+  const zipRes = await fetch(`${BASE}/claims/${claimId}/package.zip${signed}`)
+  const zipBuf = Buffer.from(await zipRes.arrayBuffer())
+  check('signed link downloads without a session', zipRes.status === 200 && zipRes.headers.get('content-type') === 'application/zip')
+  check('response is a real zip archive', zipBuf.subarray(0, 4).toString('hex') === '504b0304')
+  check('zip attaches with the claim filename', (zipRes.headers.get('content-disposition') || '').includes(`claim-${claim.body.claimNumber}.zip`))
+  const zipText = zipBuf.toString('latin1')
+  check('zip holds the summary + both photos named by reason', zipText.includes('summary.html') && zipText.includes('01-bent.png') && zipText.includes('02-rust.png'))
+  check('summary carries the claim details', zipText.includes(claim.body.claimNumber) && zipText.includes('Bent'))
+  const badTok = await fetch(`${BASE}/claims/${claimId}/package.zip?t=123.deadbeef`)
+  check('forged package links are rejected', badTok.status === 401 || badTok.status === 403)
+  const pkgShare = await api(`/claims/${claimId}/share`, { method: 'POST', token: supplier, body: { mode: 'package' } })
+  check('package can be emailed as a download link', pkgShare.status === 200)
+  const pkgMail = (await api('/outbox', { token: admin })).body.find(m => m.to === 'shipper@meridianlines.com' && m.body.includes('package.zip?t='))
+  check('email carries the direct download link', !!pkgMail)
+
   // Supplier sells the unit as damaged: their own container, grade D.
   const sell = await api(`/containers/${dmgUnit.id}`, { method: 'PATCH', token: supplier, body: { grade: 'D', damageSeverity: 4, damagePhotos: [], condition: 'used', status: 'available' } })
   check('supplier lists own unit as damaged D·4', sell.status === 200 && sell.body?.grade === 'D' && sell.body?.damageSeverity === 4)

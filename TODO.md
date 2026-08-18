@@ -55,6 +55,10 @@ Working list toward go-live. Updated 2026-07-15.
 
 ## Shipped
 
+- [x] Damage collection as its own photo type — reason-first capture (Bent, Hole,
+      Rust, Scrape, Warped…), per-photo notes, and the whole claim packaged as a
+      .zip (download, email to the shipping line, or a signed share link that needs
+      no sign-in) from the field app, supplier portal and shipper review — 2026-08-18
 - [x] Live cross-app auto-refresh (SSE): admin ⇄ field ⇄ marketplace sync without
       manual browser refresh — 2026-07-15
 - [x] Go-live auth + phone-payment pipeline + 3-way messaging (see blockers above) — 2026-07-15
