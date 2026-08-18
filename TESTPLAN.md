@@ -63,6 +63,7 @@ Field crew: pickups, deliveries, photo documentation. May inspect, never require
 | D-10 | Report damage | On the job screen tap Report damage | Optional photo allowed (not required); reasons + note; report appends to the unit’s inspection reason; can report repeatedly | Auto — smoke-round |
 | D-11 | Schedule moved | Look at the bottom nav | No Schedule tab — it lives under Profile → Schedule & availability | Auto — smoke-round |
 | D-12 | Claims need a grant | Look for a Damage claims area | Absent until an admin ticks "Damage claims" on the account; the API refuses too | Auto — smoke-rbac + api |
+| D-13 | Camera reload survival | Mid-job, open Report damage, pick a reason + note + photo — then let the phone camera reload the page (or reload by hand) | You land BACK on the same job with the sheet open and the reason, note and photo intact — never on the home screen. The same holds mid-walk-around and mid-estimate | Auto — smoke-mobile |
 
 ## I · Inspector
 
@@ -175,7 +176,8 @@ End-to-end flows that cross portals.
 | Types | `cd apps/web && npx tsc --noEmit` | clean |
 | Demo build | `cd apps/web && VITE_DEMO_STATIC=1 npm run build` | clean |
 | API suite (api) | `cd apps/api && node test.mjs  (throwaway DATA_DIR)` | 205 checks |
-| Browser sweeps | `Playwright vs the built demo: smoke-batch · smoke-viewer · smoke-lightbox · smoke-round · smoke-claimws · smoke-walk · smoke-rbac · smoke-walkfix · smoke-photos · smoke-handoff` | 262 checks |
+| Mobile sweep | `node apps/web/e2e/smoke-mobile.mjs — camera round-trip reload survival on every field-app capture flow, plus picker hygiene (see apps/web/e2e/README.md)` | 16 checks |
+| Browser sweeps | `Playwright vs the built demo: smoke-batch · smoke-viewer · smoke-lightbox · smoke-round · smoke-claimws · smoke-walk · smoke-rbac · smoke-walkfix · smoke-photos · smoke-handoff — being re-materialized into apps/web/e2e/ (they previously ran from scratch space)` | 262 checks |
 
 Playwright notes for whoever extends the sweeps: dismiss (or pre-seed
 `sessionStorage.sbx_zip_prompted`) before hovering marketplace cards; admin left-nav

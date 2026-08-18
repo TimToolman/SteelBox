@@ -14,6 +14,7 @@ import { ReportDamageSheet } from './ReportDamage'
 import { WalkAround } from './WalkAround'
 import { gradeContainer, gradeLabel, INSPECTOR_QUESTIONS, type PhotoFeatures } from '../../lib/grading'
 import { activity, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, containers as containersApi, availability as availabilityApi, messages as messagesApi, customers as customersApi, orders as ordersApi, parseTrucks, parseWorkHours, encodeWorkHours, photoUrl, fileToDataUrl, cutoutContainer, type ActivityEvent, type Depot, type Driver, type SchedJob, type DayHours, type Availability, type Message, type Customer, type Container, type Order } from '../../lib/api'
+import { loadSession, saveSession, clearSession } from '../../lib/capture'
 
 // Fallback driver when an admin opens the field app (admin accounts have no
 // linked driver record). Driver logins use their own drivers.csv row.
@@ -582,6 +583,43 @@ export default function FieldAppPage() {
 
   const scrollTop = () => window.scrollTo({ top: 0 })
   const goTo = (s: Screen) => { setScreen(s); scrollTop() }
+
+  // ── Surviving the camera round-trip ──
+  // Opening the phone camera backgrounds the browser, which may reload the
+  // page to reclaim memory — and a reload used to dump the driver back on
+  // the home screen with the job and any open dialog gone. The current spot
+  // is mirrored to sessionStorage on every change and restored on boot.
+  const restoredUi = useRef(false)
+  useEffect(() => {
+    if (!restoredUi.current) return   // don't overwrite the record while restoring
+    saveSession('sbx_field_ui', { screen, jobId: activeJob?.id, stepIndex, reportDamage })
+  }, [screen, activeJob?.id, stepIndex, reportDamage])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (restoredUi.current) return
+    const saved = loadSession<{ screen: Screen; jobId?: string; stepIndex: number; reportDamage: boolean }>('sbx_field_ui')
+    if (!saved) { restoredUi.current = true; return }
+    if (saved.jobId) {
+      const row = mySchedule.find(s => s.id === saved.jobId)
+      if (!row) {
+        // Schedule not in yet — wait for it. Once rows exist and the job
+        // still isn't among them, it finished: fall back to the dashboard.
+        if (mySchedule.length === 0) return
+        restoredUi.current = true
+        clearSession('sbx_field_ui')
+        return
+      }
+      restoredUi.current = true
+      startJob(schedToJob(row))
+      setStepIndex(saved.stepIndex)
+      // Only mid-job screens restore; end screens (success, review) restart
+      // at the flow so the driver re-confirms rather than trusting stale state.
+      if (['flow', 'camera', 'walk'].includes(saved.screen)) setScreen(saved.screen)
+      setReportDamage(saved.reportDamage)
+    } else {
+      restoredUi.current = true
+      if (['dashboard', 'jobs', 'schedule', 'inbox', 'profile', 'grade'].includes(saved.screen)) setScreen(saved.screen)
+    }
+  }, [mySchedule])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Open a workflow for a job. Re-opening the SAME job resumes where it was
   // left — a driver sent back to the dashboard after the walk-around shouldn't
