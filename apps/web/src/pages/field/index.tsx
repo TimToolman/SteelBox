@@ -197,7 +197,7 @@ function BottomNav({ active, onNav, unread = 0 }: { active: Screen; onNav: (s: S
     { id: 'dashboard', label: 'Home', icon: 'home' },
     { id: 'jobs',      label: 'Pickups & Returns', icon: 'truck' },
     { id: 'schedule',  label: 'Schedule', icon: 'calendar' },
-    { id: 'grade',     label: 'AI Grade', icon: 'star' },
+    { id: 'grade',     label: 'Inspections', icon: 'star' },
     { id: 'inbox',     label: 'Inbox', icon: 'inbox', badge: unread },
     { id: 'profile',   label: 'Profile', icon: 'user' },
   ]
@@ -914,9 +914,10 @@ export default function FieldAppPage() {
               </div>
             )}
 
-            {/* Photo review — when the unit's 8 shots are already on file the
-                photo step shows them for review instead of doing nothing. */}
-            {step?.key === 'photos12' && shots.some(sh => sh.url) && (
+            {/* Photo review — available on EVERY step, not just the photo one:
+                the walk-around doesn't stop when the checklist moves on, and a
+                shot noticed while loading is still worth taking. */}
+            {shots.some(sh => sh.url) && step?.key !== 'complete' && (
               <div style={{ margin: '0 12px 10px', background: '#fff', border: '1px solid #E1E2EC', borderRadius: '16px', padding: '14px', boxShadow: '0 1px 4px rgba(26,28,46,.08)' }}>
                 <div style={{ fontSize: '11px', fontWeight: 700, color: '#44475A', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '10px' }}>
                   Photo documentation · {shots.filter(sh => sh.url).length}/{PHOTO_TARGET} on file
@@ -949,34 +950,38 @@ export default function FieldAppPage() {
                 before loading, which is exactly when damage gets noticed —
                 reporting it here holds the unit off the marketplace instead of
                 letting it list as if nothing were wrong. */}
-            {(step?.key === 'photos12' || step?.key === 'photo1') && (
-              flowCont?.inspectionRequired ? (
-                <div style={{ margin: '0 12px 10px', background: '#FFF8E1', border: '1.5px solid #F2C94C', borderRadius: '16px', padding: '13px 14px', display: 'flex', gap: '11px', alignItems: 'flex-start' }}>
-                  <span style={{ flexShrink: 0, color: '#7B4F00', marginTop: '1px' }}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
-                  </span>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#1A1C2E' }}>Damage reported — inspection required</div>
-                    <div style={{ fontSize: '11.5px', color: '#44475A', lineHeight: 1.5, marginTop: '2px' }}>
-                      {flowCont.inspectionReason || 'Held for inspection'}
-                      {flowCont.inspectionFlaggedBy ? ` · reported by ${flowCont.inspectionFlaggedBy}` : ''}.
-                      This unit stays off the marketplace until an inspector grades it.
+            {flowCont && step?.key !== 'complete' && (
+              <div style={{ margin: '0 12px 10px' }}>
+                {/* What's on the report so far — a walk-around finds damage in
+                    passes, so this grows as you go. */}
+                {flowCont?.inspectionRequired && (
+                  <div style={{ background: '#FFF8E1', border: '1.5px solid #F2C94C', borderRadius: '16px', padding: '13px 14px', marginBottom: '9px', display: 'flex', gap: '11px', alignItems: 'flex-start' }}>
+                    <span style={{ flexShrink: 0, color: '#7B4F00', marginTop: '1px' }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
+                    </span>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#1A1C2E' }}>Damage reported — inspection required</div>
+                      <div style={{ fontSize: '11.5px', color: '#44475A', lineHeight: 1.5, marginTop: '2px' }}>
+                        {flowCont.inspectionReason || 'Held for inspection'}
+                        {flowCont.inspectionFlaggedBy ? ` · reported by ${flowCont.inspectionFlaggedBy}` : ''}.
+                        This unit stays off the marketplace until an inspector grades it.
+                      </div>
                     </div>
                   </div>
+                )}
+                {/* Always available: keep shooting, keep reporting. Finding one
+                    dent doesn't end the walk-around. */}
+                <button onClick={() => setReportDamage(true)}
+                  style={{ width: '100%', padding: '13px', borderRadius: '14px', border: '1.5px solid #F0B8B2', background: '#fff', color: '#B3261E', fontFamily: "'Google Sans', sans-serif", fontSize: '13.5px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
+                  {flowCont?.inspectionRequired ? 'Report more damage' : 'Report damage on this unit'}
+                </button>
+                <div style={{ fontSize: '11px', color: '#44475A', textAlign: 'center', marginTop: '7px', lineHeight: 1.5 }}>
+                  {flowCont?.inspectionRequired
+                    ? 'Keep walking the unit — every finding is added to the report, and you can retake any shot above.'
+                    : "Send it to Inspection Required or open a damage claim — either way it comes off the marketplace until it's inspected."}
                 </div>
-              ) : (
-                <div style={{ margin: '0 12px 10px' }}>
-                  <button onClick={() => setReportDamage(true)}
-                    style={{ width: '100%', padding: '13px', borderRadius: '14px', border: '1.5px solid #F0B8B2', background: '#fff', color: '#B3261E', fontFamily: "'Google Sans', sans-serif", fontSize: '13.5px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
-                    Report damage on this unit
-                  </button>
-                  <div style={{ fontSize: '11px', color: '#44475A', textAlign: 'center', marginTop: '7px', lineHeight: 1.5 }}>
-                    Send it to Inspection Required or open a damage claim — either way it comes off
-                    the marketplace until it's inspected.
-                  </div>
-                </div>
-              )
+              </div>
             )}
 
             {/* Condition scoring — the AI model rates the unit from its photo

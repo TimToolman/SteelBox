@@ -314,7 +314,7 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
                 {/* Stage-specific actions */}
                 <div style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                   {c.status === 'awaiting_inspection' && (
-                    <span style={{ fontSize: '12px', color: INK3 }}>Waiting on the field team's damage inspection (Field App → AI Grade → Damage claims).</span>
+                    <span style={{ fontSize: '12px', color: INK3 }}>Waiting on the field team's damage inspection (Field App → Inspections → Damage claims).</span>
                   )}
                   {c.status === 'awaiting_estimate' && (
                     <>

@@ -11,7 +11,7 @@
 // the shipping line, or copy a signed link.
 // ============================================================
 
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { claims as claimsApi, fileToDataUrl, photoUrl, DAMAGE_REASONS, type DamageClaim } from '../../lib/api'
 
 const INK = '#1A1C2E', INK2 = '#44475A', DIV = '#E1E2EC', RED = '#B3261E', BLUE = '#0057B8', GREEN = '#1B7A5A'
@@ -40,6 +40,10 @@ export function DamageCollect({ claim, onClaim, onBack, toast }: {
   const [noteText, setNoteText] = useState('')
   const [pkgUrl, setPkgUrl] = useState('')
   const [sharing, setSharing] = useState(false)
+  // Damage is found in passes — walk, shoot, walk, shoot. This jumps back to
+  // the reason picker so a long collection never buries it.
+  const pickerRef = useRef<HTMLDivElement | null>(null)
+  const backToPicker = () => pickerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   const photos = (claim.photos || []).filter(Boolean)
   const reasons = claim.photoReasons || []
@@ -133,7 +137,7 @@ export function DamageCollect({ claim, onClaim, onBack, toast }: {
       </div>
 
       {/* Capture — reason first, so nothing is filed untagged */}
-      <div style={card}>
+      <div style={card} ref={pickerRef}>
         <div style={cardTitle}>Add damage photo · tap the reason</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
           {DAMAGE_REASONS.map(r => (
@@ -150,7 +154,10 @@ export function DamageCollect({ claim, onClaim, onBack, toast }: {
 
       {/* The collection */}
       <div style={card}>
-        <div style={cardTitle}>Collected · {photos.length} photo{photos.length === 1 ? '' : 's'}</div>
+        <div style={cardTitle}>
+          Collected · {photos.length} photo{photos.length === 1 ? '' : 's'}
+          {reasons.filter(Boolean).length > 0 && ` · ${[...new Set(reasons.filter(Boolean))].join(', ')}`}
+        </div>
         {photos.length === 0 && (
           <div style={{ padding: '20px 0', textAlign: 'center', color: INK2, fontSize: '13px' }}>
             Nothing collected yet — tap a reason above to take the first shot.
@@ -184,6 +191,12 @@ export function DamageCollect({ claim, onClaim, onBack, toast }: {
             </button>
           </div>
         ))}
+        {photos.length > 0 && (
+          <button onClick={backToPicker}
+            style={{ width: '100%', marginTop: '11px', padding: '11px', borderRadius: '12px', border: `1.5px solid ${RED}`, background: '#fff', color: RED, fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+            + Found more — add another damage photo
+          </button>
+        )}
       </div>
 
       {/* Package the whole claim */}
