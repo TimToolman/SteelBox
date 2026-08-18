@@ -15,11 +15,12 @@
 // work the same claim through the same three steps.
 // ============================================================
 
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   claims as claimsApi, photoUrl, fileToDataUrl, findingsOf, claimEvents,
   type DamageClaim, type Container, type DamageFinding,
 } from '../../lib/api'
+import { pickFile, loadSession, saveSession, clearSession } from '../../lib/capture'
 import { damageLabel, SEVERITY_WORD } from '../../lib/grading'
 import { Lightbox, useLightbox, type LightboxShot } from '../../components/Lightbox'
 
@@ -33,14 +34,7 @@ const label: React.CSSProperties = { fontSize: '11px', fontWeight: 700, color: I
 const input: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '11px 13px', border: `1.5px solid ${DIV}`, borderRadius: '11px', fontSize: '13.5px', fontFamily: 'inherit', outline: 'none' }
 
 // Estimate documents are often a PDF from the shop, not a photo.
-const pickDoc = (): Promise<File | null> => new Promise(resolve => {
-  const el = document.createElement('input')
-  el.type = 'file'
-  el.accept = 'image/*,application/pdf,.pdf,.heic,.heif'
-  el.onchange = () => resolve(el.files?.[0] ?? null)
-  window.addEventListener('focus', () => setTimeout(() => resolve(el.files?.[0] ?? null), 700), { once: true })
-  el.click()
-})
+const pickDoc = () => pickFile('image/*,application/pdf,.pdf,.heic,.heif')
 
 export function ClaimWorkspace({ claim, unit, role = 'supplier', onClaim, onClose, toast }: {
   claim: DamageClaim
@@ -53,13 +47,20 @@ export function ClaimWorkspace({ claim, unit, role = 'supplier', onClaim, onClos
   onClose: () => void
   toast: (m: string) => void
 }) {
-  const [step, setStep] = useState<Step>('review')
-  const [note, setNote] = useState(claim.notes || '')
-  const [amount, setAmount] = useState(claim.estimateAmount ? String(claim.estimateAmount) : '')
-  const [scope, setScope] = useState(claim.estimateNotes || '')
-  const [shop, setShop] = useState(claim.estimateShop || '')
+  // The step and a half-typed estimate survive a page reload: attaching the
+  // shop's document opens the camera/file picker, and on a phone that round
+  // trip can reload the tab. Submitting or handing off clears the draft.
+  interface WsSave { step: Step; note: string; amount: string; scope: string; shop: string }
+  const saveKey = `sbx_claimws_${claim.id}`
+  const [restored] = useState(() => loadSession<WsSave>(saveKey))
+  const [step, setStep] = useState<Step>(restored?.step ?? 'review')
+  const [note, setNote] = useState(restored?.note ?? claim.notes ?? '')
+  const [amount, setAmount] = useState(restored?.amount ?? (claim.estimateAmount ? String(claim.estimateAmount) : ''))
+  const [scope, setScope] = useState(restored?.scope ?? claim.estimateNotes ?? '')
+  const [shop, setShop] = useState(restored?.shop ?? claim.estimateShop ?? '')
   const [busy, setBusy] = useState('')
   const [link, setLink] = useState('')
+  useEffect(() => { saveSession(saveKey, { step, note, amount, scope, shop } satisfies WsSave) }, [saveKey, step, note, amount, scope, shop])
 
   // Everything already gathered: the claim's own evidence shots, plus the
   // findings the walk-around recorded against the unit.
@@ -126,6 +127,7 @@ export function ClaimWorkspace({ claim, unit, role = 'supplier', onClaim, onClos
     setBusy('submit')
     try {
       const updated = await claimsApi.share(claim.id, 'submit')
+      clearSession(saveKey)
       onClaim(updated)
       toast(`Submitted to ${claim.shipperName} — document, .zip and sign-in link all sent`)
     } catch (e) { toast(e instanceof Error ? e.message : 'Could not submit the claim') } finally { setBusy('') }
@@ -134,6 +136,7 @@ export function ClaimWorkspace({ claim, unit, role = 'supplier', onClaim, onClos
     setBusy('handoff')
     try {
       const updated = await claimsApi.share(claim.id, 'handoff')
+      clearSession(saveKey)
       onClaim(updated)
       toast(`Sent to ${claim.supplierName} — they submit it to ${claim.shipperName}`)
     } catch (e) { toast(e instanceof Error ? e.message : 'Could not hand it over') } finally { setBusy('') }

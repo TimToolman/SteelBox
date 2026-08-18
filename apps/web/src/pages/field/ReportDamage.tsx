@@ -11,8 +11,9 @@
 // once the damage is verified, with the evidence in front of them.
 // ============================================================
 
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { containers as containersApi, photoUrl, fileToDataUrl, DAMAGE_REASONS, type Container, type DamageFinding } from '../../lib/api'
+import { pickFile, loadSession, saveSession, clearSession } from '../../lib/capture'
 
 const INK = '#1A1C2E', INK2 = '#44475A', DIV = '#E1E2EC', RED = '#B3261E', AMBER = '#7B4F00'
 
@@ -24,22 +25,21 @@ export function ReportDamageSheet({ container, sku, reportedBy, onClose, onRepor
   onReported: () => void
   toast: (m: string) => void
 }) {
-  const [picked, setPicked] = useState<string[]>([])
-  const [note, setNote] = useState('')
-  const [shot, setShot] = useState('')      // optional photo of what was found
+  // A half-written report survives the camera round-trip: taking the photo
+  // can reload the whole page (the phone reclaims memory), so what's picked
+  // here is mirrored to the session and restored when the sheet re-opens.
+  const saveKey = `sbx_report_${sku}`
+  const [picked, setPicked] = useState<string[]>(() => loadSession<{ picked: string[] }>(saveKey)?.picked ?? [])
+  const [note, setNote] = useState(() => loadSession<{ note: string }>(saveKey)?.note ?? '')
+  const [shot, setShot] = useState(() => loadSession<{ shot: string }>(saveKey)?.shot ?? '')      // optional photo of what was found
   const [busy, setBusy] = useState(false)
+  useEffect(() => { saveSession(saveKey, { picked, note, shot }) }, [saveKey, picked, note, shot])
+  // Cancel is deliberate — the draft dies with it.
+  const cancel = () => { clearSession(saveKey); onClose() }
 
   const capture = async () => {
     if (busy) return
-    const file = await new Promise<File | null>(resolve => {
-      const el = document.createElement('input')
-      el.type = 'file'
-      el.accept = 'image/*,.heic,.heif'
-      el.setAttribute('capture', 'environment')
-      el.onchange = () => resolve(el.files?.[0] ?? null)
-      window.addEventListener('focus', () => setTimeout(() => resolve(el.files?.[0] ?? null), 700), { once: true })
-      el.click()
-    })
+    const file = await pickFile('image/*,.heic,.heif', 'environment')
     if (!file || !container) return
     setBusy(true)
     try {
@@ -83,6 +83,7 @@ export function ReportDamageSheet({ container, sku, reportedBy, onClose, onRepor
       } as Partial<Container>)
       toast(already ? `${sku} — added to the damage report` : `${sku} queued for inspection — held off the marketplace`)
       setPicked([]); setNote(''); setShot('')
+      clearSession(saveKey)
       onReported()
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Could not report the damage — try again')
@@ -98,7 +99,7 @@ export function ReportDamageSheet({ container, sku, reportedBy, onClose, onRepor
   return (
     // A phone gets a bottom sheet; anything wider gets a centred card instead
     // of a full-bleed bar across the screen.
-    <div role="dialog" aria-label="Report damage" onClick={onClose} className="rd-overlay">
+    <div role="dialog" aria-label="Report damage" onClick={cancel} className="rd-overlay">
       <style>{`
         .rd-overlay { position: fixed; inset: 0; z-index: 800; background: rgba(13,14,18,.5);
           display: flex; align-items: flex-end; justify-content: center; }
@@ -118,7 +119,7 @@ export function ReportDamageSheet({ container, sku, reportedBy, onClose, onRepor
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '9px', marginBottom: '4px' }}>
           <div style={{ fontSize: '17px', fontWeight: 700, color: INK }}>{already ? 'Report more damage' : 'Report damage'}</div>
           <div style={{ fontFamily: 'monospace', fontSize: '12px', color: INK2 }}>{sku}</div>
-          <button onClick={onClose} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: INK2, fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>Cancel</button>
+          <button onClick={cancel} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: INK2, fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>Cancel</button>
         </div>
         <div style={{ fontSize: '12px', color: INK2, lineHeight: 1.5, marginBottom: '12px' }}>
           {already

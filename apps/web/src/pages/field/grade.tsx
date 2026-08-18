@@ -9,9 +9,10 @@
 // admin portal and marketplace read.
 // ============================================================
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { claims as claimsApi, photoUrl, findingsOf, CLAIM_STAGES, type Container, type DamageClaim } from '../../lib/api'
 import { ClaimWorkspace } from './ClaimWorkspace'
+import { loadSession, saveSession } from '../../lib/capture'
 import { Lightbox, useLightbox } from '../../components/Lightbox'
 import { WalkAround } from './WalkAround'
 import { GRADE_META } from '../../lib/specs'
@@ -60,9 +61,22 @@ export function GradeScreen({ containers, inspectorName, canClaim, toast, onAppl
   // condition — it can't list until this is done) and damage claims
   // (sea-freight damage evidence for the shipper/insurance pipeline).
   // Photos and results never mix.
-  const [bucket, setBucket] = useState<'retail' | 'damage'>('retail')
+  // Which bucket and which unit are open survives a page reload — the walk
+  // takes photos, and a phone camera round-trip can reload the whole tab.
+  const [bucket, setBucket] = useState<'retail' | 'damage'>(() => loadSession<{ bucket: 'retail' | 'damage' }>('sbx_grade_ui')?.bucket ?? 'retail')
   const [query, setQuery] = useState('')
   const [unit, setUnit] = useState<Container | null>(null)
+  const restoredUnit = useRef(false)
+  useEffect(() => {
+    if (restoredUnit.current || containers.length === 0) return
+    restoredUnit.current = true
+    const savedId = loadSession<{ unitId?: string }>('sbx_grade_ui')?.unitId
+    if (savedId) setUnit(containers.find(c => c.id === savedId) ?? null)
+  }, [containers])
+  useEffect(() => {
+    if (!restoredUnit.current) return
+    saveSession('sbx_grade_ui', { bucket, unitId: unit?.id })
+  }, [bucket, unit?.id])  // eslint-disable-line react-hooks/exhaustive-deps
   const [claiming, setClaiming] = useState(false)     // opening a claim off a verified finding
   // A claim just raised here — the damage bucket opens straight into it.
   const [openClaimId, setOpenClaimId] = useState('')
@@ -453,6 +467,19 @@ function DamageInspection({ inspectorName, toast, containers, openClaimId, onOpe
 
   const refresh = () => claimsApi.list().then(setClaims).catch(() => {})
   useEffect(() => { refresh() }, [])
+  // The open claim survives a reload (estimate docs are captured with the
+  // same camera round-trip that can reload the tab).
+  const restoredClaim = useRef(false)
+  useEffect(() => {
+    if (restoredClaim.current || claims.length === 0) return
+    restoredClaim.current = true
+    const savedId = loadSession<{ claimId?: string }>('sbx_claim_ui')?.claimId
+    if (savedId && !claim) setClaim(claims.find(c => c.id === savedId) ?? null)
+  }, [claims])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!restoredClaim.current) return
+    saveSession('sbx_claim_ui', { claimId: claim?.id })
+  }, [claim?.id])  // eslint-disable-line react-hooks/exhaustive-deps
   // A claim raised from an inspection lands the inspector inside it.
   useEffect(() => {
     if (!openClaimId) return

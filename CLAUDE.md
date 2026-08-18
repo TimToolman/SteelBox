@@ -119,6 +119,21 @@
   refetches on entering the view — reports filed after page load must
   appear without a manual refresh.
 
+- Mobile capture rules (`lib/capture.ts`): every photo/file input goes
+  through `pickFile()` — DOM-attached (iOS GC's detached inputs while
+  the camera is open) with a polled cancel fallback. And because a
+  phone camera round-trip can RELOAD the tab, in-flight field-app UI
+  (screen + job + step, the Report-damage draft, walk-around progress,
+  the claim workspace step/estimate, grade/claim selection) mirrors to
+  sessionStorage via load/save/clearSession and restores on mount;
+  finishing or cancelling clears it. Never hold camera-adjacent state
+  only in React.
+
+- Browser sweeps live IN THE REPO at `apps/web/e2e/` (see its README
+  for the run recipe) — sweeps kept in scratch space were lost to an
+  environment reset once. `smoke-mobile.mjs` is the first committed
+  suite; add new sweeps there, not to /tmp.
+
 - The full manual + automated regression plan lives in `TESTPLAN.md`
   — keep it current when flows change; the tester team runs it by hand.
 

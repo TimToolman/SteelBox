@@ -17,11 +17,12 @@
 // grade, which the driver can apply on the spot.
 // ============================================================
 
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   containers as containersApi, photoUrl, fileToDataUrl, SHOT_LABELS, EXTRA_SLOT_START, DAMAGE_REASONS,
   type Container, type DamageFinding,
 } from '../../lib/api'
+import { pickFile, loadSession, saveSession, clearSession } from '../../lib/capture'
 import { INSPECTOR_QUESTIONS, analyzeContainerPhotos, gradeContainer, gradeLabel, type GradeResult, type PhotoFeatures } from '../../lib/grading'
 import { GRADE_META } from '../../lib/specs'
 
@@ -58,15 +59,7 @@ export const STATIONS: Station[] = [
   { key: 'sticker', title: 'Stock number',    cue: 'Close-up of the SKU sticker — it must be legible.', shots: [7] },
 ]
 
-const pickImage = (): Promise<File | null> => new Promise(resolve => {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.accept = 'image/*,.heic,.heif'
-  input.setAttribute('capture', 'environment')
-  input.onchange = () => resolve(input.files?.[0] ?? null)
-  window.addEventListener('focus', () => setTimeout(() => resolve(input.files?.[0] ?? null), 700), { once: true })
-  input.click()
-})
+const pickImage = () => pickFile('image/*,.heic,.heif', 'environment')
 
 export function WalkAround({ container, inspectorName, finalGrader = false, onDone, onExit, onHome, toast }: {
   container: Container
@@ -80,22 +73,36 @@ export function WalkAround({ container, inspectorName, finalGrader = false, onDo
   toast: (m: string) => void
 }) {
   const [unit, setUnit] = useState<Container>(container)
-  const [at, setAt] = useState(0)                       // station index; === STATIONS.length → summary
-  const [answers, setAnswers] = useState<Record<string, number>>({})
-  const [findings, setFindings] = useState<DamageFinding[]>([])
+  // The walk survives a page reload — taking a station photo backgrounds the
+  // browser, and on a phone that often reloads the tab. Progress is mirrored
+  // to the session per unit and picked back up mid-station; only finishing
+  // the walk (queued, graded, or handed off) clears it.
+  interface WalkSave {
+    at: number; answers: Record<string, number>; findings: DamageFinding[]
+    reasons: string[]; note: string; shot: string
+    manual: boolean; manualLevel: 'minor' | 'major'; extras: Record<string, number[]>
+  }
+  const saveKey = `sbx_walk_${container.id}`
+  const [restored] = useState(() => loadSession<WalkSave>(saveKey))
+  const [at, setAt] = useState(restored?.at ?? 0)       // station index; === STATIONS.length → summary
+  const [answers, setAnswers] = useState<Record<string, number>>(restored?.answers ?? {})
+  const [findings, setFindings] = useState<DamageFinding[]>(restored?.findings ?? [])
   const [busy, setBusy] = useState(false)
 
   // Drill-down state for the station on screen
-  const [reasons, setReasons] = useState<string[]>([])
-  const [note, setNote] = useState('')
-  const [shot, setShot] = useState('')                  // damage photo URL for this finding
+  const [reasons, setReasons] = useState<string[]>(restored?.reasons ?? [])
+  const [note, setNote] = useState(restored?.note ?? '')
+  const [shot, setShot] = useState(restored?.shot ?? '')  // damage photo URL for this finding
   // Damage can be found at a stop that asks nothing (the back panel, the
   // sticker) or at one whose question came back clean — the doors latch fine
   // but there's a hole in one. Either opens the same editor by hand.
-  const [manual, setManual] = useState(false)
-  const [manualLevel, setManualLevel] = useState<'minor' | 'major'>('minor')
+  const [manual, setManual] = useState(restored?.manual ?? false)
+  const [manualLevel, setManualLevel] = useState<'minor' | 'major'>(restored?.manualLevel ?? 'minor')
   // Extra photos taken at stops that own no documentation slot, keyed by stop.
-  const [extras, setExtras] = useState<Record<string, number[]>>({})
+  const [extras, setExtras] = useState<Record<string, number[]>>(restored?.extras ?? {})
+  useEffect(() => {
+    saveSession(saveKey, { at, answers, findings, reasons, note, shot, manual, manualLevel, extras } satisfies WalkSave)
+  }, [saveKey, at, answers, findings, reasons, note, shot, manual, manualLevel, extras])
 
   // Clean-walk grading (only ever runs when nothing was found)
   const [features, setFeatures] = useState<PhotoFeatures[] | null>(null)
@@ -239,6 +246,7 @@ export function WalkAround({ container, inspectorName, finalGrader = false, onDo
         setUnit(updated)
         if (!finalGrader) {
           setQueued(true)
+          clearSession(saveKey)
           onDone(updated, true)
           return
         }
@@ -266,6 +274,7 @@ export function WalkAround({ container, inspectorName, finalGrader = false, onDo
         inspectionKind: 'opinion',
       } as Partial<Container>)
       setUnit(updated); setQueued(true); setHandoff(true)
+      clearSession(saveKey)
       toast(`${unit.sku} sent to an inspector for the final grade`)
       onDone(updated, true)
       onHome()
@@ -284,6 +293,7 @@ export function WalkAround({ container, inspectorName, finalGrader = false, onDo
         inspectionRequired: false,
       } as Partial<Container>)
       setUnit(updated)
+      clearSession(saveKey)
       toast(`${unit.sku} graded ${gradeLabel(result.grade, result.sub)} — applied to the listing`)
       onDone(updated, false)
       onHome()
