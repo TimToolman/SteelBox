@@ -104,7 +104,7 @@ const SCHEMAS = {
     // customEta/customBuildName only apply to custom-build orders
     // (status custom_in_progress): the promised completion date + which
     // catalog build the unit is being fabricated as.
-    headers: ['id','sku','guid','stockNumber','size','grade','condition','color','status','buyPrice','rentMonthly','photos','photoCount','has360','depotLocation','bayNumber','inspectorName','inspectedAt','deliveryIncluded','listingType','createdAt','purchaseCost','conditionScore','customEta','customBuildName','aiGraded','supplierId','damagePhotos','damageSeverity','preDamagePrice','inspectionRequired','inspectionReason','inspectionFlaggedBy','inspectionFlaggedAt'],
+    headers: ['id','sku','guid','stockNumber','size','grade','condition','color','status','buyPrice','rentMonthly','photos','photoCount','has360','depotLocation','bayNumber','inspectorName','inspectedAt','deliveryIncluded','listingType','createdAt','purchaseCost','conditionScore','customEta','customBuildName','aiGraded','supplierId','damagePhotos','damageSeverity','preDamagePrice','inspectionRequired','inspectionReason','inspectionFlaggedBy','inspectionFlaggedAt','inspectionFindings'],
     types: {
       buyPrice: 'number', rentMonthly: 'numberOrNull', photoCount: 'number', purchaseCost: 'number', conditionScore: 'number',
       has360: 'boolean', deliveryIncluded: 'boolean', aiGraded: 'boolean', inspectionRequired: 'boolean',
@@ -1655,6 +1655,18 @@ async function handleRequest(req, res) {
       // AI render; 9+ = extras like proof-of-delivery). Field drivers
       // document, admin fixes. When the 8th shot lands, the AI render is
       // generated automatically in the background.
+      // Damage photo from the walk-around. Not a documentation slot — this is
+      // evidence attached to one finding, so it just gets stored and the URL
+      // handed back for the finding to reference.
+      if (seg.length === 3 && seg[2] === 'damage-photo' && method === 'POST') {
+        if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Admin or driver access required')
+        if (idx === -1) return send(res, 404, { message: 'Container not found' })
+        const body = await readBody(req)
+        const saved = savePhoto(`DMG-${containers[idx].sku}`, 0, body.dataUrl)
+        if (saved.error) return send(res, 400, { message: saved.error })
+        return send(res, 201, { url: saved.url })
+      }
+
       if (seg.length === 3 && seg[2] === 'photos' && method === 'POST') {
         if (!hasRole('admin', 'driver')) return denied(user ? 403 : 401, 'Admin or driver access required')
         if (idx === -1) return send(res, 404, { message: 'Container not found' })

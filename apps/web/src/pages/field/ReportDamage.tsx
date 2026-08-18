@@ -1,41 +1,32 @@
 // ============================================================
-// Field App — "Report damage" from the walk-around.
+// Field App — "Report damage" outside the guided walk-around.
 //
-// The saleable photo set is shot before loading, and that walk-around
-// is when damage actually gets noticed. This sheet is the way to say so
-// without leaving the job: tap what you saw, add a note, and send the
-// unit down one of two tracks.
+// The walk-around captures damage station by station, in position.
+// This sheet covers the rest: something spotted while loading, or an
+// inspector adding to a report after the walk is closed out. Findings
+// append to the same report, and the unit stays off the marketplace
+// until an inspector verifies and grades it.
 //
-//   Inspection required — the unit is held off the marketplace until an
-//     inspector grades it. The depot driver doesn't have to inspect;
-//     the receiving sub-depot does it before the unit can list.
-//   Damage claim — sea-freight damage worth money from the shipping
-//     line. Opens the claim (and holds the unit back the same way).
-//
-// Either way the unit stops being listable the moment it's reported.
+// Sea-freight claims are NOT raised here — the inspector opens those
+// once the damage is verified, with the evidence in front of them.
 // ============================================================
 
 import React, { useState } from 'react'
-import {
-  containers as containersApi, claims as claimsApi,
-  DAMAGE_REASONS, type Container,
-} from '../../lib/api'
+import { containers as containersApi, DAMAGE_REASONS, type Container } from '../../lib/api'
 
 const INK = '#1A1C2E', INK2 = '#44475A', DIV = '#E1E2EC', RED = '#B3261E', AMBER = '#7B4F00'
-
-export type DamageTrack = 'inspection' | 'claim'
 
 export function ReportDamageSheet({ container, sku, reportedBy, onClose, onReported, toast }: {
   container: Container | null
   sku: string
   reportedBy: string
   onClose: () => void
-  onReported: (track: DamageTrack) => void
+  onReported: () => void
   toast: (m: string) => void
 }) {
   const [picked, setPicked] = useState<string[]>([])
   const [note, setNote] = useState('')
-  const [busy, setBusy] = useState<DamageTrack | null>(null)
+  const [busy, setBusy] = useState(false)
 
   // A walk-around finds damage in passes, not all at once — so a unit that's
   // already reported can be reported again and the findings stack up.
@@ -46,32 +37,23 @@ export function ReportDamageSheet({ container, sku, reportedBy, onClose, onRepor
   const entry = [picked.join(', '), note.trim()].filter(Boolean).join(' — ')
   const summary = already && entry ? `${already}; ${entry}` : entry || already
 
-  const send = async (track: DamageTrack) => {
+  const send = async () => {
     if (busy) return
-    if (!container) { toast('This unit is not in the container list yet — finish the photo session first'); return }
+    if (!container) { toast('This unit is not in the container list yet — start the walk-around first'); return }
     if (picked.length === 0 && !note.trim()) { toast('Pick what you saw, or add a note'); return }
-    setBusy(track)
+    setBusy(true)
     try {
-      if (track === 'claim') {
-        // The claim carries the evidence; the field app's damage collection
-        // screen is where the photos get taken, reason by reason.
-        await claimsApi.create({ containerId: container.id, notes: entry })
-      }
       await containersApi.update(container.id, {
         inspectionRequired: true,
         inspectionReason: summary,
         inspectionFlaggedBy: reportedBy,
       } as Partial<Container>)
-      toast(track === 'claim'
-        ? `${sku} — claim opened and held off the marketplace`
-        : already
-        ? `${sku} — added to the damage report`
-        : `${sku} queued for inspection — held off the marketplace`)
+      toast(already ? `${sku} — added to the damage report` : `${sku} queued for inspection — held off the marketplace`)
       setPicked([]); setNote('')
-      onReported(track)
+      onReported()
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Could not report the damage — try again')
-    } finally { setBusy(null) }
+    } finally { setBusy(false) }
   }
 
   const chip = (on: boolean): React.CSSProperties => ({
@@ -133,45 +115,15 @@ export function ReportDamageSheet({ container, sku, reportedBy, onClose, onRepor
           />
         </div>
 
-        {/* Where it goes */}
-        <div style={{ fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 2px 8px' }}>Send it to</div>
-
-        <button onClick={() => send('inspection')} disabled={!!busy}
-          style={{ width: '100%', textAlign: 'left', background: '#fff', border: `1.5px solid ${DIV}`, borderRadius: '16px', padding: '14px', marginBottom: '9px', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-          <span style={{ flexShrink: 0, width: '36px', height: '36px', borderRadius: '11px', background: '#FFF8E1', display: 'grid', placeItems: 'center', color: AMBER }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" />
-            </svg>
-          </span>
-          <span style={{ minWidth: 0 }}>
-            <span style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: INK }}>
-              {busy === 'inspection' ? 'Sending…' : already ? 'Add to the inspection report' : 'Inspection Required'}
-            </span>
-            <span style={{ display: 'block', fontSize: '11.5px', color: INK2, lineHeight: 1.5, marginTop: '2px' }}>
-              {already
-                ? 'Adds this finding to what the inspector will see. The unit stays held.'
-                : "Queues the unit for an inspector to grade. It stays off the marketplace until that's done — you don't have to inspect it yourself."}
-            </span>
-          </span>
+        <button onClick={send} disabled={busy}
+          style={{ width: '100%', padding: '15px', borderRadius: '999px', border: 'none', background: busy ? '#C4C6D0' : RED, color: '#fff', fontSize: '14px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+          {busy ? 'Sending…' : already ? 'Add to the inspection report' : 'Report it — queue for inspection'}
         </button>
-
-        <button onClick={() => send('claim')} disabled={!!busy}
-          style={{ width: '100%', textAlign: 'left', background: '#fff', border: `1.5px solid ${DIV}`, borderRadius: '16px', padding: '14px', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-          <span style={{ flexShrink: 0, width: '36px', height: '36px', borderRadius: '11px', background: '#FDECEA', display: 'grid', placeItems: 'center', color: RED }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 4h11l3 3v13H5V4Z" /><path d="M15.5 4v3.5H19" /><path d="M8.5 12.5h7" /><path d="M8.5 16h4.5" />
-            </svg>
-          </span>
-          <span style={{ minWidth: 0 }}>
-            <span style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: INK }}>
-              {busy === 'claim' ? 'Opening…' : 'Damage Claim'}
-            </span>
-            <span style={{ display: 'block', fontSize: '11.5px', color: INK2, lineHeight: 1.5, marginTop: '2px' }}>
-              Sea-freight damage worth money back from the line. Opens the claim and holds the
-              unit — collect the evidence photos under Inspections → Damage claims.
-            </span>
-          </span>
-        </button>
+        <div style={{ fontSize: '11px', color: INK2, textAlign: 'center', marginTop: '9px', lineHeight: 1.5 }}>
+          {already
+            ? 'The unit is already held; this adds to what the inspector will see.'
+            : "The unit comes off the marketplace until an inspector verifies it — you don't have to inspect it yourself."}
+        </div>
       </div>
     </div>
   )

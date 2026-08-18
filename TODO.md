@@ -55,6 +55,11 @@ Working list toward go-live. Updated 2026-07-15.
 
 ## Shipped
 
+- [x] Guided walk-around inspection — 8 stations in walking order, each with its
+      photo(s) and the condition question for that spot; a structural answer can't
+      continue without a damage photo. Any finding queues the unit for an inspector
+      (no grade offered); a clean walk grades on the spot. Claims are raised by the
+      inspector after verifying — 2026-08-18
 - [x] Report damage from the walk-around — the photo-documentation step offers
       Inspection Required (held off the marketplace until an inspector grades it)
       or a Damage Claim; grading releases the hold. "Retail grading" is now the

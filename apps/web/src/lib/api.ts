@@ -285,6 +285,7 @@ export interface Container {
   inspectionReason?: string      // what the driver saw ("Bent — rear rail")
   inspectionFlaggedBy?: string
   inspectionFlaggedAt?: string | null
+  inspectionFindings?: string    // JSON DamageFinding[] from the guided walk-around
   supplierId?: string        // owning supplier (companies resellers buy stock from)
   damagePhotos?: string[]    // claim evidence shots shown on sell-as-damaged listings
   damageSeverity?: number    // D·1 (minor) – D·5 (severe); set by the damage inspection
@@ -336,6 +337,10 @@ export const containers = {
   // stores the file under data/photos and records /photos/<file> in that slot.
   uploadPhoto: (id: string, data: { slot: number; label?: string; dataUrl: string; inspectorName?: string }) =>
     request<Container>(`/containers/${id}/photos`, { method: 'POST', body: JSON.stringify(data) }),
+  // Evidence for one walk-around finding — stored outside the 8-shot set and
+  // referenced by URL from the finding itself.
+  damagePhoto: (id: string, dataUrl: string) =>
+    request<{ url: string }>(`/containers/${id}/damage-photo`, { method: 'POST', body: JSON.stringify({ dataUrl }) }),
   deletePhoto: (id: string, slot: number) =>
     request<Container>(`/containers/${id}/photos/${slot}`, { method: 'DELETE' }),
   // Generate the AI-stitched 3D render (slot 8) from the 8 documentation shots.
@@ -979,6 +984,28 @@ export const DAMAGE_REASONS = [
   'Crack', 'Water damage', 'Missing part', 'Door / seal', 'Floor', 'Other',
 ] as const
 export type DamageReason = typeof DAMAGE_REASONS[number]
+
+// One thing found at one station of the guided walk-around. `level` is how
+// the answer scored: 'minor' is a cosmetic finding, 'major' is the capped
+// answer — which cannot be recorded without a photo.
+export interface DamageFinding {
+  station: string
+  question: string
+  level: 'minor' | 'major'
+  reasons: string[]
+  note: string
+  photo: string
+  at: string
+  by: string
+}
+
+export function findingsOf(c: Container | null | undefined): DamageFinding[] {
+  if (!c?.inspectionFindings) return []
+  try {
+    const parsed = JSON.parse(c.inspectionFindings)
+    return Array.isArray(parsed) ? parsed as DamageFinding[] : []
+  } catch { return [] }
+}
 
 export const DAMAGE_SHOT_LABELS = [
   'Wide shot of unit', 'Damage close-up 1', 'Damage close-up 2',
