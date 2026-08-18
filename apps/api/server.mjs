@@ -217,6 +217,14 @@ const SCHEMAS = {
     headers: ['id','channel','to','subject','body','relatedType','relatedId','status','createdAt'],
     types: {},
   },
+  // Demo/beta bug reports — filed from the floating "Report an issue" tab on
+  // every portal, reviewed under Admin → Beta Issues. consoleErrors is a
+  // JSON array of the page's recent errors, captured client-side.
+  issues: {
+    file: 'issues.csv',
+    headers: ['id','details','url','route','reporter','reporterEmail','reporterRole','userAgent','viewport','consoleErrors','screenshotUrl','status','createdAt'],
+    types: {},
+  },
   // Custom build products on the marketplace "Custom Builds" tab.
   // Managed in Admin → Settings. photo '' = show the built-in clipart.
   custombuilds: {
@@ -1546,6 +1554,12 @@ async function handleRequest(req, res) {
           sellerId: tenant || body.sellerId || '',
           phoneVerified: false, active: true, createdAt: new Date().toISOString(),
         }
+        // A shipper works for exactly one line — the account is meaningless
+        // without it (every claim view scopes on it), so it's mandatory.
+        if (rec.role === 'shipper') {
+          const line = readTable('shippers').find(s => s.id === rec.shipperId && s.active !== false)
+          if (!line) return send(res, 400, { message: 'A shipper account must be tied to a shipping line — pick one from the list.' })
+        }
         users.push(rec)
         writeTable('users', users)
         return send(res, 201, publicUser(rec))
@@ -1581,7 +1595,14 @@ async function handleRequest(req, res) {
           if (String(body.password).length < 8) return send(res, 400, { message: 'Password must be at least 8 characters' })
           patch.passwordHash = hashPassword(body.password)
         }
-        users[idx] = { ...users[idx], ...patch, id: users[idx].id }
+        // Same rule on edit: whatever this patch results in, a shipper-role
+        // account cannot be left without its line.
+        const next = { ...users[idx], ...patch }
+        if (next.role === 'shipper') {
+          const line = readTable('shippers').find(s => s.id === next.shipperId && s.active !== false)
+          if (!line) return send(res, 400, { message: 'A shipper account must be tied to a shipping line — pick one from the list.' })
+        }
+        users[idx] = { ...next, id: users[idx].id }
         writeTable('users', users)
         return send(res, 200, publicUser(users[idx]))
       }
@@ -1591,6 +1612,58 @@ async function handleRequest(req, res) {
         users[idx] = { ...users[idx], active: false }
         writeTable('users', users)
         return send(res, 200, { id: users[idx].id, archived: true })
+      }
+    }
+
+    // ── Beta issues — the floating "Report an issue" tab on every portal ──
+    // Anyone can file one (shoppers hit bugs too, and this is a beta), but
+    // only admins read the list. The client sends its own context bundle:
+    // URL, route, viewport, userAgent, recent console errors, screenshot.
+    if (seg[0] === 'issues') {
+      const issues = readTable('issues')
+      if (seg.length === 1 && method === 'POST') {
+        const body = await readBody(req)
+        const details = String(body.details || '').trim().slice(0, 2000)
+        if (!details) return send(res, 400, { message: 'Say what happened — that text is the whole point of the report.' })
+        let screenshotUrl = ''
+        if (String(body.screenshot || '').startsWith('data:image/')) {
+          const saved = saveDoc('ISSUE', body.screenshot)
+          if (!saved.error) screenshotUrl = saved.url
+        }
+        const rec = {
+          id: uid('iss'),
+          details,
+          url: String(body.url || '').slice(0, 500),
+          route: String(body.route || '').slice(0, 200),
+          reporter: user?.name || 'Guest',
+          reporterEmail: user?.email || '',
+          reporterRole: user?.role || 'guest',
+          userAgent: String(body.userAgent || '').slice(0, 300),
+          viewport: String(body.viewport || '').slice(0, 40),
+          consoleErrors: JSON.stringify(Array.isArray(body.consoleErrors) ? body.consoleErrors.slice(-10).map(e => String(e).slice(0, 500)) : []),
+          screenshotUrl,
+          status: 'open', createdAt: new Date().toISOString(),
+        }
+        issues.push(rec)
+        writeTable('issues', issues)
+        return send(res, 201, rec)
+      }
+      if (!hasRole('admin')) return denied(user ? 403 : 401, 'Admin access required')
+      if (seg.length === 1 && method === 'GET') {
+        return send(res, 200, [...issues].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')))
+      }
+      const ii = issues.findIndex(x => x.id === seg[1])
+      if (ii === -1) return send(res, 404, { message: 'Issue not found' })
+      if (seg.length === 2 && method === 'PATCH') {
+        const body = await readBody(req)
+        if (['open', 'resolved'].includes(body.status)) issues[ii] = { ...issues[ii], status: body.status }
+        writeTable('issues', issues)
+        return send(res, 200, issues[ii])
+      }
+      if (seg.length === 2 && method === 'DELETE') {
+        issues.splice(ii, 1)
+        writeTable('issues', issues)
+        return send(res, 200, { deleted: true })
       }
     }
 
@@ -2704,6 +2777,32 @@ async function handleRequest(req, res) {
         shippers[shpIdx] = { ...shippers[shpIdx], active: false }
         writeTable('shippers', shippers)
         return send(res, 200, { id: shippers[shpIdx].id, archived: true })
+      }
+      // The people at the line — every user account tied to this shipper.
+      // Contact management IS user management: invite mints a login, hide
+      // pulls the sign-in grant, remove unlinks (both via PATCH /users).
+      if (seg.length === 3 && seg[2] === 'contacts' && method === 'GET') {
+        return send(res, 200, readTable('users').filter(u => u.shipperId === shippers[shpIdx].id).map(publicUser))
+      }
+      if (seg.length === 3 && seg[2] === 'invite' && method === 'POST') {
+        const body = await readBody(req)
+        const email = String(body.email || '').trim().toLowerCase()
+        if (!/^\S+@\S+\.\S+$/.test(email)) return send(res, 400, { message: 'A valid email is required' })
+        const users = readTable('users')
+        if (users.some(u => (u.email || '').toLowerCase() === email)) return send(res, 409, { message: 'Email already in use' })
+        const tempPassword = randomBytes(5).toString('hex')
+        const rec = {
+          id: uid('usr'), email, passwordHash: hashPassword(tempPassword), role: 'shipper',
+          name: body.name || email, phone: body.phone || '', driverId: '', customerId: '',
+          roles: ['marketplace'], supplierId: '', shipperId: shippers[shpIdx].id, sellerId: '',
+          phoneVerified: false, active: true, createdAt: new Date().toISOString(),
+        }
+        users.push(rec)
+        writeTable('users', users)
+        queueMessage('email', email, `Your ${shippers[shpIdx].name} claims-review account`,
+          `Hello ${rec.name},\n\nDamage claims against ${shippers[shpIdx].name} are reviewed in the National SteelBox shipper portal. Your account is ready.\n\nSign in: ${(process.env.PUBLIC_ORIGIN || 'https://www.mvpcontainers.com')}/shipper\nEmail: ${email}\nTemporary password: ${tempPassword}\n\nYou will see only claims filed against ${shippers[shpIdx].name}.`,
+          'shipper', shippers[shpIdx].id)
+        return send(res, 201, { user: publicUser(rec), tempPassword })
       }
     }
     // Repair-shop network: staff read it (suppliers pick a shop when booking

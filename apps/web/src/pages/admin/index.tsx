@@ -8,7 +8,7 @@ import React, { useState, useCallback, useEffect } from 'react'
 import { GradeBadge, StatusBadge, Button, Modal, Snackbar, BuildClipart, ProgressRing } from '../../components/ui'
 import { ShowPasswordButton } from '../../lib/auth'
 import { useContainers, useOrders, useDrivers, useLive, useSnackbar, useAuth, useFavicon, useIsMobile } from '../../hooks'
-import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, sellers as sellersApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, customBuilds as customBuildsApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, cutoutContainer, SHOT_LABELS, RENDER_SLOT, RENDER_LABEL, EXTRA_SLOT_START, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Seller, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role, type CustomBuild, type Message, CUSTOM_STAGES, SIZE_LABEL } from '../../lib/api'
+import { orders as ordersApi, containers as containersApi, activity as activityApi, depots as depotsApi, drivers as driversApi, sellers as sellersApi, schedule as scheduleApi, customers as customersApi, messages as messagesApi, users as usersApi, outbox as outboxApi, customBuilds as customBuildsApi, parseTrucks, encodeTrucks, photoUrl, fileToDataUrl, cutoutContainer, SHOT_LABELS, RENDER_SLOT, RENDER_LABEL, EXTRA_SLOT_START, type Container, type Order, type Driver, type ActivityEvent, type Depot, type Seller, type Truck, type ContainerSize, type SchedJob, type SchedType, type Customer, type AuthUser, type OutboxMessage, type Role, type CustomBuild, type Message, CUSTOM_STAGES, SIZE_LABEL, issuesApi, type BetaIssue } from '../../lib/api'
 import { meetPoints as meetPointsApi, shippersApi, suppliersApi, type MeetPoint, type Shipper, type Supplier } from '../../lib/api'
 import { parseZones, zoneOverlaps } from '../../lib/territory'
 import { CoverageMap } from './CoverageMap'
@@ -16,6 +16,7 @@ import { RepairShopsView } from './RepairShops'
 import { DriverApplicationsView } from './DriverApplications'
 import { AnalyticsView } from './Analytics'
 import { claims as claimsAdminApi } from '../../lib/api'
+import { Lightbox, useLightbox } from '../../components/Lightbox'
 
 // Every size/type code, for the container add/edit selects.
 const SIZE_SELECT_OPTIONS = Object.entries(SIZE_LABEL) as [ContainerSize, string][]
@@ -31,7 +32,7 @@ const TRUCK_SIZES: { value: ContainerSize; label: string }[] = [
 
 // ── Types ─────────────────────────────────────────────────
 
-type AdminView = 'dashboard' | 'analytics' | 'orders' | 'inventory' | 'schedule' | 'activity' | 'inbox' | 'drivers' | 'driverapps' | 'customers' | 'users' | 'notifications' | 'depots' | 'repairshops' | 'sellers' | 'shippinglines' | 'builds'
+type AdminView = 'dashboard' | 'analytics' | 'orders' | 'inventory' | 'schedule' | 'activity' | 'inbox' | 'drivers' | 'driverapps' | 'customers' | 'users' | 'notifications' | 'depots' | 'repairshops' | 'sellers' | 'shippinglines' | 'builds' | 'betaissues'
 
 const VIEW_TITLES: Record<AdminView, string> = {
   dashboard:     'Dashboard',
@@ -50,6 +51,7 @@ const VIEW_TITLES: Record<AdminView, string> = {
   sellers:       'Sellers',
   shippinglines: 'Shipping Lines',
   builds:        'Custom Builds',
+  betaissues:    'Beta Issues',
   analytics:     'Analytics',
 }
 
@@ -793,13 +795,15 @@ function UserModal({ target, drivers, sellers, suppliers, shipperLines, sellerId
   const save = async () => {
     if (saving) return
     if (hasG('supplier') && !form.supplierId) { setError('Pick which supplier company this account manages'); return }
-    if (hasG('shipper') && !form.shipperId) { setError('Pick which shipping line this account reviews for'); return }
+    // A shipper works for exactly one line — mandatory whether the access
+    // comes from the shipper role or the shipper portal grant.
+    if ((form.role === 'shipper' || hasG('shipper')) && !form.shipperId) { setError('Pick which shipping line this account reviews for'); return }
     setSaving(true)
     setError('')
     const grantFields = {
       roles: form.roles,
       supplierId: hasG('supplier') ? form.supplierId : '',
-      shipperId: hasG('shipper') ? form.shipperId : '',
+      shipperId: (form.role === 'shipper' || hasG('shipper')) ? form.shipperId : '',
     }
     try {
       if (isNew) {
@@ -871,6 +875,19 @@ function UserModal({ target, drivers, sellers, suppliers, shipperLines, sellerId
             <option value="">— Select driver —</option>
             {drivers.map(d => <option key={d.id} value={d.id}>{d.name} · {d.driverCode}</option>)}
           </select>
+        </div>
+      )}
+      {form.role === 'shipper' && (
+        <div>
+          <label style={lbl}>Shipping line (required)</label>
+          <select style={inp} value={form.shipperId} onChange={e => setForm(p => ({ ...p, shipperId: e.target.value }))}>
+            <option value="">— Select the shipping line —</option>
+            {shipperLines.filter(s => s.active !== false).map(s => <option key={s.id} value={s.id}>{s.name}{s.line ? ` · ${s.line}` : ''}</option>)}
+          </select>
+          <div style={{ fontSize: '11px', color: 'var(--ink3)', margin: '-6px 0 12px', lineHeight: 1.5 }}>
+            A shipper account works for exactly one line — every claim they see is scoped to it.
+            Maintain the list under Shipping Lines in the left nav.
+          </div>
         </div>
       )}
 
@@ -1755,6 +1772,27 @@ export default function AdminPage() {
   const [editShipper, setEditShipper] = useState<Shipper | 'new' | null>(null)
   const refetchShippers = useCallback(() => shippersApi.list().then(setShipperLines).catch(() => {}), [])
   useEffect(() => { refetchShippers() }, [refetchShippers])
+  // Beta issues — reports from the floating tab, newest first.
+  const [issueList, setIssueList] = useState<BetaIssue[]>([])
+  const refetchIssues = useCallback(() => issuesApi.list().then(setIssueList).catch(() => {}), [])
+  // Re-pull on entering the view too — reports filed after page load
+  // (including from this very tab) must show up without a manual refresh.
+  useEffect(() => { refetchIssues() }, [refetchIssues, view === 'betaissues'])
+  const issueLb = useLightbox()
+  // The people at each line: one contacts panel open at a time; invite mints
+  // a login, hide pulls the sign-in grant, remove unlinks the account.
+  const [openLineId, setOpenLineId] = useState<string | null>(null)
+  const [lineContacts, setLineContacts] = useState<AuthUser[]>([])
+  const [inviteForm, setInviteForm] = useState({ name: '', email: '', phone: '' })
+  const [inviteBusy, setInviteBusy] = useState(false)
+  const loadContacts = useCallback((lineId: string) => {
+    shippersApi.contacts(lineId).then(setLineContacts).catch(() => setLineContacts([]))
+  }, [])
+  const toggleLineContacts = (lineId: string) => {
+    if (openLineId === lineId) { setOpenLineId(null); return }
+    setOpenLineId(lineId); setLineContacts([]); setInviteForm({ name: '', email: '', phone: '' })
+    loadContacts(lineId)
+  }
   // Supplier companies — for linking a supplier-portal grant to its fleet.
   const [supplierCos, setSupplierCos] = useState<Supplier[]>([])
   useEffect(() => { suppliersApi.list().then(setSupplierCos).catch(() => {}) }, [])
@@ -2358,6 +2396,7 @@ export default function AdminPage() {
           <NavItem active={view === 'users'} onClick={() => go('users')} label="Users & Access" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6" r="2.6" /><path d="M4.5 17a5.5 5.5 0 0 1 11 0" /><path d="M14.5 8.5l1 1 2-2" /></svg>} />
           <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'var(--ink3)', padding: '16px 18px 3px' }}>System</div>
           <NavItem active={view === 'notifications'} onClick={() => go('notifications')} label="Alerts" badge={reserved.length + orderList.filter(o => !o.driverId && o.status !== 'delivered').length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M4 8A6 6 0 0 1 16 8L16 12L18 14L2 14L4 12Z" /><path d="M8 16a2 2 0 004 0" /></svg>} />
+          <NavItem active={view === 'betaissues'} onClick={() => go('betaissues')} label="Beta Issues" badge={issueList.filter(i => i.status === 'open').length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="11" r="4.2" /><path d="M10 6.8V4.5M6.9 8 5 6.2M13.1 8 15 6.2M5.8 11H3.5M16.5 11h-2.3M6.9 14 5 15.8M13.1 14 15 15.8" /></svg>} />
           <NavItem active={view === 'depots'} onClick={() => go('depots')} label="Depots" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2a5.5 5.5 0 0 0-5.5 5.5c0 4 5.5 10 5.5 10s5.5-6 5.5-10A5.5 5.5 0 0 0 10 2z" /><circle cx="10" cy="7.5" r="1.8" /></svg>} />
           <NavItem active={view === 'repairshops'} onClick={() => go('repairshops')} label="Repair Shops" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13.5 6.5a3.5 3.5 0 0 0-4.8-3.2l2.1 2.1-2.1 2.1-2.1-2.1a3.5 3.5 0 0 0 4.6 4.6l4.4 4.4a1.5 1.5 0 0 0 2.1-2.1l-4.4-4.4c.13-.44.2-.9.2-1.4z" /></svg>} />
           {scope === 'global' && <NavItem active={view === 'sellers'} onClick={() => go('sellers')} label="Sellers" badge={sellerList.filter(x => x.active !== false).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7l1-4h12l1 4" /><path d="M3 7h14v10H3z" /><path d="M8 11h4" /></svg>} />}
@@ -3660,7 +3699,8 @@ export default function AdminPage() {
                     <thead><tr><Th>Shipping line</Th><Th>Trade lane</Th><Th>Claims contact</Th><Th>Address</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
                     <tbody>
                       {shipperLines.map(sh => (
-                        <tr key={sh.id} style={{ opacity: sh.active === false ? 0.5 : 1 }}>
+                        <React.Fragment key={sh.id}>
+                        <tr style={{ opacity: sh.active === false ? 0.5 : 1 }}>
                           <Td>
                             <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '7px' }}>⚓ {sh.name}</div>
                             <div style={{ fontSize: '11px', color: 'var(--ink3)', fontFamily: 'var(--mono)' }}>{sh.id}</div>
@@ -3676,6 +3716,7 @@ export default function AdminPage() {
                             : <span style={{ color: 'var(--green)', fontWeight: 600, fontSize: '11px' }}>Active</span>}</Td>
                           <Td>
                             <div style={{ display: 'flex', gap: '6px' }}>
+                              <TblBtn onClick={() => toggleLineContacts(sh.id)}>{openLineId === sh.id ? 'Hide contacts' : 'Contacts'}</TblBtn>
                               <TblBtn onClick={() => setEditShipper(sh)}>Edit</TblBtn>
                               {sh.active === false ? (
                                 <TblBtn variant="success" onClick={() => shippersApi.update(sh.id, { active: true }).then(() => { toast(`${sh.name} reactivated`); refetchShippers() }).catch(e => toast(e instanceof Error ? e.message : 'Failed'))}>Reactivate</TblBtn>
@@ -3688,12 +3729,143 @@ export default function AdminPage() {
                             </div>
                           </Td>
                         </tr>
+                        {openLineId === sh.id && (
+                          <tr>
+                            <td colSpan={6} style={{ background: 'var(--surf1)', borderTop: '1px solid var(--div)', padding: '14px 18px' }}>
+                              <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '8px' }}>
+                                Contacts at {sh.name} — accounts that review claims for this line
+                              </div>
+                              {lineContacts.length === 0 && (
+                                <div style={{ fontSize: '12px', color: 'var(--ink3)', marginBottom: '10px' }}>No accounts yet — invite the line's claims contact below.</div>
+                              )}
+                              {lineContacts.map(ct => {
+                                const hidden = !(ct.roles || []).includes('marketplace')
+                                return (
+                                  <div key={ct.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0', borderBottom: '1px solid var(--div)', flexWrap: 'wrap' }}>
+                                    <div style={{ minWidth: '180px' }}>
+                                      <div style={{ fontSize: '13px', fontWeight: 700 }}>{ct.name}</div>
+                                      <div style={{ fontSize: '11px', color: 'var(--ink3)' }}>{ct.email}{ct.phone ? <> · <span style={{ fontFamily: 'var(--mono)' }}>{ct.phone}</span></> : null}</div>
+                                    </div>
+                                    {hidden
+                                      ? <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--cta)', background: '#FDECEA', borderRadius: 'var(--pill)', padding: '2px 9px' }}>ACCESS HIDDEN</span>
+                                      : <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--green)', background: 'var(--green-cont, #E6F4EE)', borderRadius: 'var(--pill)', padding: '2px 9px' }}>CAN SIGN IN</span>}
+                                    <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
+                                      <TblBtn onClick={() => {
+                                        usersApi.update(ct.id, { roles: hidden ? ['marketplace'] : [] } as Parameters<typeof usersApi.update>[1])
+                                          .then(() => { toast(hidden ? `${ct.name} can sign in again` : `${ct.name}'s access hidden — the account stays listed`); loadContacts(sh.id) })
+                                          .catch(e => toast(e instanceof Error ? e.message : 'Failed'))
+                                      }}>{hidden ? 'Restore access' : 'Hide access'}</TblBtn>
+                                      <TblBtn variant="danger" onClick={() => {
+                                        if (!window.confirm(`Remove ${ct.name} from ${sh.name}? Their account is unlinked and deactivated.`)) return
+                                        usersApi.update(ct.id, { shipperId: '', role: 'customer', active: false } as Parameters<typeof usersApi.update>[1])
+                                          .then(() => { toast(`${ct.name} removed from ${sh.name}`); loadContacts(sh.id) })
+                                          .catch(e => toast(e instanceof Error ? e.message : 'Failed'))
+                                      }}>Remove</TblBtn>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                              {/* Invite — mints the login and emails the temp password */}
+                              <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                <input placeholder="Full name" value={inviteForm.name} onChange={e => setInviteForm(p => ({ ...p, name: e.target.value }))}
+                                  style={{ flex: '1 1 150px', padding: '8px 11px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '12.5px', outline: 'none', fontFamily: 'var(--sans)' }} />
+                                <input placeholder="email@line.com" value={inviteForm.email} onChange={e => setInviteForm(p => ({ ...p, email: e.target.value }))}
+                                  style={{ flex: '1 1 190px', padding: '8px 11px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '12.5px', outline: 'none', fontFamily: 'var(--sans)' }} />
+                                <input placeholder="Phone (optional)" value={inviteForm.phone} onChange={e => setInviteForm(p => ({ ...p, phone: e.target.value }))}
+                                  style={{ flex: '1 1 130px', padding: '8px 11px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '12.5px', outline: 'none', fontFamily: 'var(--sans)' }} />
+                                <Button variant="primary" size="md" disabled={inviteBusy || !inviteForm.email} onClick={() => {
+                                  setInviteBusy(true)
+                                  shippersApi.invite(sh.id, inviteForm)
+                                    .then(() => { toast(`Invite sent — ${inviteForm.email} received a temporary password for the shipper portal`); setInviteForm({ name: '', email: '', phone: '' }); loadContacts(sh.id) })
+                                    .catch(e => toast(e instanceof Error ? e.message : 'Invite failed'))
+                                    .finally(() => setInviteBusy(false))
+                                }}>{inviteBusy ? 'Inviting…' : 'Invite'}</Button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </React.Fragment>
                       ))}
                       {shipperLines.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', padding: '20px', color: 'var(--ink3)', fontSize: '13px' }}>No shipping lines yet — add the carriers your suppliers file claims against.</td></tr>}
                     </tbody>
                   </table>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ── Beta issues — reports from the floating tab on every portal ── */}
+          {view === 'betaissues' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <div>
+                  <div style={{ fontSize: '15px', fontWeight: 700 }}>Beta Issues</div>
+                  <div style={{ fontSize: '12px', color: 'var(--ink3)', marginTop: '2px' }}>
+                    {issueList.filter(i => i.status === 'open').length} open · filed from the "Report an issue" tab. Copy one as a prompt to hand it straight to a developer (or Claude).
+                  </div>
+                </div>
+                <Button variant="ghost" size="md" onClick={() => refetchIssues()}>Refresh</Button>
+              </div>
+              {issueList.length === 0 && (
+                <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', padding: '26px', textAlign: 'center', color: 'var(--ink3)', fontSize: '13px' }}>
+                  Nothing reported yet. The floating tab on the right edge of every portal files straight into this list.
+                </div>
+              )}
+              <div style={{ display: 'grid', gap: '10px' }}>
+                {issueList.map(iss => {
+                  let errs: string[] = []
+                  try { errs = JSON.parse(iss.consoleErrors || '[]') } catch { errs = [] }
+                  const prompt = [
+                    `Bug report from the SteelBox beta (${new Date(iss.createdAt).toLocaleString()}):`,
+                    ``,
+                    iss.details,
+                    ``,
+                    `Where: ${iss.url}`,
+                    `Reporter: ${iss.reporter}${iss.reporterEmail ? ` <${iss.reporterEmail}>` : ''} (${iss.reporterRole})`,
+                    `Browser: ${iss.userAgent}`,
+                    `Viewport: ${iss.viewport}`,
+                    errs.length ? `Console errors:\n${errs.map(e => `  - ${e}`).join('\n')}` : `Console errors: none captured`,
+                    ``,
+                    `Please find the cause and fix it.`,
+                  ].join('\n')
+                  return (
+                    <div key={iss.id} style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1px solid var(--div)', boxShadow: 'var(--sh1)', padding: '14px 16px', opacity: iss.status === 'resolved' ? 0.6 : 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '9px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.6px', borderRadius: 'var(--pill)', padding: '2px 9px', background: iss.status === 'open' ? '#FDECEA' : 'var(--surf1)', color: iss.status === 'open' ? '#B3261E' : 'var(--ink3)' }}>
+                          {iss.status === 'open' ? 'OPEN' : 'RESOLVED'}
+                        </span>
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--ink3)' }}>{new Date(iss.createdAt).toLocaleString()}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--ink2)' }}>{iss.reporter}{iss.reporterEmail ? ` · ${iss.reporterEmail}` : ''} · {iss.reporterRole}</span>
+                        <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--ink3)' }}>{iss.route || iss.url}</span>
+                      </div>
+                      <div style={{ fontSize: '13.5px', marginTop: '8px', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{iss.details}</div>
+                      <div style={{ display: 'flex', gap: '14px', marginTop: '9px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                        {iss.screenshotUrl && (
+                          <img src={photoUrl(iss.screenshotUrl)} alt="Reporter's screenshot"
+                            onClick={() => issueLb.show([{ url: photoUrl(iss.screenshotUrl), caption: 'Reporter\u2019s screenshot', sub: iss.route || iss.url }])}
+                            style={{ width: '130px', height: '82px', objectFit: 'cover', borderRadius: 'var(--r8)', border: '1px solid var(--div)', cursor: 'zoom-in' }} />
+                        )}
+                        <div style={{ flex: 1, minWidth: '220px', fontSize: '11px', color: 'var(--ink3)', lineHeight: 1.6 }}>
+                          <div><b style={{ color: 'var(--ink2)' }}>Browser:</b> {iss.userAgent.split(') ').pop() || iss.userAgent} · {iss.viewport}</div>
+                          {errs.length > 0 && (
+                            <div style={{ fontFamily: 'var(--mono)', fontSize: '10.5px', background: 'var(--surf1)', borderRadius: 'var(--r8)', padding: '7px 9px', marginTop: '5px', maxHeight: '92px', overflowY: 'auto' }}>
+                              {errs.map((e, i) => <div key={i}>{e}</div>)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px', marginTop: '11px' }}>
+                        <TblBtn onClick={() => { navigator.clipboard?.writeText(prompt).then(() => toast('Copied as a fix-it prompt')).catch(() => toast('Copy failed')) }}>Copy as prompt</TblBtn>
+                        {iss.status === 'open'
+                          ? <TblBtn variant="success" onClick={() => issuesApi.update(iss.id, { status: 'resolved' }).then(refetchIssues).catch(e => toast(e instanceof Error ? e.message : 'Failed'))}>Mark resolved</TblBtn>
+                          : <TblBtn onClick={() => issuesApi.update(iss.id, { status: 'open' }).then(refetchIssues).catch(e => toast(e instanceof Error ? e.message : 'Failed'))}>Reopen</TblBtn>}
+                        <TblBtn variant="danger" onClick={() => { if (window.confirm('Delete this report for good?')) issuesApi.remove(iss.id).then(refetchIssues).catch(e => toast(e instanceof Error ? e.message : 'Failed')) }}>Delete</TblBtn>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              {issueLb.open && <Lightbox shots={issueLb.open.shots} index={issueLb.open.index} onIndex={issueLb.setIndex} onClose={issueLb.close} />}
             </div>
           )}
 

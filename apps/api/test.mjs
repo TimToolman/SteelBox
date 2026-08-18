@@ -369,6 +369,53 @@ try {
   const shpForbidden = await api('/shippers', { method: 'POST', token: mvpAdmin, body: { name: 'Rogue Line' } })
   check('reseller admin cannot edit the directory', shpForbidden.status === 403)
 
+  // ── One line per shipper account, and the contacts behind each line ──
+  console.log('Shipper accounts & line contacts')
+  const noLine = await api('/users', { method: 'POST', token: admin, body: { email: 'lineless@test.dev', password: 'test1234x', role: 'shipper', name: 'No Line' } })
+  check('a shipper account without a line is refused', noLine.status === 400 && /shipping line/i.test(noLine.body?.message || ''))
+  const withLine = await api('/users', { method: 'POST', token: admin, body: { email: 'tied@meridianlines.com', password: 'test1234x', role: 'shipper', name: 'Tied Reviewer', shipperId: 'shp_01' } })
+  check('tied to a line, the account is minted', withLine.status === 201 && withLine.body?.shipperId === 'shp_01')
+  const untie = await api(`/users/${withLine.body.id}`, { method: 'PATCH', token: admin, body: { shipperId: '' } })
+  check('and the line cannot be edited away later', untie.status === 400)
+  // Contacts = the users tied to the line; invite mints a working login.
+  const inv = await api('/shippers/shp_01/invite', { method: 'POST', token: admin, body: { name: 'Ana Osei', email: 'ana.osei@meridianlines.com', phone: '(310) 555-0299' } })
+  check('inviting a contact mints a shipper login', inv.status === 201 && inv.body?.user?.shipperId === 'shp_01' && !!inv.body?.tempPassword)
+  const invMail = (await api('/outbox', { token: admin })).body.find(m => m.to === 'ana.osei@meridianlines.com')
+  check('the invite email carries the portal link + temp password', !!invMail && invMail.body.includes('/shipper') && invMail.body.includes(inv.body.tempPassword))
+  const invLogin = await api('/auth/login', { method: 'POST', body: { email: 'ana.osei@meridianlines.com', password: inv.body.tempPassword } })
+  check('the invited contact can sign in with it', invLogin.status === 200 && !!invLogin.body?.token)
+  const invDup = await api('/shippers/shp_01/invite', { method: 'POST', token: admin, body: { name: 'Ana Again', email: 'ana.osei@meridianlines.com' } })
+  check('a duplicate invite is refused', invDup.status === 409)
+  const contacts = await api('/shippers/shp_01/contacts', { token: admin })
+  check('the contacts list shows everyone at the line', contacts.status === 200 && contacts.body.some(u => u.email === 'ana.osei@meridianlines.com') && contacts.body.some(u => u.email === 'tied@meridianlines.com'))
+  // Hide = pull every grant ('blocked' sentinel keeps the row listed).
+  const hide = await api(`/users/${inv.body.user.id}`, { method: 'PATCH', token: admin, body: { roles: [] } })
+  check('hiding access empties the grants but keeps the contact', hide.status === 200 && Array.isArray(hide.body?.roles) && hide.body.roles.length === 0)
+  const invScoped = await api('/claims', { token: invLogin.body.token })
+  check("a contact's claim view is scoped to their own line", invScoped.status === 200 && invScoped.body.every(c => c.shipperId === 'shp_01'))
+  // Remove = unlink + deactivate (role drops to customer so the rule allows it).
+  const removed = await api(`/users/${inv.body.user.id}`, { method: 'PATCH', token: admin, body: { shipperId: '', role: 'customer', active: false } })
+  check('removing a contact unlinks and deactivates the account', removed.status === 200 && removed.body?.shipperId === '' && removed.body?.active === false)
+  check('and they leave the contacts list', !(await api('/shippers/shp_01/contacts', { token: admin })).body.some(u => u.id === inv.body.user.id))
+
+  // ── Beta issues — the floating "Report an issue" tab ──
+  console.log('Beta issues')
+  const issPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+  const issBare = await api('/issues', { method: 'POST', body: { url: 'http://x/shop' } })
+  check('a report without any words is refused', issBare.status === 400)
+  const issGuest = await api('/issues', { method: 'POST', body: { details: 'Zoom did nothing on the claim page', url: 'http://x/claim?id=1', route: '/claim?id=1', userAgent: 'TestBrowser/1.0', viewport: '1280×950', consoleErrors: ['TypeError: boom @ claim.tsx:12'], screenshot: issPng } })
+  check('a guest can file a report (shoppers hit bugs too)', issGuest.status === 201 && issGuest.body?.reporter === 'Guest')
+  check('the screenshot lands on disk, not inline', /^\/photos\//.test(issGuest.body?.screenshotUrl || ''))
+  check('console errors ride along', JSON.parse(issGuest.body.consoleErrors)[0].includes('TypeError'))
+  const issSigned = await api('/issues', { method: 'POST', token: supplier, body: { details: 'Filter reset also cleared my ZIP', url: 'http://x/shop', route: '/shop' } })
+  check('a signed-in report carries who filed it', issSigned.status === 201 && issSigned.body?.reporterEmail === 'supplier@oceanbox.com')
+  const issDenied = await api('/issues', { token: supplier })
+  check('only admins read the list', issDenied.status === 403 || issDenied.status === 401)
+  const issList = await api('/issues', { token: admin })
+  check('admin sees the queue, newest first', issList.status === 200 && issList.body.length >= 2 && issList.body[0].createdAt >= issList.body[1].createdAt)
+  const issDone = await api(`/issues/${issGuest.body.id}`, { method: 'PATCH', token: admin, body: { status: 'resolved' } })
+  check('an issue can be marked resolved', issDone.status === 200 && issDone.body?.status === 'resolved')
+
   // ── Walk-around damage report → inspection hold ──
   // A driver spots damage while shooting the saleable photo set. Reporting it
   // pulls the unit off the marketplace until an inspector grades it.

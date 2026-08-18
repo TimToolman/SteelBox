@@ -1071,6 +1071,37 @@ export const shippersApi = {
   // Deactivates (soft delete) so existing claims keep their reference.
   remove: (id: string) =>
     request<{ id: string; archived: true }>(`/shippers/${id}`, { method: 'DELETE' }),
+  // The people at the line — user accounts tied to this shipper. Invite
+  // mints a login (temp password emailed); hide/remove go through /users.
+  contacts: (id: string) => request<AuthUser[]>(`/shippers/${id}/contacts`),
+  invite: (id: string, data: { name: string; email: string; phone?: string }) =>
+    request<{ user: AuthUser; tempPassword: string }>(`/shippers/${id}/invite`, { method: 'POST', body: JSON.stringify(data) }),
+}
+
+// ── Beta issues — bug reports from the floating tab (demo/beta) ──
+export interface BetaIssue {
+  id: string
+  details: string
+  url: string
+  route: string
+  reporter: string
+  reporterEmail: string
+  reporterRole: string
+  userAgent: string
+  viewport: string
+  consoleErrors: string      // JSON string[] of the page's recent errors
+  screenshotUrl: string
+  status: 'open' | 'resolved'
+  createdAt: string
+}
+export const issuesApi = {
+  // Filing works signed-in or not — shoppers hit bugs too.
+  create: (data: { details: string; url: string; route: string; userAgent: string; viewport: string; consoleErrors: string[]; screenshot?: string }) =>
+    request<BetaIssue>('/issues', { method: 'POST', body: JSON.stringify(data) }),
+  list: () => request<BetaIssue[]>('/issues'),
+  update: (id: string, data: { status: 'open' | 'resolved' }) =>
+    request<BetaIssue>(`/issues/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  remove: (id: string) => request<{ deleted: true }>(`/issues/${id}`, { method: 'DELETE' }),
 }
 
 export const repairShops = {

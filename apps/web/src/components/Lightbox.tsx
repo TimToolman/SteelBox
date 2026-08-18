@@ -180,11 +180,14 @@ export function ThumbStrip({ shots, index, onPick, tone = 'dark' }: {
 
 // ── Full-screen viewer ────────────────────────────────────
 
-export function Lightbox({ shots, index, onIndex, onClose }: {
+export function Lightbox({ shots, index, onIndex, onClose, onShow3D }: {
   shots: LightboxShot[]
   index: number
   onIndex: (i: number) => void
   onClose: () => void
+  // Marketplace gallery only: closes the viewer and lands back on the
+  // gallery's rotatable 3D view. Absent everywhere else — no pill shown.
+  onShow3D?: () => void
 }) {
   const { zoom, zoomBy, reset, handlers, transform, cursor } = useZoomPan()
   const frameRef = useRef<HTMLDivElement | null>(null)
@@ -246,23 +249,24 @@ export function Lightbox({ shots, index, onIndex, onClose }: {
     <div role="dialog" aria-modal="true" aria-label={shot.caption || 'Photo'} onClick={onClose}
       style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(8,9,13,.95)', display: 'flex', flexDirection: 'column' }}>
 
-      {/* Top bar — where you are in the set, and the way out */}
-      <div onClick={stop} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '13px 16px', color: '#fff', flexShrink: 0 }}>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: '12px', fontWeight: 700, letterSpacing: '.6px', color: 'rgba(255,255,255,.92)' }}>
-          {many ? `${index + 1} / ${shots.length}` : 'PHOTO'}
-        </span>
-        {shot.caption && (
-          <span style={{ fontSize: '13px', fontWeight: 600, color: 'rgba(255,255,255,.62)', letterSpacing: '-.1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shot.caption}</span>
-        )}
-        <button ref={closeRef} className="sb-vc-btn" onClick={onClose} aria-label="Close" title="Close (Esc)"
-          style={{ marginLeft: 'auto', width: '38px', height: '38px', borderRadius: '50%', border: '1px solid rgba(255,255,255,.16)', background: 'rgba(255,255,255,.07)', color: '#fff', cursor: 'pointer', display: 'grid', placeItems: 'center', padding: 0, flexShrink: 0 }}>
-          <Glyph d={Icon.close} />
-        </button>
-      </div>
-
-      {/* The photo */}
+      {/* The photo. Close (and the 3D escape hatch, when the host has one)
+          sit ON the image box's top edge, not the far screen corner — the
+          eye is on the photo, so the way out lives where the eye already is. */}
       <div ref={frameRef} onClick={stop}
-        style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '0 14px' }}>
+        style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '46px 14px 0' }}>
+        <div style={{ position: 'absolute', top: '10px', right: '14px', zIndex: 3, display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {onShow3D && (
+            <button onClick={onShow3D} title="Back to the gallery's rotatable 3D view"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', padding: '9px 15px', borderRadius: '999px', border: '1px solid rgba(255,255,255,.25)', background: 'rgba(255,255,255,.1)', color: '#fff', fontSize: '12px', fontWeight: 700, letterSpacing: '.2px', cursor: 'pointer', fontFamily: 'inherit' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z" /><path d="M3 7l9 5 9-5" /><path d="M12 12v10" /></svg>
+              Show 3D View
+            </button>
+          )}
+          <button ref={closeRef} className="sb-vc-btn" onClick={onClose} aria-label="Close" title="Close (Esc)"
+            style={{ width: '40px', height: '40px', borderRadius: '50%', border: '1px solid rgba(255,255,255,.25)', background: 'rgba(20,22,30,.72)', color: '#fff', cursor: 'pointer', display: 'grid', placeItems: 'center', padding: 0, flexShrink: 0 }}>
+            <Glyph d={Icon.close} />
+          </button>
+        </div>
         <img
           src={shot.url} alt={shot.caption || ''} {...handlers}
           style={{
@@ -273,8 +277,18 @@ export function Lightbox({ shots, index, onIndex, onClose }: {
         />
       </div>
 
-      {/* Controls sit under the image box — previous, zoom out, zoom in, next */}
-      <div onClick={stop} style={{ flexShrink: 0, padding: '14px 16px 18px', display: 'grid', justifyItems: 'center', gap: '11px' }}>
+      {/* Controls sit under the image box — previous, zoom out, zoom in,
+          next — with the where-am-I label right beside them, not stranded
+          in the far top corner of the screen. */}
+      <div onClick={stop} style={{ flexShrink: 0, padding: '12px 16px 18px', display: 'grid', justifyItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '9px', color: '#fff', maxWidth: '92%', overflow: 'hidden' }}>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: '12px', fontWeight: 700, letterSpacing: '.6px', color: 'rgba(255,255,255,.92)', whiteSpace: 'nowrap' }}>
+            {many ? `${index + 1} / ${shots.length}` : 'PHOTO'}
+          </span>
+          {shot.caption && (
+            <span style={{ fontSize: '13.5px', fontWeight: 700, letterSpacing: '-.1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shot.caption}</span>
+          )}
+        </div>
         <ViewerControls tone="dark" zoom={zoom} canStep={many}
           onPrev={() => go(-1)} onNext={() => go(1)}
           onZoomIn={() => zoomBy(STEP)} onZoomOut={() => zoomBy(-STEP)} onFit={reset} />

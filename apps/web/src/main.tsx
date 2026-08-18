@@ -12,6 +12,7 @@ import FieldAppPage from './pages/field/index'
 import { AuthProvider, RequireRole } from './lib/auth'
 import { resolveTenant } from './tenant'
 import { captureAttribution } from './lib/attribution'
+import { BugReportTab } from './components/BugReport'
 
 // Record UTM params / referrer once per page load so every lead or
 // quote created later in the session carries its attribution.
@@ -67,6 +68,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        {/* Demo/beta: the floating "Report an issue" tab rides on every
+            portal — one place for testers to log what they hit. */}
+        <BugReportTab />
       </BrowserRouter>
     </AuthProvider>
   </React.StrictMode>

@@ -528,11 +528,6 @@ export default function MarketplacePage() {
           <aside style={isMobile
             ? { display: filtersOpen ? 'block' : 'none', width: '100%', boxSizing: 'border-box', borderBottom: '1px solid var(--div)', padding: '14px 16px', background: 'var(--surf-w)' }
             : { width: 'var(--sb-w)', flexShrink: 0, borderRight: '1px solid var(--div)', padding: '14px 10px', position: 'sticky', top: 'var(--nav-h)', height: 'calc(100vh - var(--nav-h))', overflowY: 'auto', background: 'var(--surf-w)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.4px' }}>Filters</span>
-              <button onClick={() => { setCondFilter('used'); clearAllFilters() }} style={{ background: 'none', border: 'none', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>Reset</button>
-            </div>
-
             {/* Zip Destination — first and loudest: the delivery ZIP drives
                 which reseller serves the shopper (nav branding), which yards'
                 inventory shows, and the all-in delivered price. */}
@@ -582,10 +577,17 @@ export default function MarketplacePage() {
               </select>
             </div>
 
-            {/* Sub-filters appear once the shopper has decided New vs Used */}
+            {/* Sub-filters appear once the shopper has decided New vs Used.
+                The Filters / Reset header sits HERE, not at the top of the
+                rail — ZIP and Sort By aren't filters and Reset must not read
+                as though it would clear them. */}
             {condFilter !== 'all' && (
               <>
-                <hr style={{ border: 'none', borderTop: '1px solid var(--div)', margin: '8px 0' }} />
+                <hr style={{ border: 'none', borderTop: '1px solid var(--div)', margin: '8px 0 10px' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.4px' }}>Filters</span>
+                  <button onClick={() => { setCondFilter('used'); clearAllFilters() }} style={{ background: 'none', border: 'none', fontSize: '11px', fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>Reset</button>
+                </div>
 
                 {/* Size filters — select pills; none selected = every size */}
                 <div style={{ marginBottom: '10px' }}>

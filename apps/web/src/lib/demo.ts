@@ -46,6 +46,7 @@ const db: Record<string, Row[]> = Object.fromEntries([
   ['mktcampaigns', snapshot.mktcampaigns],
   ['mktconnections', snapshot.mktconnections],
   ['driverapps', snapshot.driverapps],
+  ['issues', []],   // beta bug reports — session-only, nothing seeded
 ].map(([k, v]) => [k as string, JSON.parse(JSON.stringify(v ?? []))]))
 
 const uid = (p: string) => `${p}_demo_${Math.random().toString(36).slice(2, 10)}`
@@ -511,6 +512,48 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
     if (b.estimateShop !== undefined) c.estimateShop = b.estimateShop
     claimEvent(c, storedUser()?.name || 'Inspector', `Repair-shop estimate attached${b.estimateShop ? ` (${b.estimateShop})` : ''}`)
     return ok(c)
+  }
+
+  // Beta bug report — the screenshot stays a data URL (photoUrl passes those
+  // through untouched), everything else mirrors the API's shape.
+  if (route === '/issues' && method === 'POST') {
+    const details = String(body.details || '').trim().slice(0, 2000)
+    if (!details) throw new Error('Say what happened — that text is the whole point of the report.')
+    const me = storedUser()
+    const rec = {
+      id: uid('iss'), details,
+      url: String(body.url || ''), route: String(body.route || ''),
+      reporter: me?.name || 'Guest', reporterEmail: me?.email || '', reporterRole: me?.role || 'guest',
+      userAgent: String(body.userAgent || ''), viewport: String(body.viewport || ''),
+      consoleErrors: JSON.stringify(Array.isArray(body.consoleErrors) ? body.consoleErrors.slice(-10) : []),
+      screenshotUrl: String(body.screenshot || '').startsWith('data:image/') ? String(body.screenshot) : '',
+      status: 'open', createdAt: new Date().toISOString(),
+    } as Row
+    db.issues.push(rec)
+    return ok(rec)
+  }
+
+  // Shipping-line contacts — the user accounts tied to one line. Invite
+  // mints a login the same way the API does (temp password, pretend email).
+  const shpContacts = route.match(/^\/shippers\/([^/]+)\/(contacts|invite)$/)
+  if (shpContacts) {
+    const line = db.shippers.find(s => s.id === shpContacts[1])
+    if (!line) throw new Error('Shipping line not found')
+    if (shpContacts[2] === 'contacts' && method === 'GET') {
+      return ok(db.users.filter(u => u.shipperId === line.id).map(u => ({ ...u })))
+    }
+    if (shpContacts[2] === 'invite' && method === 'POST') {
+      const email = String(body.email || '').trim().toLowerCase()
+      if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error('A valid email is required')
+      if (db.users.some(u => String(u.email || '').toLowerCase() === email)) throw new Error('Email already in use')
+      const rec = {
+        id: uid('usr'), email, role: 'shipper', name: String(body.name || email), phone: String(body.phone || ''),
+        driverId: '', customerId: '', roles: ['marketplace'], supplierId: '', shipperId: line.id, sellerId: '',
+        phoneVerified: false, active: true, createdAt: new Date().toISOString(),
+      } as Row
+      db.users.push(rec)
+      return ok({ user: rec, tempPassword: 'demo-invite' })
+    }
   }
 
   // Share the estimate with the shipping line (pretend email + audit event)

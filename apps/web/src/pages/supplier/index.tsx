@@ -15,7 +15,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../hooks'
 import {
   containers as containersApi, claims as claimsApi, suppliersApi, shippersApi, repairShops as repairShopsApi,
-  depots as depotsApi, prefs as prefsApi, photoUrl, findingsOf, SIZE_LABEL, CLAIM_STAGES,
+  depots as depotsApi, prefs as prefsApi, photoUrl, findingsOf, SIZE_LABEL, CLAIM_STAGES, SHOT_LABELS,
   type Container, type DamageClaim, type Supplier, type Shipper, type RepairShop, type ClaimStatus, type AuthUser, type Depot,
 } from '../../lib/api'
 import { GRADE_META, DAMAGE_DISCOUNT } from '../../lib/specs'
@@ -289,12 +289,17 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
                 <ChipRow>{severitiesPresent.map(s => <Chip key={s} on={fSeverity.set.has(s)} onClick={() => fSeverity.toggle(s)}>{damageLabel(s)}</Chip>)}</ChipRow>
               </FilterGroup>
             )}
-            <FilterGroup label="Shipping line">
-              <select value={fLine} onChange={e => setFLine(e.target.value)} style={railSelect}>
-                <option value="">All lines</option>
-                {shipperList.map(sh => <option key={sh.id} value={sh.id}>{sh.name}</option>)}
-              </select>
-            </FilterGroup>
+            {/* An account tied to one shipping line only ever sees that
+                line's claims — a line filter would be a control with one
+                setting, so it disappears for them. */}
+            {!user?.shipperId && (
+              <FilterGroup label="Shipping line">
+                <select value={fLine} onChange={e => setFLine(e.target.value)} style={railSelect}>
+                  <option value="">All lines</option>
+                  {shipperList.map(sh => <option key={sh.id} value={sh.id}>{sh.name}</option>)}
+                </select>
+              </FilterGroup>
+            )}
             <PeriodFilter period={period} onChange={setPeriod} years={claimYears} />
           </FilterRail>
 
@@ -398,10 +403,19 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
             {fleet.length === 0 && <div style={{ ...card, color: INK3, fontSize: '13px' }}>No units assigned to this supplier yet.</div>}
             {fleet.map(c => {
               const meta = GRADE_META[c.grade]
+              // Every shot on the unit — documentation first, then any damage
+              // photos — so the fleet card opens the whole story, zoomable.
+              const unitShots = [
+                ...(c.photos || []).map((u, i) => ({ u, cap: SHOT_LABELS[i] || `Photo ${i + 1}` })),
+                ...(c.damagePhotos || []).map((u, i) => ({ u, cap: `Damage photo ${i + 1}` })),
+              ].filter(s => !!s.u).map(s => ({ url: photoUrl(s.u), caption: s.cap, sub: c.sku }))
               return (
                 <div key={c.id} style={{ ...card, padding: '12px', display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  <div style={{ width: '58px', height: '44px', borderRadius: '8px', background: 'linear-gradient(135deg,#CBD5E8,#A8BFDF)', overflow: 'hidden', flexShrink: 0 }}>
-                    {c.photos?.filter(Boolean)[0] && <img src={photoUrl(c.photos.filter(Boolean)[0])} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                  <div
+                    onClick={() => unitShots.length && lb.show(unitShots, 0)}
+                    title={unitShots.length ? `View ${unitShots.length} photos` : undefined}
+                    style={{ width: '58px', height: '44px', borderRadius: '8px', background: 'linear-gradient(135deg,#CBD5E8,#A8BFDF)', overflow: 'hidden', flexShrink: 0, cursor: unitShots.length ? 'zoom-in' : 'default' }}>
+                    {c.photos?.filter(Boolean)[0] && <img src={photoUrl(c.photos.filter(Boolean)[0])} alt={c.sku} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
                   </div>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ fontFamily: 'var(--mono)', fontSize: '12px', fontWeight: 700 }}>{c.sku}</div>
