@@ -19,7 +19,7 @@
 
 import React, { useMemo, useRef, useState } from 'react'
 import {
-  containers as containersApi, photoUrl, fileToDataUrl, SHOT_LABELS, DAMAGE_REASONS,
+  containers as containersApi, photoUrl, fileToDataUrl, SHOT_LABELS, EXTRA_SLOT_START, DAMAGE_REASONS,
   type Container, type DamageFinding,
 } from '../../lib/api'
 import { INSPECTOR_QUESTIONS, analyzeContainerPhotos, gradeContainer, gradeLabel, type GradeResult, type PhotoFeatures } from '../../lib/grading'
@@ -32,6 +32,16 @@ const INK = '#1A1C2E', INK2 = '#44475A', DIV = '#E1E2EC', BLUE = '#0057B8', GO =
 
 const card: React.CSSProperties = { margin: '0 12px 10px', background: '#fff', borderRadius: '16px', border: `1px solid ${DIV}`, padding: '14px', boxShadow: '0 1px 4px rgba(26,28,46,.08)' }
 const cardTitle: React.CSSProperties = { fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '10px' }
+
+// One frame for every walk-around photo: a 4:3 box, the shot contained inside
+// it on a neutral ground. Container shots are wide — cropping them to fill a
+// short strip hid whether the panel was framed at all.
+// Size is controlled by the column width alone — a max-height here would
+// fight the ratio and squash the frame back out of shape.
+const shotBox: React.CSSProperties = {
+  width: '100%', aspectRatio: '4 / 3', objectFit: 'contain',
+  borderRadius: '10px', display: 'block', background: '#EEF1F6', boxSizing: 'border-box',
+}
 
 // The route around the container. `shots` are documentation slots (0–7);
 // `question` is the INSPECTOR_QUESTIONS key asked at that spot.
@@ -80,6 +90,8 @@ export function WalkAround({ container, inspectorName, onDone, onExit, toast }: 
   // but there's a hole in one. Either opens the same editor by hand.
   const [manual, setManual] = useState(false)
   const [manualLevel, setManualLevel] = useState<'minor' | 'major'>('minor')
+  // Extra photos taken at stops that own no documentation slot, keyed by stop.
+  const [extras, setExtras] = useState<Record<string, number[]>>({})
 
   // Clean-walk grading (only ever runs when nothing was found)
   const [features, setFeatures] = useState<PhotoFeatures[] | null>(null)
@@ -105,6 +117,21 @@ export function WalkAround({ container, inspectorName, onDone, onExit, toast }: 
 
   const jumpTop = () => topRef.current?.scrollIntoView({ block: 'start' })
 
+  const extraSlots = extras[station?.key ?? ''] ?? []
+  const shotLabel = (slot: number) => SHOT_LABELS[slot] ?? `${station?.title ?? 'Extra'} photo`
+  // Extras live in the spare slots above the 8-shot standard, so they never
+  // displace a documentation photo.
+  const addExtra = async () => {
+    // An empty placeholder from a cancelled camera is reused rather than
+    // stacking up another one.
+    const waiting = extraSlots.find(sl => !photos[sl])
+    if (waiting !== undefined) { await captureShot(waiting); return }
+    let slot = EXTRA_SLOT_START
+    while (photos[slot]) slot++
+    setExtras(p => ({ ...p, [station.key]: [...(p[station.key] ?? []), slot] }))
+    await captureShot(slot)
+  }
+
   // ── Capture ──
   const captureShot = async (slot: number) => {
     if (busy) return
@@ -113,9 +140,9 @@ export function WalkAround({ container, inspectorName, onDone, onExit, toast }: 
     setBusy(true)
     try {
       const dataUrl = await fileToDataUrl(file)
-      const updated = await containersApi.uploadPhoto(unit.id, { slot, label: SHOT_LABELS[slot], dataUrl, inspectorName })
+      const updated = await containersApi.uploadPhoto(unit.id, { slot, label: SHOT_LABELS[slot] ?? `${station.title} — walk-around`, dataUrl, inspectorName })
       setUnit(updated)
-      toast(`${SHOT_LABELS[slot]} ✓`)
+      toast(`${SHOT_LABELS[slot] ?? station.title} ✓`)
     } catch (e) { toast(e instanceof Error ? e.message : 'Upload failed — try again') } finally { setBusy(false) }
   }
 
@@ -337,24 +364,37 @@ export function WalkAround({ container, inspectorName, onDone, onExit, toast }: 
         <div style={{ fontSize: '18px', fontWeight: 700, color: INK, marginTop: '3px' }}>{station.title}</div>
         <div style={{ fontSize: '12.5px', color: INK2, lineHeight: 1.5, marginTop: '3px' }}>{station.cue}</div>
 
-        {station.shots.length > 0 && (
-          <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-            {station.shots.map(slot => (
-              <div key={slot} style={{ flex: 1 }}>
-                {photos[slot]
-                  ? <img src={photoUrl(photos[slot])} alt={SHOT_LABELS[slot]} style={{ width: '100%', height: '96px', objectFit: 'cover', borderRadius: '10px', display: 'block' }} />
-                  : <div style={{ width: '100%', height: '96px', borderRadius: '10px', border: `1.5px dashed #C4C6D0`, display: 'grid', placeItems: 'center', color: INK2 }}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8h4l1.5-2h7L17 8h4v11H3V8Z" /><circle cx="12" cy="13" r="3.2" /></svg>
-                    </div>}
-                <div style={{ fontSize: '10px', color: INK2, margin: '4px 0 4px' }}>{SHOT_LABELS[slot]}</div>
-                <button onClick={() => captureShot(slot)} disabled={busy}
-                  style={{ width: '100%', padding: '8px 0', borderRadius: '9px', border: `1.5px solid ${photos[slot] ? '#C4C6D0' : BLUE}`, background: photos[slot] ? '#fff' : BLUE, color: photos[slot] ? BLUE : '#fff', fontSize: '12px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
-                  {photos[slot] ? 'Retake' : 'Take photo'}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Documentation shots for this stop. The frame is a fixed 4:3 box and
+            the photo is contained inside it — a container shot is wide, and
+            cropping it to a letterbox hid whether the panel was even framed. */}
+        <div style={{ display: 'flex', gap: '8px', marginTop: '12px', maxWidth: station.shots.length > 1 ? '100%' : '300px' }}>
+          {(station.shots.length > 0 ? station.shots : extraSlots).map(slot => (
+            <div key={slot} style={{ flex: 1, minWidth: 0 }}>
+              {photos[slot]
+                ? <img src={photoUrl(photos[slot])} alt={shotLabel(slot)} style={shotBox} />
+                : <div style={{ ...shotBox, border: `1.5px dashed #C4C6D0`, display: 'grid', placeItems: 'center', color: INK2 }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8h4l1.5-2h7L17 8h4v11H3V8Z" /><circle cx="12" cy="13" r="3.2" /></svg>
+                  </div>}
+              <div style={{ fontSize: '10px', color: INK2, margin: '5px 0 4px' }}>{shotLabel(slot)}</div>
+              <button onClick={() => captureShot(slot)} disabled={busy}
+                style={{ width: '100%', padding: '8px 0', borderRadius: '9px', border: `1.5px solid ${photos[slot] ? '#C4C6D0' : BLUE}`, background: photos[slot] ? '#fff' : BLUE, color: photos[slot] ? BLUE : '#fff', fontSize: '12px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                {photos[slot] ? 'Retake' : 'Take photo'}
+              </button>
+            </div>
+          ))}
+          {/* Stops with no assigned shot (seams & rails, the light test) can
+              still photograph what they're looking at — extras land in the
+              spare slots, labelled by the stop. */}
+          {station.shots.length === 0 && (
+            <div style={{ flex: '0 0 auto', alignSelf: 'flex-end' }}>
+              <button onClick={addExtra} disabled={busy}
+                style={{ padding: '10px 14px', borderRadius: '9px', border: `1.5px solid ${BLUE}`, background: '#fff', color: BLUE, fontSize: '12px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '7px', whiteSpace: 'nowrap' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8h4l1.5-2h7L17 8h4v11H3V8Z" /><circle cx="12" cy="13" r="3.2" /></svg>
+                {extraSlots.length ? 'Another photo' : 'Add a photo'}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {question && (
