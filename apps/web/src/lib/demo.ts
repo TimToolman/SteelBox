@@ -403,6 +403,17 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
     return ok(c)
   }
 
+  // Damage evidence for one walk-around finding. With no server the data URL
+  // is the URL — the finding references it directly and it renders fine.
+  const dmgPhoto = route.match(/^\/containers\/([^/]+)\/damage-photo$/)
+  if (dmgPhoto && method === 'POST') {
+    const c = db.containers.find(x => x.id === dmgPhoto[1] || x.sku === dmgPhoto[1])
+    if (!c) throw new Error('Container not found')
+    const url = String((body as { dataUrl?: string }).dataUrl || '')
+    if (!url.startsWith('data:image/')) throw new Error('dataUrl must be a base64 image')
+    return ok({ url })
+  }
+
   // Signed package link. There is no server here, so the demo builds the
   // real .zip in the browser and hands back a blob: URL — the download is
   // genuine, it just can't outlive the tab.

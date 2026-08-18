@@ -11,6 +11,7 @@ import { Snackbar, ProgressRing } from '../../components/ui'
 import { GradeScreen, FlowGradeCard, GradeReviewScreen } from './grade'
 import { DriverProfileScreen } from './Profile'
 import { ReportDamageSheet } from './ReportDamage'
+import { WalkAround } from './WalkAround'
 import { gradeContainer, gradeLabel, INSPECTOR_QUESTIONS, type PhotoFeatures } from '../../lib/grading'
 import { activity, depots as depotsApi, drivers as driversApi, schedule as scheduleApi, containers as containersApi, availability as availabilityApi, messages as messagesApi, customers as customersApi, orders as ordersApi, parseTrucks, parseWorkHours, encodeWorkHours, photoUrl, fileToDataUrl, cutoutContainer, type ActivityEvent, type Depot, type Driver, type SchedJob, type DayHours, type Availability, type Message, type Customer, type Container, type Order } from '../../lib/api'
 
@@ -82,7 +83,7 @@ const KIND_META: Record<JobKind, { label: string; icon: string; color: string; b
 
 // A step: an action key + label. `photos1`/`photos12` gate on captures;
 // `signature`/`receipt`/`sms` run inline side effects.
-type StepKey = 'travel' | 'arrive' | 'load' | 'photos12' | 'unload' | 'drop' | 'sms' | 'signature' | 'photo1' | 'score' | 'receipt' | 'complete'
+type StepKey = 'travel' | 'arrive' | 'load' | 'walk' | 'unload' | 'drop' | 'sms' | 'signature' | 'photo1' | 'score' | 'receipt' | 'complete'
 interface FlowStep { key: StepKey; label: string; detail?: string; cta: string }
 
 function stepsFor(job: Job): FlowStep[] {
@@ -91,8 +92,7 @@ function stepsFor(job: Job): FlowStep[] {
   if (job.kind === 'pickup') return [
     { key: 'travel',   label: 'Travel to depot',        detail: 'Check in with the lot attendant', cta: 'On my way' },
     { key: 'arrive',   label: 'Arrived at depot',       cta: 'Arrived' },
-    { key: 'photos12', label: 'Photo documentation',    detail: `${PHOTO_TARGET} photos, before loading`, cta: 'Open Photo Session' },
-    { key: 'score',    label: 'Score condition',        detail: 'Rate the unit 1–5', cta: 'Save Score' },
+    { key: 'walk',     label: 'Walk-around inspection', detail: `${PHOTO_TARGET} photos + condition, stop by stop`, cta: 'Start Walk-Around' },
     { key: 'load',     label: 'Load container',         detail: 'Secure the unit on the trailer', cta: 'Loaded' },
     { key: 'complete', label: 'Pickup complete',        cta: 'Finish Pickup' },
   ]
@@ -141,7 +141,7 @@ const fmtTime = (iso: string) => { const d = new Date(iso); return d.toLocaleStr
 
 // ── Types ─────────────────────────────────────────────────
 
-type Screen = 'dashboard' | 'jobs' | 'flow' | 'camera' | 'review' | 'success' | 'schedule' | 'grade' | 'gradeReview' | 'inbox' | 'profile'
+type Screen = 'dashboard' | 'jobs' | 'flow' | 'camera' | 'review' | 'success' | 'schedule' | 'walk' | 'grade' | 'gradeReview' | 'inbox' | 'profile'
 
 interface PhotoShot {
   id: number
@@ -646,7 +646,7 @@ export default function FieldAppPage() {
     switch (step.key) {
       case 'arrive':    logActivity(job, 'arrived', 'Arrived on site'); toast(`Arrival recorded · ${nowT}`); break
       case 'sms':       logActivity(job, 'sms_sent', `ETA text sent to ${job.customer}`); toast('ETA text sent to customer'); break
-      case 'photos12':  if (doneCount < PHOTO_TARGET) { hydrateShots(job); goTo('camera'); return } break // photos_submitted logged on submit
+      case 'walk':      hydrateShots(job); goTo('walk'); return // the walk-around closes itself out
       case 'photo1':    capturePhoto1(job); return // advances after the photo uploads
       case 'score': return // driven by the grading card's Finished → review → Approve
       case 'signature': setSigned(true); logActivity(job, 'signature', 'Customer signature captured'); break
@@ -873,7 +873,14 @@ export default function FieldAppPage() {
         // used to gate on photos already existing, which dead-locked the flow).
         const stepReady = step?.key === 'signature' ? signed : true
         const flowCont = containerList.find(c => c.id === job.containerId || c.sku === job.sku) ?? null
-        const photoCta = step?.key === 'photos12' && doneCount >= PHOTO_TARGET ? 'Photos on file — Continue' : step?.cta
+        // Nothing to photograph or report until the driver has actually
+        // reached the unit — the walk-around starts at the container.
+        const arriveIdx = steps.findIndex(x => x.key === 'arrive')
+        const onSite = arriveIdx === -1 || stepIndex > arriveIdx
+        // A walk already under way resumes rather than restarting.
+        const walkedShots = (flowCont?.photos || []).filter(Boolean).length
+        const photoCta = step?.key === 'walk' && walkedShots > 0 && walkedShots < PHOTO_TARGET ? 'Resume Walk-Around'
+          : step?.key === 'walk' && walkedShots >= PHOTO_TARGET ? 'Re-Walk / Review' : step?.cta
 
         return (
           <>
@@ -898,7 +905,7 @@ export default function FieldAppPage() {
                   disabled={!stepReady}
                   style={{ width: '100%', padding: '15px', background: !stepReady ? '#C4C6D0' : step.key === 'complete' ? '#1B7A5A' : '#0057B8', color: '#fff', border: 'none', borderRadius: '999px', fontFamily: "'Google Sans', sans-serif", fontSize: '15px', fontWeight: 700, cursor: stepReady ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: stepReady ? '0 4px 14px rgba(0,87,184,.25)' : 'none' }}
                 >
-                  {step.key === 'photos12' && <Icon name="camera" size={17} color="#fff" />}
+                  {step.key === 'walk' && <Icon name="camera" size={17} color="#fff" />}
                   {step.key === 'complete' && <Icon name="check" size={17} color="#fff" sw={2.2} />}
                   {step.key === 'receipt' && <Icon name="receipt" size={17} color="#fff" />}
                   {step.key === 'sms' && <Icon name="sms" size={17} color="#fff" />}
@@ -917,7 +924,7 @@ export default function FieldAppPage() {
             {/* Photo review — available on EVERY step, not just the photo one:
                 the walk-around doesn't stop when the checklist moves on, and a
                 shot noticed while loading is still worth taking. */}
-            {shots.some(sh => sh.url) && step?.key !== 'complete' && (
+            {onSite && shots.some(sh => sh.url) && step?.key !== 'complete' && (
               <div style={{ margin: '0 12px 10px', background: '#fff', border: '1px solid #E1E2EC', borderRadius: '16px', padding: '14px', boxShadow: '0 1px 4px rgba(26,28,46,.08)' }}>
                 <div style={{ fontSize: '11px', fontWeight: 700, color: '#44475A', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '10px' }}>
                   Photo documentation · {shots.filter(sh => sh.url).length}/{PHOTO_TARGET} on file
@@ -952,15 +959,16 @@ export default function FieldAppPage() {
                 letting it list as if nothing were wrong. */}
             {flowCont && step?.key !== 'complete' && (
               <div style={{ margin: '0 12px 10px' }}>
-                {/* What's on the report so far — a walk-around finds damage in
-                    passes, so this grows as you go. */}
+                {/* What's on the report so far. This is information about the
+                    unit, so it shows from the moment the job opens — only the
+                    actions below wait until the driver is actually there. */}
                 {flowCont?.inspectionRequired && (
                   <div style={{ background: '#FFF8E1', border: '1.5px solid #F2C94C', borderRadius: '16px', padding: '13px 14px', marginBottom: '9px', display: 'flex', gap: '11px', alignItems: 'flex-start' }}>
                     <span style={{ flexShrink: 0, color: '#7B4F00', marginTop: '1px' }}>
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
                     </span>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#1A1C2E' }}>Damage reported — inspection required</div>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#1A1C2E' }}>Damage reported</div>
                       <div style={{ fontSize: '11.5px', color: '#44475A', lineHeight: 1.5, marginTop: '2px' }}>
                         {flowCont.inspectionReason || 'Held for inspection'}
                         {flowCont.inspectionFlaggedBy ? ` · reported by ${flowCont.inspectionFlaggedBy}` : ''}.
@@ -969,8 +977,10 @@ export default function FieldAppPage() {
                     </div>
                   </div>
                 )}
-                {/* Always available: keep shooting, keep reporting. Finding one
-                    dent doesn't end the walk-around. */}
+                {/* Reporting needs the driver at the container — nothing to
+                    see from the cab. Once on site, finding one dent doesn't
+                    end the walk-around: report as many as you find. */}
+                {onSite && <>
                 <button onClick={() => setReportDamage(true)}
                   style={{ width: '100%', padding: '13px', borderRadius: '14px', border: '1.5px solid #F0B8B2', background: '#fff', color: '#B3261E', fontFamily: "'Google Sans', sans-serif", fontSize: '13.5px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
@@ -978,9 +988,10 @@ export default function FieldAppPage() {
                 </button>
                 <div style={{ fontSize: '11px', color: '#44475A', textAlign: 'center', marginTop: '7px', lineHeight: 1.5 }}>
                   {flowCont?.inspectionRequired
-                    ? 'Keep walking the unit — every finding is added to the report, and you can retake any shot above.'
-                    : "Send it to Inspection Required or open a damage claim — either way it comes off the marketplace until it's inspected."}
+                    ? 'Every finding is added to the report, and you can retake any shot above.'
+                    : "Anything you find comes off the marketplace until an inspector verifies it."}
                 </div>
+                </>}
               </div>
             )}
 
@@ -1563,6 +1574,31 @@ export default function FieldAppPage() {
         onApplied={() => fetchContainers().catch(() => {})}
       />
     ),
+    // The guided walk-around: photos and condition captured station by
+    // station. It closes itself out — findings queue the unit for an
+    // inspector, a clean walk offers the model's grade on the spot.
+    walk: (() => {
+      const cont = activeJob ? containerList.find(c => c.id === activeJob.containerId || c.sku === activeJob.sku) : undefined
+      if (!cont) return <div style={{ padding: '40px', textAlign: 'center', color: '#44475A' }}>No container record linked to this job.</div>
+      return (
+        <WalkAround
+          container={cont}
+          inspectorName={me?.name || user?.name || 'Field Inspector'}
+          toast={toast}
+          onExit={() => goTo('flow')}
+          onDone={(updated, wasQueued) => {
+            setContainerList(prev => prev.map(c => c.id === updated.id ? updated : c))
+            fetchContainers().catch(() => {})
+            if (activeJob) {
+              logActivity(activeJob, wasQueued ? 'event' : 'photos_submitted',
+                wasQueued ? 'Walk-around found damage — queued for inspection' : `Walk-around complete — graded ${updated.grade}·${updated.conditionScore}`)
+              const steps = stepsFor(activeJob)
+              if (steps[stepIndex]?.key === 'walk') setStepIndex(i => i + 1)
+            }
+          }}
+        />
+      )
+    })(),
     inbox:     renderInbox(),
     // Contractor profile: stats, ratings, earnings, docs, availability.
     profile: (
@@ -1587,7 +1623,7 @@ export default function FieldAppPage() {
   }
 
   // Camera/review/success and the job flow all belong to the Pickups & Returns tab.
-  const navActive: Screen = ['review', 'success', 'flow', 'camera', 'gradeReview'].includes(screen) ? 'jobs' : screen
+  const navActive: Screen = ['review', 'success', 'flow', 'camera', 'walk', 'gradeReview'].includes(screen) ? 'jobs' : screen
 
   return (
     <div style={page}>

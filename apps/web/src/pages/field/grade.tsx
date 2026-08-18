@@ -10,7 +10,7 @@
 // ============================================================
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { containers as containersApi, claims as claimsApi, photoUrl, SHOT_LABELS, CLAIM_STAGES, type Container, type DamageClaim } from '../../lib/api'
+import { containers as containersApi, claims as claimsApi, photoUrl, findingsOf, SHOT_LABELS, CLAIM_STAGES, type Container, type DamageClaim } from '../../lib/api'
 import { DamageCollect } from './DamageCollect'
 import { ReportDamageSheet } from './ReportDamage'
 import { UnitPhotoStrip } from './UnitPhotos'
@@ -66,6 +66,27 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
   const [result, setResult] = useState<GradeResult | null>(null)
   const [applying, setApplying] = useState(false)
   const [reporting, setReporting] = useState(false)   // report-damage sheet
+  const [claiming, setClaiming] = useState(false)     // opening a claim off a verified finding
+
+  // What the walk-around recorded, station by station.
+  const findings = useMemo(() => findingsOf(unit), [unit])
+
+  // The inspector verifies, then decides whether it's a claim against the
+  // shipping line. Evidence photos already exist; the claim collects its own.
+  const raiseClaim = async () => {
+    if (!unit || claiming) return
+    setClaiming(true)
+    try {
+      const summary = findings.length
+        ? findings.map(f => [f.reasons.join(', '), f.note].filter(Boolean).join(' — ') || f.question).join('; ')
+        : (unit.inspectionReason || 'Damage verified by the inspector')
+      await claimsApi.create({ containerId: unit.id, notes: summary })
+      toast(`Claim opened for ${unit.sku} — collect the evidence under Damage claims`)
+      onApplied()
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not open the claim')
+    } finally { setClaiming(false) }
+  }
 
   // Units that CAN be graded: at least one documentation photo uploaded.
   // Units a driver flagged on the walk-around sort to the top — they are
@@ -229,12 +250,38 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
           <span style={{ flexShrink: 0, color: AMBER, marginTop: '1px' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
           </span>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: INK }}>Reported damage — held off the marketplace</div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: INK }}>Damage reported — verify before grading</div>
             <div style={{ fontSize: '11.5px', color: INK2, lineHeight: 1.5, marginTop: '2px' }}>
-              {unit.inspectionReason || 'Damage reported'}
-              {unit.inspectionFlaggedBy ? ` · reported by ${unit.inspectionFlaggedBy}` : ''}.
-              Applying a grade below releases it.
+              {unit.inspectionFlaggedBy ? `Reported by ${unit.inspectionFlaggedBy}` : 'Reported by the field crew'}.
+              Held off the marketplace — applying a grade below releases it.
+            </div>
+            {/* Each finding as it was recorded, at the stop it was found */}
+            {findings.length > 0 ? findings.map((f, i) => (
+              <div key={i} style={{ display: 'flex', gap: '9px', alignItems: 'flex-start', marginTop: '9px', paddingTop: '9px', borderTop: `1px solid #F2C94C` }}>
+                {f.photo
+                  ? <img src={photoUrl(f.photo)} alt={f.reasons.join(', ')} style={{ width: '62px', height: '46px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0 }} />
+                  : <span style={{ width: '62px', height: '46px', borderRadius: '8px', background: '#fff', flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: '9px', color: INK2 }}>no photo</span>}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: f.level === 'major' ? RED : INK }}>
+                    {f.station} · {f.reasons.join(', ') || f.question}
+                    {f.level === 'major' && <span style={{ marginLeft: '5px', fontSize: '9px', background: '#FDECEA', color: RED, borderRadius: '999px', padding: '1px 6px' }}>STRUCTURAL</span>}
+                  </div>
+                  {f.note && <div style={{ fontSize: '11px', color: INK2, marginTop: '1px', lineHeight: 1.4 }}>{f.note}</div>}
+                </div>
+              </div>
+            )) : (
+              <div style={{ fontSize: '11.5px', color: INK, marginTop: '6px' }}>{unit.inspectionReason || 'Damage reported'}</div>
+            )}
+            {/* The claim call is the inspector's, made with the unit in front
+                of them — it is never raised from the driver's job screen. */}
+            <button onClick={raiseClaim} disabled={claiming}
+              style={{ marginTop: '11px', padding: '9px 14px', borderRadius: '999px', border: `1.5px solid ${RED}`, background: '#fff', color: RED, fontSize: '12px', fontWeight: 700, cursor: claiming ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+              {claiming ? 'Opening…' : 'Verified — open a damage claim'}
+            </button>
+            <div style={{ fontSize: '10.5px', color: INK2, marginTop: '5px', lineHeight: 1.45 }}>
+              Only if it's sea-freight damage worth money back from the line. Evidence photos are
+              collected under Damage claims.
             </div>
           </div>
         </div>

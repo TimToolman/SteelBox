@@ -28,14 +28,25 @@
   `users.roles` (`marketplace` = sign-in master switch, plus
   `supplier` / `shipper`).
 
-- Inspection hold: a driver who spots damage on the walk-around sets
-  `containers.inspectionRequired` (+ `inspectionReason` /
-  `inspectionFlaggedBy` / `inspectionFlaggedAt`). While it's set the
+- The **guided walk-around** (`pages/field/WalkAround.tsx`) is the
+  inspection: 8 stations in the order you physically circle the unit,
+  each taking its documentation shot(s) and asking the condition
+  question that belongs to that spot. A clean answer moves on; a
+  cosmetic one asks what/where and offers a photo; the capped
+  (`capGrade`) answer **requires** a photo before Next unlocks. The walk
+  decides its own outcome — any finding queues the unit for an inspector
+  (no grade proposed, no choice offered) and a clean walk offers the
+  model's grade on the spot.
+- Inspection hold: findings set `containers.inspectionRequired` (+
+  `inspectionReason` / `inspectionFlaggedBy` / `inspectionFlaggedAt` /
+  `inspectionFindings`, a JSON `DamageFinding[]`). While it's set the
   server refuses the draft→available promotion and pulls a listable unit
   back to `draft`; an explicit inspection (`aiGraded` / `inspectedAt`)
   clears it and the unit re-promotes. The grading role is **inspector**
   ('adjuster' is the legacy value, still accepted); drivers may inspect
-  but are never required to.
+  but are never required to. **Sea-freight claims are the inspector's
+  call** — raised from Inspections after verifying, never from the
+  driver's job screen.
 
 - Damage evidence is its own photo collection, never the retail 8-shot
   set: `claims.photos` appends, index-aligned with `photoReasons` and
