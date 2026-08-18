@@ -516,7 +516,7 @@ export function EmailCaptureBand() {
       <div className="ld-wrap">
         <div className="ld-capture">
           <div>
-            <h3>One trip / like new inventory listings and prices, delivered weekly</h3>
+            <h3>One trip / like new inventory listings and prices, delivered weekly to your email</h3>
             <p>One short email when fresh units hit the yard. No spam, unsubscribe anytime.</p>
           </div>
           {state === 'done'
