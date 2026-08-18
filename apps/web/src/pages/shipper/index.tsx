@@ -11,7 +11,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { useAuth, useSnackbar } from '../../hooks'
-import { claims as claimsApi, prefs as prefsApi, photoUrl, type DamageClaim, type AuthUser } from '../../lib/api'
+import { claims as claimsApi, prefs as prefsApi, shippersApi, photoUrl, type DamageClaim, type AuthUser } from '../../lib/api'
 import { damageLabel, SEVERITY_WORD } from '../../lib/grading'
 import { Snackbar } from '../../components/ui'
 import { ClaimTimeline, ClaimPacket, ClaimPackageActions, photoCaption, claimShots, shotIndex } from '../supplier/claimkit'
@@ -33,6 +33,21 @@ export default function ShipperReviewPage({ embedded = false }: { embedded?: boo
   // Claims this session has actually opened and read.
   const [reviewed, setReviewed] = useState<Set<string>>(new Set())
   const lb = useLightbox()
+  // Which line this account works for — the header leads with its name.
+  // Directory first (works before any claim exists), claims as fallback.
+  const [shipperName, setShipperName] = useState('')
+  useEffect(() => {
+    if (!user?.shipperId) return
+    shippersApi.list()
+      .then(list => setShipperName(list.find(s => s.id === user.shipperId)?.name || ''))
+      .catch(() => {})
+  }, [user?.shipperId])
+  useEffect(() => {
+    if (!shipperName && claimList.length > 0 && user?.shipperId) {
+      const own = claimList.find(c => c.shipperId === user.shipperId)
+      if (own?.shipperName) setShipperName(own.shipperName)
+    }
+  }, [claimList, shipperName, user?.shipperId])
 
   // Opens the whole claim — every photo, damage, note and the estimate — in
   // its own tab, and marks it read so the decision buttons appear.
@@ -94,7 +109,11 @@ export default function ShipperReviewPage({ embedded = false }: { embedded?: boo
       <header style={{ background: '#fff', borderBottom: `1px solid ${DIV}`, padding: '0 20px', height: '60px', display: 'flex', alignItems: 'center', gap: '12px', position: 'sticky', top: 0, zIndex: 50 }}>
         <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#0E7490', display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 700, fontSize: '15px' }}>⚓</div>
         <div>
-          <div style={{ fontWeight: 700, fontSize: '15px', lineHeight: 1.2 }}>Shipper Claims Review</div>
+          {/* The line's own name leads — whoever is signed in, the header
+              answers "whose claims am I looking at" at a glance. */}
+          <div style={{ fontWeight: 700, fontSize: '15px', lineHeight: 1.2 }}>
+            {shipperName ? <>{shipperName} <span style={{ fontWeight: 600, color: INK3 }}>· Claims Review</span></> : 'Shipper Claims Review'}
+          </div>
           <div style={{ fontSize: '11px', color: INK3 }}>{user?.name}{user ? ` · ${user.email}` : ''}</div>
         </div>
         <label style={{ marginLeft: 'auto', fontSize: '11px', color: INK3, display: 'flex', alignItems: 'center', gap: '6px' }}>

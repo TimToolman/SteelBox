@@ -97,7 +97,30 @@
   its column with a `transform`, which boxes any `position: fixed`
   child into a sliver), and bind its keys in the **capture** phase with
   `stopPropagation` (hosts bind the same arrows — the marketplace
-  detail modal steps containers on ← →).
+  detail modal steps containers on ← →). Close (✕) sits on the image
+  box's top-right, the counter+caption live at the bottom by the
+  controls, and the marketplace passes `onShow3D` (a pill that exits
+  to the gallery's 3D slot) — other hosts don't.
+
+- A **shipper account works for exactly one line**: `users.shipperId`
+  is mandatory whenever the role is `shipper` or the shipper grant is
+  ticked (client + server enforce it; every claim view scopes on it).
+  The Shipping Lines directory (HQ admin only) manages the lines and
+  their **contacts** — contacts ARE user accounts tied to the line:
+  `POST /shippers/:id/invite` mints one (temp password emailed), hide
+  = empty grants (`blocked` sentinel), remove = unlink + deactivate.
+
+- Beta bug reporter: `components/BugReport.tsx` mounts once in
+  `main.tsx` (floating right-edge tab on every portal; portals into
+  `<body>`). It buffers window/console errors, optionally grabs a tab
+  screenshot via `getDisplayMedia`, and files to `POST /issues`
+  (guests allowed; screenshot saved to disk server-side). Admin →
+  Beta Issues lists reports with a copy-as-prompt action. The list
+  refetches on entering the view — reports filed after page load must
+  appear without a manual refresh.
+
+- The full manual + automated regression plan lives in `TESTPLAN.md`
+  — keep it current when flows change; the tester team runs it by hand.
 
 - Home-page redesign in progress (Aug 2026): the pre-redesign page is
   frozen at `apps/web/snapshots/landing-v1/` (restore steps in its

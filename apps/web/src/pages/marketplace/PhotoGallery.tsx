@@ -156,17 +156,19 @@ export function PhotoGallery({ container }: { container: Container }) {
         )}
       </div>
 
-      {/* Control bar under the image box — which shot this is on the left,
-          previous · zoom out · zoom in · next on the right. */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', padding: '10px 12px 4px', background: '#060F1E' }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, letterSpacing: '.7px', color: 'rgba(255,255,255,.5)' }}>
+      {/* Control bar under the image box — the where-am-I label and the
+          previous · zoom out · zoom in · next cluster, both centred (the
+          same geometry as the full-screen viewer, so nothing jumps around
+          when a click switches between the two). */}
+      <div style={{ display: 'grid', justifyItems: 'center', gap: '7px', padding: '10px 12px 4px', background: '#060F1E' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '9px', maxWidth: '96%', overflow: 'hidden' }}>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', fontWeight: 700, letterSpacing: '.7px', color: 'rgba(255,255,255,.5)', whiteSpace: 'nowrap' }}>
             {idx + 1} / {items.length}
-          </div>
-          <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#fff', letterSpacing: '-.15px', marginTop: '1px' }}>
+          </span>
+          <span style={{ fontSize: '13.5px', fontWeight: 700, color: '#fff', letterSpacing: '-.15px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {item.label}
             {!item.url && !item.isRender && <span style={{ fontWeight: 600, color: 'rgba(255,255,255,.45)' }}> · photo pending</span>}
-          </div>
+          </span>
         </div>
         <ViewerControls tone="dark" compact zoom={view.zoom}
           onPrev={() => step(-1)} onNext={() => step(1)}
@@ -192,7 +194,12 @@ export function PhotoGallery({ container }: { container: Container }) {
         ))}
       </div>
 
-      {lb.open && <Lightbox shots={lb.open.shots} index={lb.open.index} onIndex={lb.setIndex} onClose={lb.close} />}
+      {lb.open && (
+        <Lightbox shots={lb.open.shots} index={lb.open.index} onIndex={lb.setIndex} onClose={lb.close}
+          // "Show 3D View" — out of the viewer, back onto the gallery with
+          // the 3D slot selected (drag-to-rotate when no render exists yet).
+          onShow3D={() => { lb.close(); goTo(items.length - 1) }} />
+      )}
     </div>
   )
 }
