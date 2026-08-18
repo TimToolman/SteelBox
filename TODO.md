@@ -55,6 +55,9 @@ Working list toward go-live. Updated 2026-07-15.
 
 ## Shipped
 
+- [x] Damage claims gated behind an admin-granted `claims` role — a driver or
+      inspector can inspect and grade by role, but only reviews and submits claims
+      once it's ticked on their account — 2026-08-18
 - [x] Claims are post-inspection work: the Inspections queue runs the same guided
       walk a driver does, and a claim opens into review → estimate → send —
       required note, estimate value and the repair shop's uploaded document, then

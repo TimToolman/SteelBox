@@ -484,7 +484,10 @@ function verifyToken(token) {
 // entirely), plus 'supplier' and/or 'shipper'. A single marketplace login
 // then offers each granted portal as a tab. Grants can never confer
 // admin/driver — those stay primary-role only.
-const PORTAL_GRANTS = ['marketplace', 'supplier', 'shipper', 'marketing']
+// 'claims' is the field-crew grant: a driver or inspector may work damage
+// claims only once an admin ticks it on their account. Everything else the
+// field app does is theirs by role.
+const PORTAL_GRANTS = ['marketplace', 'supplier', 'shipper', 'marketing', 'claims']
 // 'blocked' is a stored sentinel: an admin explicitly removed every grant.
 // Without it, "all grants removed" (empty list) would be indistinguishable
 // from a legacy row that predates grants — which defaults to marketplace.
@@ -2996,6 +2999,12 @@ async function handleRequest(req, res) {
     if (seg[0] === 'claims') {
       const all = readTable('claims')
 
+      // A driver or inspector reaches claims ONLY with the 'claims' grant an
+      // admin ticks on their account — the rest of the field app is theirs by
+      // role, this one is handed out deliberately.
+      const fieldClaims = () => hasRole('admin') || (hasRole('driver') && grantsOf(user).includes('claims'))
+
+
       // ── Claim package (.zip) ──
       // Placed ahead of the role gates: a signed ?t= link lets a shipping
       // line pull the file straight from an email, no account needed.
@@ -3004,7 +3013,7 @@ async function handleRequest(req, res) {
         if (!claim) return send(res, 404, { message: 'Claim not found' })
         const token = url.searchParams.get('t')
         const allowed = (token && verifyClaimShare(claim.id, token))
-          || hasRole('admin', 'driver')
+          || fieldClaims()
           || (hasRole('supplier') && claim.supplierId === user?.supplierId)
           || (hasRole('shipper') && claim.shipperId === user?.shipperId)
         if (!allowed) return denied(user ? 403 : 401, 'Not allowed to download this claim')
@@ -3026,7 +3035,7 @@ async function handleRequest(req, res) {
         if (!c) return send(res, 404, { message: 'Claim not found' })
         const token = url.searchParams.get('t')
         const allowed = (token && verifyClaimShare(c.id, token))
-          || hasRole('admin', 'driver')
+          || fieldClaims()
           || (hasRole('supplier') && c.supplierId === user?.supplierId)
           || (hasRole('shipper') && c.shipperId === user?.shipperId)
         if (!allowed) return denied(user ? 403 : 401, 'Not allowed to view this claim')
@@ -3037,7 +3046,7 @@ async function handleRequest(req, res) {
       // Visibility: staff and the field crew see everything; a supplier sees
       // their own claims; a shipping line sees claims filed against it.
       const visible = () => {
-        if (hasRole('admin', 'driver')) return all
+        if (fieldClaims()) return all
         if (hasRole('supplier')) return all.filter(c => c.supplierId === user.supplierId)
         if (hasRole('shipper')) return all.filter(c => c.shipperId === user.shipperId)
         return null
@@ -3068,7 +3077,7 @@ async function handleRequest(req, res) {
         // The field crew files too: a driver who finds sea-freight damage on
         // the walk-around opens the claim from the job, before the unit ever
         // reaches a supplier's desk.
-        if (!hasRole('admin', 'supplier', 'driver')) return denied(user ? 403 : 401, 'Supplier or field access required')
+        if (!hasRole('admin', 'supplier') && !fieldClaims()) return denied(user ? 403 : 401, 'Supplier access, or the claims grant, required')
         const body = await readBody(req)
         const cont = readTable('containers').find(c => c.id === body.containerId || c.sku === body.containerId)
         if (!cont) return send(res, 400, { message: 'containerId is required' })
@@ -3102,7 +3111,7 @@ async function handleRequest(req, res) {
       const idx = all.findIndex(c => c.id === seg[1])
       if (idx === -1) return send(res, 404, { message: 'Claim not found' })
       const claim = all[idx]
-      const mine = hasRole('admin', 'driver')
+      const mine = fieldClaims()
         || (hasRole('supplier') && claim.supplierId === user.supplierId)
         || (hasRole('shipper') && claim.shipperId === user.shipperId)
       if (!mine) return denied(user ? 403 : 401, 'No access to this claim')
@@ -3151,7 +3160,7 @@ async function handleRequest(req, res) {
       if (seg.length === 3 && seg[2] === 'share' && method === 'POST') {
         // The inspector who verified the damage can submit it too, not just
         // the supplier — they're the one holding the estimate.
-        if (!hasRole('admin', 'supplier', 'driver')) return denied(user ? 403 : 401, 'Inspector or supplier access required')
+        if (!hasRole('admin', 'supplier') && !fieldClaims()) return denied(user ? 403 : 401, 'Supplier access, or the claims grant, required')
         const body = await readBody(req)
         const mode = ['packet', 'package', 'document', 'submit'].includes(body.mode) ? body.mode : 'link'
         const shipperUser = readTable('users').find(x => x.shipperId === claim.shipperId)
@@ -3237,13 +3246,13 @@ async function handleRequest(req, res) {
 
       // A copyable/emailable download link for the packaged claim.
       if (seg.length === 3 && seg[2] === 'package-link' && method === 'GET') {
-        if (!hasRole('admin', 'driver', 'supplier', 'shipper')) return denied(user ? 403 : 401, 'Staff access required')
+        if (!hasRole('admin', 'supplier', 'shipper') && !fieldClaims()) return denied(user ? 403 : 401, 'Staff access required')
         return send(res, 200, { url: packageUrl(claim), expiresInDays: 30 })
       }
 
       // The same signature, pointed at the readable document instead of the zip.
       if (seg.length === 3 && seg[2] === 'document-link' && method === 'GET') {
-        if (!hasRole('admin', 'driver', 'supplier', 'shipper')) return denied(user ? 403 : 401, 'Staff access required')
+        if (!hasRole('admin', 'supplier', 'shipper') && !fieldClaims()) return denied(user ? 403 : 401, 'Staff access required')
         return send(res, 200, { url: documentUrl(claim), expiresInDays: 30 })
       }
 

@@ -50,6 +50,13 @@
   call** — raised from Inspections after verifying, never from the
   driver's job screen.
 
+- Damage claims are a **granted privilege for the field crew**: the
+  `claims` entry in `users.roles` (an admin checkbox, alongside
+  supplier/shipper/marketing). Without it a driver or inspector gets no
+  Damage claims tab and every `/claims` route refuses them — inspecting
+  and grading never needed it, filing money claims does. Admins,
+  suppliers and shippers are unaffected.
+
 - A **damage claim comes after an inspection** — nothing is collected in
   it. `pages/field/ClaimWorkspace.tsx` is three steps: review every photo
   and recorded finding → a required note + estimate value + the repair

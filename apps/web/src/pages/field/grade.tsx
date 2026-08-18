@@ -46,11 +46,15 @@ function SubPips({ sub, color }: { sub: number; color: string }) {
 interface GradeScreenProps {
   containers: Container[]
   inspectorName: string
+  // Damage claims are a granted privilege: an admin ticks "Damage claims" on
+  // the account before a driver or inspector can review or submit one.
+  // Inspecting and grading never needed it; filing money claims does.
+  canClaim: boolean
   toast: (msg: string) => void
   onApplied: () => void      // parent refreshes its container list
 }
 
-export function GradeScreen({ containers, inspectorName, toast, onApplied }: GradeScreenProps) {
+export function GradeScreen({ containers, inspectorName, canClaim, toast, onApplied }: GradeScreenProps) {
   // Two separate inspection buckets: inspection required (the unit's saleable
   // condition — it can't list until this is done) and damage claims
   // (sea-freight damage evidence for the shipper/insurance pipeline).
@@ -59,6 +63,16 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
   const [query, setQuery] = useState('')
   const [unit, setUnit] = useState<Container | null>(null)
   const [claiming, setClaiming] = useState(false)     // opening a claim off a verified finding
+  // A claim just raised here — the damage bucket opens straight into it.
+  const [openClaimId, setOpenClaimId] = useState('')
+  // Claims already on file, so a unit that has one offers the way back to it
+  // rather than quietly opening a second.
+  const [claims, setClaims] = useState<DamageClaim[]>([])
+  useEffect(() => { if (canClaim) claimsApi.list().then(setClaims).catch(() => {}) }, [canClaim])
+  const openClaimFor = (c: Container | null) =>
+    c ? claims.find(x => (x.containerId === c.id || x.containerSku === c.sku) && x.status !== 'closed') : undefined
+
+  const goToClaim = (id: string) => { setUnit(null); setBucket('damage'); setOpenClaimId(id) }
 
   // What the walk-around recorded, station by station.
   const findings = useMemo(() => findingsOf(unit), [unit])
@@ -79,8 +93,12 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
       // it starts at the estimate rather than asking the same questions again.
       const majors = findings.filter(f => f.level === 'major').length
       const severity = majors >= 2 ? 5 : majors === 1 ? 4 : findings.length >= 2 ? 3 : 2
-      await claimsApi.create({ containerId: unit.id, notes: summary, severity, inspectorName, inspectedAt: new Date().toISOString() })
-      toast(`Claim opened for ${unit.sku} — collect the evidence under Damage claims`)
+      const created = await claimsApi.create({ containerId: unit.id, notes: summary, severity, inspectorName, inspectedAt: new Date().toISOString() })
+      // The evidence was captured on the walk — the claim opens straight into
+      // its workspace, at the estimate, rather than sending anyone to collect.
+      toast(`${created.claimNumber} opened — review it and add the repair estimate`)
+      goToClaim(created.id)
+      setClaims(list => [created, ...list])
       onApplied()
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Could not open the claim')
@@ -104,7 +122,8 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
   // photo analysis.
   const start = (c: Container) => setUnit(c)
 
-  const bucketTabs = (
+  // Without the grant there is no second bucket to switch to.
+  const bucketTabs = !canClaim ? null : (
     <div style={{ display: 'flex', gap: '4px', margin: '0 12px 10px', background: '#EEF2FF', border: `1px solid ${DIV}`, borderRadius: '999px', padding: '3px' }}>
       {([['retail', 'Inspection Required'], ['damage', 'Damage claims']] as const).map(([k, label]) => (
         <button key={k} onClick={() => setBucket(k)}
@@ -115,14 +134,14 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
     </div>
   )
 
-  if (bucket === 'damage' && !unit) {
+  if (bucket === 'damage' && canClaim && !unit) {
     return (
       <div style={{ paddingBottom: '90px' }}>
         <div style={{ padding: '16px 12px 10px' }}>
           <div style={{ fontSize: '19px', fontWeight: 700, color: INK }}>Inspections</div>
         </div>
         {bucketTabs}
-        <DamageInspection inspectorName={inspectorName} toast={toast} containers={containers} />
+        <DamageInspection inspectorName={inspectorName} toast={toast} containers={containers} openClaimId={openClaimId} onOpened={() => setOpenClaimId('')} />
       </div>
     )
   }
@@ -200,19 +219,26 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
   // happens to be the final say, so findings don't queue back to them.
   return (
     <div style={{ paddingBottom: '90px' }}>
-      {unit.inspectionRequired && (
+      {/* Shown whenever this unit has damage on file — held by the field crew,
+          or found by this inspector on a previous pass. The claim route has to
+          exist in both cases, not only while a hold is standing. */}
+      {(unit.inspectionRequired || findings.length > 0) && (
         <div style={{ ...card, background: '#FFF8E1', borderColor: '#F2C94C', display: 'flex', gap: '11px', alignItems: 'flex-start', marginTop: '14px' }}>
           <span style={{ flexShrink: 0, color: AMBER, marginTop: '1px' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
           </span>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: '13px', fontWeight: 700, color: INK }}>
-              {secondOpinion ? 'Sent for a second opinion' : 'Damage reported by the field crew'}
+              {secondOpinion ? 'Sent for a second opinion'
+                : unit.inspectionRequired ? 'Damage reported by the field crew'
+                : 'Damage on file for this unit'}
             </div>
             <div style={{ fontSize: '11.5px', color: INK2, lineHeight: 1.5, marginTop: '2px' }}>
-              {unit.inspectionReason || 'Held for inspection'}
+              {unit.inspectionReason || 'Recorded on a walk-around'}
               {unit.inspectionFlaggedBy ? ` · ${unit.inspectionFlaggedBy}` : ''}.
-              Walk it yourself below — finishing the walk grades it and releases the hold.
+              {unit.inspectionRequired
+                ? ' Walk it yourself below — finishing the walk grades it and releases the hold.'
+                : ' Walk it again below to re-grade, or take it to a claim.'}
             </div>
             {findings.map((f, i) => (
               <div key={i} style={{ display: 'flex', gap: '9px', alignItems: 'flex-start', marginTop: '9px', paddingTop: '9px', borderTop: `1px solid #F2C94C` }}>
@@ -230,12 +256,15 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
             ))}
             {/* Verified damage becomes a claim from here — never from the
                 driver's job screen, and never on a second-opinion hold. */}
-            {!secondOpinion && (
-              <button onClick={raiseClaim} disabled={claiming}
-                style={{ marginTop: '11px', padding: '9px 14px', borderRadius: '999px', border: `1.5px solid ${RED}`, background: '#fff', color: RED, fontSize: '12px', fontWeight: 700, cursor: claiming ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
-                {claiming ? 'Opening…' : 'Verified — open a damage claim'}
-              </button>
-            )}
+            {!secondOpinion && canClaim && (() => {
+              const existing = openClaimFor(unit)
+              return (
+                <button onClick={() => existing ? goToClaim(existing.id) : raiseClaim()} disabled={claiming}
+                  style={{ marginTop: '11px', padding: '9px 14px', borderRadius: '999px', border: `1.5px solid ${RED}`, background: '#fff', color: RED, fontSize: '12px', fontWeight: 700, cursor: claiming ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                  {claiming ? 'Opening…' : existing ? `Return to claim ${existing.claimNumber} →` : 'Verified — open a damage claim'}
+                </button>
+              )
+            })()}
           </div>
         </div>
       )}
@@ -388,12 +417,22 @@ export function GradeReviewScreen({ sku, result, applying, onApprove, onBack }: 
 // the model determines severity D·1 (minor) to D·5 (severe). Applying
 // moves the claim from "Awaiting inspection" to "Awaiting estimate".
 
-function DamageInspection({ inspectorName, toast, containers }: { inspectorName: string; toast: (m: string) => void; containers: Container[] }) {
+function DamageInspection({ inspectorName, toast, containers, openClaimId, onOpened }: {
+  inspectorName: string; toast: (m: string) => void; containers: Container[]
+  openClaimId?: string          // a claim just raised — open it on arrival
+  onOpened?: () => void
+}) {
   const [claims, setClaims] = useState<DamageClaim[]>([])
   const [claim, setClaim] = useState<DamageClaim | null>(null)
 
   const refresh = () => claimsApi.list().then(setClaims).catch(() => {})
   useEffect(() => { refresh() }, [])
+  // A claim raised from an inspection lands the inspector inside it.
+  useEffect(() => {
+    if (!openClaimId) return
+    const found = claims.find(c => c.id === openClaimId)
+    if (found) { setClaim(found); onOpened?.() }
+  }, [openClaimId, claims]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const stageLabel = (st: DamageClaim['status']) =>
     CLAIM_STAGES.find(x => x.key === st)?.label
