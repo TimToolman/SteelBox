@@ -28,6 +28,11 @@
   `users.roles` (`marketplace` = sign-in master switch, plus
   `supplier` / `shipper`).
 
+- Home-page redesign in progress (Aug 2026): the pre-redesign page is
+  frozen at `apps/web/snapshots/landing-v1/` (restore steps in its
+  README; source commit `e59b5ec`). Keep that snapshot untouched while
+  the new home page evolves — it is the owner's rollback point.
+
 ## Verification before shipping
 
 - `npx tsc --noEmit` in `apps/web`
