@@ -116,7 +116,7 @@ export function InsightsPanel({ user, containers }: { user: AuthUser | null; con
 
   useEffect(() => {
     if (user) ordersApi.list().then(setOrderList).catch(() => setOrderList([]))
-    if (user && ['supplier', 'shipper', 'admin', 'driver', 'adjuster'].includes(user.role)) {
+    if (user && ['supplier', 'shipper', 'admin', 'driver', 'inspector', 'adjuster'].includes(user.role)) {
       claimsApi.list().then(setClaimList).catch(() => setClaimList([]))
     }
   }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps

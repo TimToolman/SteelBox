@@ -31,14 +31,24 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 4000
 const PHOTO_TARGET = 8
 const RENDER_SLOT = 8
 
-// Promote a draft to available once photo documentation is complete.
+// Promote a draft to available once photo documentation is complete —
+// UNLESS the unit is held for inspection. A driver who spots damage on the
+// walk-around flags it, and the hold keeps the unit off the marketplace
+// until an inspector grades it (the depot may photograph a unit that the
+// receiving sub-depot still has to inspect).
 function withPhotoPromotion(c) {
+  if (c.inspectionRequired) return c
   // photos slots can contain '' placeholders — only real URLs count.
   const real = Array.isArray(c.photos) ? c.photos.filter(Boolean).length : 0
   const count = Math.max(c.photoCount ?? 0, real)
   if (c.status === 'draft' && count >= PHOTO_TARGET) return { ...c, status: 'available' }
   return c
 }
+
+// Statuses a unit can be pulled back from when damage is reported. A unit
+// already sold, assigned, or rolling stays where it is — the claim pipeline
+// handles those; only a listable unit gets held back.
+const HOLDABLE = new Set(['draft', 'available'])
 
 // ── CSV helpers ───────────────────────────────────────────
 // A small but correct CSV implementation (handles quoted fields,
@@ -94,11 +104,12 @@ const SCHEMAS = {
     // customEta/customBuildName only apply to custom-build orders
     // (status custom_in_progress): the promised completion date + which
     // catalog build the unit is being fabricated as.
-    headers: ['id','sku','guid','stockNumber','size','grade','condition','color','status','buyPrice','rentMonthly','photos','photoCount','has360','depotLocation','bayNumber','inspectorName','inspectedAt','deliveryIncluded','listingType','createdAt','purchaseCost','conditionScore','customEta','customBuildName','aiGraded','supplierId','damagePhotos','damageSeverity','preDamagePrice'],
+    headers: ['id','sku','guid','stockNumber','size','grade','condition','color','status','buyPrice','rentMonthly','photos','photoCount','has360','depotLocation','bayNumber','inspectorName','inspectedAt','deliveryIncluded','listingType','createdAt','purchaseCost','conditionScore','customEta','customBuildName','aiGraded','supplierId','damagePhotos','damageSeverity','preDamagePrice','inspectionRequired','inspectionReason','inspectionFlaggedBy','inspectionFlaggedAt'],
     types: {
       buyPrice: 'number', rentMonthly: 'numberOrNull', photoCount: 'number', purchaseCost: 'number', conditionScore: 'number',
-      has360: 'boolean', deliveryIncluded: 'boolean', aiGraded: 'boolean',
+      has360: 'boolean', deliveryIncluded: 'boolean', aiGraded: 'boolean', inspectionRequired: 'boolean',
       photos: 'array', inspectedAt: 'stringOrNull', damagePhotos: 'array', damageSeverity: 'number', preDamagePrice: 'number',
+      inspectionFlaggedAt: 'stringOrNull',
     },
   },
   orders: {
@@ -1203,14 +1214,18 @@ async function handleRequest(req, res) {
     // Resolve the signed-in user (if any) once for the whole request.
     const user = currentUser(req)
     const denied = (status = 401, message = 'Sign in required') => send(res, status, { message })
-    // 'adjuster' (container condition grader) carries driver-level access:
-    // field-app reads plus container updates from the grading flow.
+    // 'inspector' (container condition grader; 'adjuster' is the legacy name
+    // for the same role) carries driver-level access: field-app reads plus
+    // container updates from the grading flow. Drivers get the inverse — they
+    // MAY inspect and grade, they're just never required to.
     // Effective roles = primary role + portal grants (supplier/shipper), so a
     // customer granted the supplier portal passes hasRole('supplier').
     // 'marketplace' is a sign-in gate, not a permission, so it's excluded.
+    const INSPECTOR_ROLES = ['inspector', 'adjuster']
     const hasRole = (...roles) => !!user &&
       (roles.includes(user.role)
-        || (user.role === 'adjuster' && roles.includes('driver'))
+        || (INSPECTOR_ROLES.includes(user.role) && (roles.includes('driver') || roles.includes('inspector')))
+        || (user.role === 'driver' && roles.includes('inspector'))
         || grantsOf(user).some(g => g !== 'marketplace' && roles.includes(g)))
 
     // ── Auth ──
@@ -1433,7 +1448,7 @@ async function handleRequest(req, res) {
         if (!body.password || String(body.password).length < 8) return send(res, 400, { message: 'Password must be at least 8 characters' })
         const rec = {
           id: uid('usr'), email, passwordHash: hashPassword(body.password),
-          role: ['admin', 'driver', 'adjuster', 'customer', 'supplier', 'shipper'].includes(body.role) ? body.role : 'customer',
+          role: ['admin', 'driver', 'inspector', 'adjuster', 'customer', 'supplier', 'shipper'].includes(body.role) ? body.role : 'customer',
           name: body.name || email, phone: body.phone || '',
           driverId: body.driverId || '', customerId: body.customerId || '',
           // Portal grants: marketplace (base) + supplier/shipper portals, with
@@ -1474,7 +1489,7 @@ async function handleRequest(req, res) {
         if (body.shipperId != null) patch.shipperId = body.shipperId
         // Re-homing an account to another reseller is HQ-only.
         if (body.sellerId != null && !tenant) patch.sellerId = body.sellerId
-        if (['admin', 'driver', 'adjuster', 'customer', 'supplier', 'shipper'].includes(body.role)) patch.role = body.role
+        if (['admin', 'driver', 'inspector', 'adjuster', 'customer', 'supplier', 'shipper'].includes(body.role)) patch.role = body.role
         if (body.active != null) patch.active = body.active === true
         if (body.password) {
           if (String(body.password).length < 8) return send(res, 400, { message: 'Password must be at least 8 characters' })
@@ -1573,7 +1588,22 @@ async function handleRequest(req, res) {
         if (!hasRole('admin', 'driver') && !ownSupplierUnit) return denied(user ? 403 : 401, 'Admin or driver access required')
         if (idx === -1) return send(res, 404, { message: 'Container not found' })
         const body = await readBody(req)
-        containers[idx] = withPhotoPromotion({ ...containers[idx], ...body, id: containers[idx].id })
+        const merged = { ...containers[idx], ...body, id: containers[idx].id }
+        // Reporting damage holds the unit back: a listable unit drops to
+        // draft so the marketplace stops showing it until it's inspected.
+        if (body.inspectionRequired === true && !containers[idx].inspectionRequired) {
+          merged.inspectionFlaggedBy = body.inspectionFlaggedBy || user?.name || 'Field crew'
+          merged.inspectionFlaggedAt = body.inspectionFlaggedAt || new Date().toISOString()
+          if (HOLDABLE.has(merged.status)) merged.status = 'draft'
+        }
+        // Grading it releases the hold — the next promotion puts it back on
+        // the marketplace with the inspector's grade attached. Only an
+        // explicit inspection counts; editing a price does not.
+        if (body.inspectionRequired !== true && (body.aiGraded === true || body.inspectedAt)) {
+          merged.inspectionRequired = false
+          merged.inspectionReason = ''
+        }
+        containers[idx] = withPhotoPromotion(merged)
         writeTable('containers', containers)
         // Setting/altering the custom-build ETA syncs the customer's order and
         // notifies them (their portal shows the expected completion date).
@@ -2922,7 +2952,10 @@ async function handleRequest(req, res) {
       }
 
       if (seg.length === 1 && method === 'POST') {
-        if (!hasRole('admin', 'supplier')) return denied(user ? 403 : 401, 'Supplier access required')
+        // The field crew files too: a driver who finds sea-freight damage on
+        // the walk-around opens the claim from the job, before the unit ever
+        // reaches a supplier's desk.
+        if (!hasRole('admin', 'supplier', 'driver')) return denied(user ? 403 : 401, 'Supplier or field access required')
         const body = await readBody(req)
         const cont = readTable('containers').find(c => c.id === body.containerId || c.sku === body.containerId)
         if (!cont) return send(res, 400, { message: 'containerId is required' })

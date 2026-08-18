@@ -28,6 +28,15 @@
   `users.roles` (`marketplace` = sign-in master switch, plus
   `supplier` / `shipper`).
 
+- Inspection hold: a driver who spots damage on the walk-around sets
+  `containers.inspectionRequired` (+ `inspectionReason` /
+  `inspectionFlaggedBy` / `inspectionFlaggedAt`). While it's set the
+  server refuses the draft→available promotion and pulls a listable unit
+  back to `draft`; an explicit inspection (`aiGraded` / `inspectedAt`)
+  clears it and the unit re-promotes. The grading role is **inspector**
+  ('adjuster' is the legacy value, still accepted); drivers may inspect
+  but are never required to.
+
 - Damage evidence is its own photo collection, never the retail 8-shot
   set: `claims.photos` appends, index-aligned with `photoReasons` and
   `photoNotes`. `GET /claims/:id/package.zip?t=…` streams the whole claim

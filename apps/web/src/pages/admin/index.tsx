@@ -839,8 +839,8 @@ function UserModal({ target, drivers, sellers, suppliers, shipperLines, sellerId
       <label style={lbl}>Role</label>
       <select style={inp} value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value as Role }))}>
         <option value="admin">Admin — full portal access</option>
-        <option value="driver">Driver — field app</option>
-        <option value="adjuster">Adjuster — field app, AI grading</option>
+        <option value="driver">Driver — field app; may inspect, not required to</option>
+        <option value="inspector">Inspector — field app, inspections &amp; grading</option>
         <option value="customer">Customer — marketplace</option>
         <option value="supplier">Supplier — dedicated supplier account</option>
         <option value="shipper">Shipper — dedicated shipping-line account</option>

@@ -98,10 +98,13 @@ export function ContainerCard({ container, onSelect, mode = 'buy', inCart = fals
             AI GRADED
           </span>
         )}
-        {/* Draft badge — admin-only preview of unlisted units */}
+        {/* Draft badge — admin-only preview of unlisted units. A unit the
+            field crew flagged says so, so staff know why it left the market. */}
         {isDraft && (
-          <span style={{ position: 'absolute', top: '36px', left: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'var(--amber, #B45309)', color: '#fff', borderRadius: 'var(--r4)', padding: '3px 8px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
-            <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#fff' }} />Draft
+          <span title={container.inspectionRequired ? (container.inspectionReason || 'Damage reported on the walk-around') : undefined}
+            style={{ position: 'absolute', top: '36px', left: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px', background: container.inspectionRequired ? 'var(--red, #B3261E)' : 'var(--amber, #B45309)', color: '#fff', borderRadius: 'var(--r4)', padding: '3px 8px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+            <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#fff' }} />
+            {container.inspectionRequired ? 'Inspection required' : 'Draft'}
           </span>
         )}
         {/* Sale in progress veil */}

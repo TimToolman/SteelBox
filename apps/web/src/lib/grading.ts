@@ -3,7 +3,7 @@
 //
 // Rates a container from (a) the unit's uploaded 8-shot photo
 // documentation and (b) five structured answers from the driver
-// or container adjuster performing the pickup/review. Produces a
+// or inspector performing the pickup/review. Produces a
 // condition grade (A/B/C) plus a 1–5 sub-score within the grade
 // (stored in Container.conditionScore) so two "B" units can
 // still be compared: B·5 is nearly an A, B·1 is nearly a C.
@@ -20,7 +20,7 @@
 
 import { photoUrl, type Container, type ContainerGrade } from './api'
 
-// ── The adjuster's five questions ──────────────────────────
+// ── The inspector's five questions ─────────────────────────
 
 export interface QuestionOption {
   label: string
@@ -36,7 +36,7 @@ export interface Question {
   options: QuestionOption[]
 }
 
-export const ADJUSTER_QUESTIONS: Question[] = [
+export const INSPECTOR_QUESTIONS: Question[] = [
   {
     key: 'doors',
     title: 'Doors & seals',
@@ -229,7 +229,7 @@ export function gradeContainer(features: PhotoFeatures[], answers: Record<string
   let answerScore = 0
   let capped = false
   const factors: GradeFactor[] = []
-  for (const q of ADJUSTER_QUESTIONS) {
+  for (const q of INSPECTOR_QUESTIONS) {
     const opt = q.options[answers[q.key]] ?? q.options[1]
     answerScore += opt.points * q.weight
     if (opt.capGrade) capped = true

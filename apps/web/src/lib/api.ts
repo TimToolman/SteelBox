@@ -51,7 +51,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 // ── Auth ──────────────────────────────────────────────────
 
-export type Role = 'customer' | 'driver' | 'adjuster' | 'supplier' | 'shipper' | 'marketing' | 'admin'
+// 'inspector' handles inspections and grading. 'adjuster' is the legacy name
+// for the same role, still accepted on accounts created before the rename.
+// A driver may inspect too — it is simply never required of them.
+export type Role = 'customer' | 'driver' | 'inspector' | 'adjuster' | 'supplier' | 'shipper' | 'marketing' | 'admin'
 
 export interface AuthUser {
   id: string
@@ -276,6 +279,12 @@ export interface Container {
   customEta: string          // custom builds: promised completion date (YYYY-MM-DD)
   customBuildName: string    // custom builds: which catalog product is being fabricated
   aiGraded?: boolean         // grade assigned by the AI/ML imaging pipeline (set by the field app)
+  // Damage reported on a walk-around holds the unit off the marketplace
+  // until an inspector grades it. Set from the field app's job flow.
+  inspectionRequired?: boolean
+  inspectionReason?: string      // what the driver saw ("Bent — rear rail")
+  inspectionFlaggedBy?: string
+  inspectionFlaggedAt?: string | null
   supplierId?: string        // owning supplier (companies resellers buy stock from)
   damagePhotos?: string[]    // claim evidence shots shown on sell-as-damaged listings
   damageSeverity?: number    // D·1 (minor) – D·5 (severe); set by the damage inspection
@@ -946,7 +955,7 @@ export interface RepairShop {
 // The supplier-facing tracker follows these stages in order; the last two
 // are terminal outcomes of the supplier's retail-or-wholesale decision.
 export type ClaimStatus =
-  | 'awaiting_inspection'   // field adjuster documents the damage
+  | 'awaiting_inspection'   // field inspector documents the damage
   | 'awaiting_estimate'     // supplier attaches the repair estimate
   | 'awaiting_shipper'      // shipping line reviews the estimate
   | 'awaiting_decision'     // supplier decides: repair (retail) or sell as damaged
@@ -963,7 +972,7 @@ export const CLAIM_STAGES: { key: ClaimStatus; label: string }[] = [
 
 // Damage evidence gets its own photo slots — never mixed into the unit's
 // retail 8-shot gallery.
-// Quick reasons a field adjuster taps when collecting damage evidence.
+// Quick reasons a field inspector taps when collecting damage evidence.
 // Kept short so the whole set fits one thumb-reachable row set on a phone.
 export const DAMAGE_REASONS = [
   'Bent', 'Hole', 'Rust', 'Scrape', 'Warped', 'Dent',
