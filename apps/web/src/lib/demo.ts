@@ -792,10 +792,12 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
         if (body.inspectionRequired === true) {
           c.inspectionFlaggedBy = body.inspectionFlaggedBy || storedUser()?.name || 'Field crew'
           c.inspectionFlaggedAt = body.inspectionFlaggedAt || new Date().toISOString()
+          c.inspectionKind = body.inspectionKind || c.inspectionKind || 'damage'
           if (c.status === 'available' || c.status === 'draft') c.status = 'draft'
         } else if (body.aiGraded === true || body.inspectedAt) {
           c.inspectionRequired = false
           c.inspectionReason = ''
+          c.inspectionKind = ''
         }
         const shots = Array.isArray(c.photos) ? (c.photos as string[]).filter(Boolean).length : 0
         if (!c.inspectionRequired && c.status === 'draft' && Math.max(Number(c.photoCount) || 0, shots) >= 8) c.status = 'available'

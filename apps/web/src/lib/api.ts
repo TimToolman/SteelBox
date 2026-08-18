@@ -286,6 +286,9 @@ export interface Container {
   inspectionFlaggedBy?: string
   inspectionFlaggedAt?: string | null
   inspectionFindings?: string    // JSON DamageFinding[] from the guided walk-around
+  // Why it's held: 'damage' (something was found) or 'opinion' (the walk came
+  // back clean and the driver wanted an inspector to make the call).
+  inspectionKind?: '' | 'damage' | 'opinion'
   supplierId?: string        // owning supplier (companies resellers buy stock from)
   damagePhotos?: string[]    // claim evidence shots shown on sell-as-damaged listings
   damageSeverity?: number    // D·1 (minor) – D·5 (severe); set by the damage inspection

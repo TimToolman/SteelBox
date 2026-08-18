@@ -584,10 +584,13 @@ export default function FieldAppPage() {
   const scrollTop = () => window.scrollTo({ top: 0 })
   const goTo = (s: Screen) => { setScreen(s); scrollTop() }
 
-  // Open a workflow for a job (fresh state).
+  // Open a workflow for a job. Re-opening the SAME job resumes where it was
+  // left — a driver sent back to the dashboard after the walk-around shouldn't
+  // have to tap through Travel and Arrived again to reach Load.
   const startJob = (job: Job) => {
+    const resuming = activeJob?.id === job.id
     setActiveJob(job)
-    setStepIndex(0)
+    if (!resuming) setStepIndex(0)
     setLocOpen(false)
     setSigned(false)
     setReturnPhoto(false)
@@ -1586,6 +1589,7 @@ export default function FieldAppPage() {
           inspectorName={me?.name || user?.name || 'Field Inspector'}
           toast={toast}
           onExit={() => goTo('flow')}
+          onHome={() => goTo('dashboard')}
           onDone={(updated, wasQueued) => {
             setContainerList(prev => prev.map(c => c.id === updated.id ? updated : c))
             fetchContainers().catch(() => {})

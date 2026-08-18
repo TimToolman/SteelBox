@@ -70,6 +70,9 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
 
   // What the walk-around recorded, station by station.
   const findings = useMemo(() => findingsOf(unit), [unit])
+  // Held because the driver wanted the call made here, not because anything
+  // was found — the screen shouldn't send an inspector hunting for damage.
+  const secondOpinion = unit?.inspectionKind === 'opinion'
 
   // The inspector verifies, then decides whether it's a claim against the
   // shipping line. Evidence photos already exist; the claim collects its own.
@@ -251,10 +254,14 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
           </span>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: INK }}>Damage reported — verify before grading</div>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: INK }}>
+              {secondOpinion ? 'Sent for a second opinion' : 'Damage reported — verify before grading'}
+            </div>
             <div style={{ fontSize: '11.5px', color: INK2, lineHeight: 1.5, marginTop: '2px' }}>
-              {unit.inspectionFlaggedBy ? `Reported by ${unit.inspectionFlaggedBy}` : 'Reported by the field crew'}.
-              Held off the marketplace — applying a grade below releases it.
+              {secondOpinion
+                ? <>{unit.inspectionReason || 'The walk-around was clean — the field crew asked for the grade to be made here.'} Held off the marketplace until you grade it.</>
+                : <>{unit.inspectionFlaggedBy ? `Reported by ${unit.inspectionFlaggedBy}` : 'Reported by the field crew'}.
+                    Held off the marketplace — applying a grade below releases it.</>}
             </div>
             {/* Each finding as it was recorded, at the stop it was found */}
             {findings.length > 0 ? findings.map((f, i) => (
@@ -274,7 +281,9 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
               <div style={{ fontSize: '11.5px', color: INK, marginTop: '6px' }}>{unit.inspectionReason || 'Damage reported'}</div>
             )}
             {/* The claim call is the inspector's, made with the unit in front
-                of them — it is never raised from the driver's job screen. */}
+                of them — it is never raised from the driver's job screen. A
+                second-opinion hold has no damage to claim for. */}
+            {!secondOpinion && <>
             <button onClick={raiseClaim} disabled={claiming}
               style={{ marginTop: '11px', padding: '9px 14px', borderRadius: '999px', border: `1.5px solid ${RED}`, background: '#fff', color: RED, fontSize: '12px', fontWeight: 700, cursor: claiming ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
               {claiming ? 'Opening…' : 'Verified — open a damage claim'}
@@ -283,6 +292,7 @@ export function GradeScreen({ containers, inspectorName, toast, onApplied }: Gra
               Only if it's sea-freight damage worth money back from the line. Evidence photos are
               collected under Damage claims.
             </div>
+            </>}
           </div>
         </div>
       )}

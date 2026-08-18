@@ -68,11 +68,12 @@ const pickImage = (): Promise<File | null> => new Promise(resolve => {
   input.click()
 })
 
-export function WalkAround({ container, inspectorName, onDone, onExit, toast }: {
+export function WalkAround({ container, inspectorName, onDone, onExit, onHome, toast }: {
   container: Container
   inspectorName: string
   onDone: (updated: Container, queued: boolean) => void
   onExit: () => void
+  onHome: () => void          // the unit is settled — the driver's day moves on
   toast: (m: string) => void
 }) {
   const [unit, setUnit] = useState<Container>(container)
@@ -97,6 +98,7 @@ export function WalkAround({ container, inspectorName, onDone, onExit, toast }: 
   const [features, setFeatures] = useState<PhotoFeatures[] | null>(null)
   const [result, setResult] = useState<GradeResult | null>(null)
   const [queued, setQueued] = useState(false)
+  const [handoff, setHandoff] = useState(false)   // clean walk, sent for a second opinion
   const topRef = useRef<HTMLDivElement | null>(null)
 
   const station = STATIONS[at]
@@ -226,6 +228,7 @@ export function WalkAround({ container, inspectorName, onDone, onExit, toast }: 
           inspectionReason: summary,
           inspectionFlaggedBy: inspectorName,
           inspectionFindings: JSON.stringify(all),
+          inspectionKind: 'damage',
         } as Partial<Container>)
         setUnit(updated); setQueued(true)
         onDone(updated, true)
@@ -236,6 +239,29 @@ export function WalkAround({ container, inspectorName, onDone, onExit, toast }: 
       }
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Could not close out the walk-around')
+    } finally { setBusy(false) }
+  }
+
+  // A clean walk still ends in a judgement call, and the driver doesn't have
+  // to be the one who makes it. Handing off holds the unit exactly like a
+  // damage report does — it just says so for a different reason.
+  const sendToInspector = async () => {
+    if (busy) return
+    setBusy(true)
+    try {
+      const proposed = result ? ` — model proposed ${gradeLabel(result.grade, result.sub)}` : ''
+      const updated = await containersApi.update(unit.id, {
+        inspectionRequired: true,
+        inspectionReason: `Second opinion requested by ${inspectorName}${proposed}`,
+        inspectionFlaggedBy: inspectorName,
+        inspectionKind: 'opinion',
+      } as Partial<Container>)
+      setUnit(updated); setQueued(true); setHandoff(true)
+      toast(`${unit.sku} sent to an inspector for the final grade`)
+      onDone(updated, true)
+      onHome()
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not hand this off — try again')
     } finally { setBusy(false) }
   }
 
@@ -250,6 +276,7 @@ export function WalkAround({ container, inspectorName, onDone, onExit, toast }: 
       setUnit(updated)
       toast(`${unit.sku} graded ${gradeLabel(result.grade, result.sub)} — applied to the listing`)
       onDone(updated, false)
+      onHome()
     } catch (e) { toast(e instanceof Error ? e.message : 'Could not save the grade') } finally { setBusy(false) }
   }
 
@@ -295,15 +322,20 @@ export function WalkAround({ container, inspectorName, onDone, onExit, toast }: 
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4" /><path d="M12 17.4v.2" /></svg>
                 </span>
                 <div>
-                  <div style={{ fontSize: '15px', fontWeight: 700, color: INK }}>Queued for inspection</div>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: INK }}>
+                    {handoff ? 'Sent to an inspector' : 'Queued for inspection'}
+                  </div>
                   <div style={{ fontSize: '12.5px', color: INK2, lineHeight: 1.55, marginTop: '3px' }}>
-                    You reported {findings.length} finding{findings.length === 1 ? '' : 's'}, so this unit isn't graded here —
-                    an inspector verifies the damage and grades it. It stays off the marketplace until then.
+                    {handoff
+                      ? <>The walk-around came back clean — an inspector makes the final call on the grade.
+                          Your photos and answers go with it. The unit waits off the marketplace until they've graded it.</>
+                      : <>You reported {findings.length} finding{findings.length === 1 ? '' : 's'}, so this unit isn't graded here —
+                          an inspector verifies the damage and grades it. It stays off the marketplace until then.</>}
                   </div>
                 </div>
               </div>
             </div>
-            <div style={card}>
+            {findings.length > 0 && <div style={card}>
               <div style={cardTitle}>What you reported</div>
               {findings.map((f, i) => (
                 <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '9px 0', borderTop: i ? `1px solid ${DIV}` : 'none' }}>
@@ -319,7 +351,7 @@ export function WalkAround({ container, inspectorName, onDone, onExit, toast }: 
                   </div>
                 </div>
               ))}
-            </div>
+            </div>}
             <div style={{ margin: '0 12px' }}>
               <button onClick={onExit} style={{ width: '100%', padding: '15px', borderRadius: '999px', border: 'none', background: GREEN, color: '#fff', fontSize: '14px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
                 Done — back to the job
@@ -345,6 +377,14 @@ export function WalkAround({ container, inspectorName, onDone, onExit, toast }: 
                 style={{ width: '100%', padding: '15px', borderRadius: '999px', border: 'none', background: '#E65100', color: '#fff', fontSize: '14px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
                 {busy ? 'Applying…' : `Approve — apply grade ${gradeLabel(result.grade, result.sub)}`}
               </button>
+              {/* The driver never has to be the one who calls it. */}
+              <button onClick={sendToInspector} disabled={busy}
+                style={{ width: '100%', marginTop: '9px', padding: '14px', borderRadius: '999px', border: `1.5px solid ${DIV}`, background: '#fff', color: BLUE, fontSize: '13.5px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                Not sure — send to an inspector
+              </button>
+              <div style={{ fontSize: '11px', color: INK2, textAlign: 'center', marginTop: '8px', lineHeight: 1.5 }}>
+                An inspector grades it instead. The unit waits off the marketplace until they do.
+              </div>
             </div>
           </>
         )}

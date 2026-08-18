@@ -104,7 +104,7 @@ const SCHEMAS = {
     // customEta/customBuildName only apply to custom-build orders
     // (status custom_in_progress): the promised completion date + which
     // catalog build the unit is being fabricated as.
-    headers: ['id','sku','guid','stockNumber','size','grade','condition','color','status','buyPrice','rentMonthly','photos','photoCount','has360','depotLocation','bayNumber','inspectorName','inspectedAt','deliveryIncluded','listingType','createdAt','purchaseCost','conditionScore','customEta','customBuildName','aiGraded','supplierId','damagePhotos','damageSeverity','preDamagePrice','inspectionRequired','inspectionReason','inspectionFlaggedBy','inspectionFlaggedAt','inspectionFindings'],
+    headers: ['id','sku','guid','stockNumber','size','grade','condition','color','status','buyPrice','rentMonthly','photos','photoCount','has360','depotLocation','bayNumber','inspectorName','inspectedAt','deliveryIncluded','listingType','createdAt','purchaseCost','conditionScore','customEta','customBuildName','aiGraded','supplierId','damagePhotos','damageSeverity','preDamagePrice','inspectionRequired','inspectionReason','inspectionFlaggedBy','inspectionFlaggedAt','inspectionFindings','inspectionKind'],
     types: {
       buyPrice: 'number', rentMonthly: 'numberOrNull', photoCount: 'number', purchaseCost: 'number', conditionScore: 'number',
       has360: 'boolean', deliveryIncluded: 'boolean', aiGraded: 'boolean', inspectionRequired: 'boolean',
@@ -1594,6 +1594,7 @@ async function handleRequest(req, res) {
         if (body.inspectionRequired === true && !containers[idx].inspectionRequired) {
           merged.inspectionFlaggedBy = body.inspectionFlaggedBy || user?.name || 'Field crew'
           merged.inspectionFlaggedAt = body.inspectionFlaggedAt || new Date().toISOString()
+          merged.inspectionKind = body.inspectionKind || 'damage'
           if (HOLDABLE.has(merged.status)) merged.status = 'draft'
         }
         // Grading it releases the hold — the next promotion puts it back on
@@ -1602,6 +1603,7 @@ async function handleRequest(req, res) {
         if (body.inspectionRequired !== true && (body.aiGraded === true || body.inspectedAt)) {
           merged.inspectionRequired = false
           merged.inspectionReason = ''
+          merged.inspectionKind = ''
         }
         containers[idx] = withPhotoPromotion(merged)
         writeTable('containers', containers)

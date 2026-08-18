@@ -344,8 +344,19 @@ try {
   check('the inspector clears the hold by grading it', graded.status === 200 && graded.body?.inspectionRequired === false)
   check('grading releases the unit back to the marketplace', graded.body?.status === 'available' && graded.body?.grade === 'B')
 
+  // A clean walk the driver didn't want to call: held for a second opinion,
+  // not for damage — the inspector needs to know which it is.
+  const opinionUnit = containers.find(c => c.status === 'available' && ![unit.id, dmgUnit.id, clUnit.id, held.id].includes(c.id))
+  const handoff = await api(`/containers/${opinionUnit.id}`, { method: 'PATCH', token: fieldDriver, body: { inspectionRequired: true, inspectionKind: 'opinion', inspectionReason: 'Second opinion requested by Ray Okonkwo — model proposed A·3' } })
+  check('a driver can hand a clean walk to an inspector', handoff.status === 200 && handoff.body?.inspectionRequired === true)
+  check('the hold records that it is an opinion, not damage', handoff.body?.inspectionKind === 'opinion')
+  check('a handed-off unit waits off the marketplace too', handoff.body?.status === 'draft')
+  const opinionGraded = await api(`/containers/${opinionUnit.id}`, { method: 'PATCH', token: inspector, body: { grade: 'A', conditionScore: 3, aiGraded: true, inspectorName: 'Ivy Nakamura', inspectedAt: new Date().toISOString() } })
+  check("the inspector's grade clears an opinion hold too", opinionGraded.body?.inspectionRequired === false && opinionGraded.body?.inspectionKind === '')
+  check('and puts it back on the marketplace', opinionGraded.body?.status === 'available' && opinionGraded.body?.grade === 'A')
+
   // The other track: sea-freight damage the field crew files a claim for.
-  const claimUnit = containers.find(c => c.status === 'available' && ![unit.id, dmgUnit.id, clUnit.id, held.id].includes(c.id))
+  const claimUnit = containers.find(c => c.status === 'available' && ![unit.id, dmgUnit.id, clUnit.id, held.id, opinionUnit.id].includes(c.id))
   const fieldClaim = await api('/claims', { method: 'POST', token: fieldDriver, body: { containerId: claimUnit.id, notes: 'Hole — left panel, fist-sized' } })
   check('the field crew can open a damage claim', fieldClaim.status === 201 && fieldClaim.body?.notes.includes('left panel'))
   const claimHold = await api(`/containers/${claimUnit.id}`, { method: 'PATCH', token: fieldDriver, body: { inspectionRequired: true, inspectionReason: 'Hole — left panel' } })
