@@ -154,6 +154,13 @@
   written until they choose. Both outcomes return to the job at its
   Load step, not the home screen.
 
+- The reseller marketing portal's multi-channel blueprint (schema,
+  vendor choices, attribution model, compliance, phased rollout) is
+  `MARKETING-PORTAL.md`, tasked out in TODO.md. The governing rule:
+  vendors deliver messages, our database owns contacts, consent and
+  attribution — two systems of record for consent is a legal problem,
+  and attribution living in a vendor or a Zap can't join to `orders`.
+
 - The full manual + automated regression plan lives in `TESTPLAN.md`
   — keep it current when flows change; the tester team runs it by hand.
 

@@ -49,9 +49,74 @@ Working list toward go-live. Updated 2026-07-15.
       customer with ability to change by user or multi-select by user which profile they are. admin will
       have access to Admin Portal. Driver will have access to Field App. Customer will have access to 
       marketplace. Admin as access to all portals. 
-- [ ] **Create New Portal - Marketing** build elements of a true marketing hub, like hubspot, that lets
-      admins track emails sent, responded, follow ups, etc. with tracking, reports, charts, etc.
-      showing how each email, direct mail, or social media publish has performed. 
+- [x] **Create New Portal - Marketing** — first cut shipped: per-reseller contacts with
+      consent, ZIP-zone audiences, campaign composer, delivered/opens/clicks/revenue
+      metrics, provider connections and plan tiers. The multi-channel build-out is
+      blueprinted in `MARKETING-PORTAL.md` and tasked below.
+
+## Marketing portal — multi-channel build-out
+
+Full technical blueprint, schema and rationale: **`MARKETING-PORTAL.md`**.
+Vendors deliver messages; **our database owns contacts, consent and attribution** — two
+systems of record for consent is a legal problem, not a sync problem.
+
+**Blocked on a decision from the CMO** (see blueprint §9): one sending brand vs. per-reseller
+brands. This gates 10DLC registration, which is 2–6 weeks of calendar time we cannot compress.
+
+### Phase 0 — foundation & compliance (gates everything; start week 1)
+- [ ] Split `mktcontacts.consent` into `consentEmail` / `consentSms` / `consentMail`,
+      plus `consentSource`, `consentAt`, `consentIp` — the TCPA evidence bundle.
+      One boolean can't express "email yes, texts no", which is the common real state.
+- [ ] `dedupeKey` per contact (lower(email) / E.164 phone), unique per seller.
+- [ ] Submit 10DLC brand + campaign registration (calendar time — start before anything else).
+- [ ] Per-reseller sending subdomains with SPF/DKIM/DMARC. Without this one reseller's
+      complaint rate poisons deliverability for every other reseller.
+- [ ] `/r/<clickId>` redirector + `mkt_touch` ledger + `sbx_cid` first-party cookie.
+- [ ] Add `orders.clickId` so revenue joins to a campaign in one query.
+- [ ] **Prerequisite:** the Postgres move (below) — multi-channel volume outgrows CSVs immediately.
+
+### Phase 1 — audiences + email (weeks 3–5)
+- [ ] `mkt_audiences` — saved definitions (ZIP prefixes, tags, last-order age, never-ordered),
+      resolved at send time, not frozen at creation.
+- [ ] Klaviyo delivery integration + webhook ingest (delivered/open/click/bounce/unsub).
+- [ ] `mkt_sends` delivery ledger — one row per contact per step, with `costCents`.
+- [ ] Campaign ROI tile: delivered → opened → clicked → attributed revenue, per ZIP zone.
+
+### Phase 2 — SMS (weeks 6–8)
+- [ ] SMS channel through the same audience/ledger path.
+- [ ] Quiet hours 8am–9pm **in the recipient's timezone**, derived from their ZIP.
+- [ ] STOP/HELP honoured in seconds and written back to OUR `consentSms`.
+- [ ] Per-segment cost capture (SMS bills per 160 chars — long copy silently doubles spend).
+
+### Phase 3 — direct mail (weeks 9–11)
+- [ ] Lob integration: postcards/letters triggered from journeys, address verification.
+- [ ] QR code = `/r/<clickId>` — the only way mail is measurable — plus a vanity short URL.
+- [ ] Per-piece cost + delivery status back into `mkt_sends`.
+
+### Phase 4 — journeys / follow-up funnels (weeks 12–15)
+- [ ] `mkt_journeys` + `mkt_journey_steps` (wait → channel → template, with stop conditions).
+- [ ] Triggers: quote-with-no-order, order-delivered, abandoned cart, manual enrol.
+- [ ] Stop-if rules (ordered / replied / unsubscribed) evaluated before every step.
+
+### Phase 5 — AI video (weeks 16–19)
+- [ ] HeyGen base renders (~10–20 clips), then composite ZIP/city/depot/price as an overlay
+      pass we control — NOT one render per ZIP per reseller (cost/benefit doesn't hold).
+- [ ] `mkt_assets` with a human approval gate: nothing posts under a reseller's name
+      without a named approver. An AI clip that misstates a price is a claim we must honour.
+- [ ] Measure on one message × one reseller × ten ZIP zones before scaling.
+
+### Phase 6 — executive reporting (weeks 20–22)
+- [ ] First-touch, last-touch and position-based (40/20/40) side by side — showing one
+      model invites the argument that the number was chosen.
+- [ ] ROI per reseller × ZIP zone × channel; scheduled executive email.
+- [ ] Optional HubSpot **read-only** mirror if the team wants a familiar CRM UI.
+
+### Explicitly NOT doing (and why)
+- [ ] ~~GoHighLevel / HubSpot as system of record~~ — a second copy of contacts and consent
+      to reconcile; GHL's sub-account model fights our reseller/territory data.
+- [ ] ~~Make.com/Zapier owning attribution~~ — ops glue only. Anything that writes a metric
+      we report on goes through our API, or the ROI number can't be audited or rebuilt.
+- [ ] ~~Purchased lists~~ — one bad list blacklists a sending domain for months.
 
 ## Shipped
 
