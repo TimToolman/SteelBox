@@ -1,6 +1,9 @@
 # TODO — MVP Container
 
-Working list toward go-live. Updated 2026-07-15.
+Working list toward go-live. Updated 2026-08-18.
+
+Phased plan below: **retail sales launch week 9**, rentals week 15, marketing alongside.
+Roadmap for presenting: `roadmap.html`.
 
 ## Go-live blockers
 
@@ -77,128 +80,148 @@ send it over and it lands under the section it belongs to.
       metrics, provider connections and plan tiers. The multi-channel build-out is
       blueprinted in `MARKETING-PORTAL.md` and tasked below.
 
-## Payments (Stripe) — NOT BUILT
+## The plan — retail first, rentals after, marketing alongside
 
-Checkout today collects an order and says "we'll call you"; there is no card
-processing anywhere in the codebase. This is the single largest gap between the demo
-and a site that can take money.
+Decided 2026-08-18. **Retail sales launch in week 9**; rentals stay phone-quoted until
+week 15; marketing goes live with the site rather than after it.
 
-- [ ] Stripe account + business verification. **Calendar-bound** (days to weeks of
-      underwriting); start it before the code, not after.
-- [ ] Payment Intents on checkout — card, Apple/Google Pay. Never store a PAN; the
-      card never touches our server.
-- [ ] Webhook receiver (`payment_intent.succeeded/failed`, `charge.refunded`) as the
-      authority on paid state — the browser's word for "it worked" is not evidence.
-- [ ] Idempotency keys on every charge so a double-tap or retry can't bill twice.
-- [ ] Order state machine: pending → authorized → captured → fulfilled → refunded,
-      replacing today's phone-payment checklist.
-- [ ] Deposits + partial payments (rentals take a month's deposit; custom builds take
-      a deposit up front).
-- [ ] Refunds from the admin portal, with an audit row per refund.
-- [ ] Multi-tenant money: which seller is paid for which order (Stripe Connect if
-      resellers are paid directly, or one account + internal ledger). **Decision needed
-      before building** — it changes the schema.
-- [ ] Sales tax by delivery ZIP (Stripe Tax or Avalara) — a container delivered across
-      state lines is a taxable event we currently ignore.
-- [ ] PCI SAQ-A questionnaire (trivial with hosted fields, but it must be filed).
+The sequence is set by what earns soonest against what takes longest. Buying a container
+is a one-time charge — the shortest path from here to revenue. Renting is recurring
+billing, dunning and deposit handling: more machinery, and it can wait behind a working
+till. Marketing's compliance clock (10DLC, domain reputation) is 2–6 weeks of pure
+calendar, so it starts in week 1 even though nothing ships from it until week 7.
 
-## Rental subscriptions — NOT BUILT
+**Three things gate the date and no amount of engineering speed moves them:** Stripe
+underwriting, 10DLC brand registration, and the legal documents you cannot charge a card
+without. All three start week 1.
 
-A rental today prices `term × monthly rate` once at checkout and then nothing ever
-renews, invoices or ends. Renting is the recurring half of the business and none of
-that machinery exists.
+| Phase | Weeks | What it delivers |
+|---|---|---|
+| P1 · Database & infrastructure | 1–3 | Postgres, CI, backups, monitoring |
+| P2 · Marketing foundation | 1–3 | Consent model, 10DLC filed, DMARC, click ledger |
+| P3 · Payments | 3–7 | Stripe, tax, refunds, order state machine |
+| P4 · Legal & content | 2–8 | Policies, agreements, real photography |
+| P5 · Audiences + email | 4–7 | First campaign out the door |
+| **🚀 Retail launch** | **9** | **Buy-only, taking cards** |
+| P6 · SMS | 9–11 | Gated on the 10DLC filed in week 1 |
+| P7 · Rental subscriptions | 10–15 | Recurring billing, dunning, deposits |
+| P8 · Direct mail | 16–18 | Lob, QR attribution |
+| P9 · Journeys | 19–22 | Follow-up funnels |
+| P10 · AI video | 23–26 | Per-ZIP social, human-approved |
+| P11 · Executive reporting | 27–28 | Attribution models, ROI by territory |
 
-- [ ] Subscription records: unit, customer, rate, start, term, renewal mode, status.
-- [ ] Stripe Subscriptions (or scheduled Payment Intents) for the monthly charge.
-- [ ] Dunning: retry schedule, failed-payment emails, and what happens on day 30
-      (suspend? recover the unit? — a policy decision, not a code one).
-- [ ] Proration on early return, and end-of-term: auto-renew, month-to-month, or return.
-- [ ] Deposit hold + release, tied to the return inspection the field app already runs.
-- [ ] Customer self-serve: see the subscription, change the card, schedule a return.
-- [ ] Rental revenue reporting separated from sales (MRR, churn, units on rent).
-- [ ] Return-to-inventory automation: subscription ends → unit re-enters the marketplace
-      once the return walk-around clears it.
+Presentable version of this plan: **`roadmap.html`** (open it in a browser).
 
-## Production infrastructure — NOT BUILT
+---
+
+## P1 · Database & infrastructure — weeks 1–3
+
+Blocks payments, subscriptions and marketing. Nothing else starts until Postgres lands.
 
 - [ ] **Postgres migration** (promoted from Nice-to-have — it now blocks payments,
-      subscriptions and the marketing portal). Every `SCHEMAS` entry is already a table
-      definition; the CSV read/write layer becomes the query layer.
 - [ ] Hosting + CI: build, migrations and rollback on deploy.
 - [ ] Automated backups with a **restore actually tested**, not just configured.
 - [ ] Error tracking (Sentry) and uptime alerting — right now a 500 in production is
-      invisible until a customer calls.
 - [ ] Secrets management: no keys in env files on a laptop.
 - [ ] Rate limiting + bot protection on auth, checkout and the quote forms.
 - [ ] Load check: the API is single-instance by design (CSV + SSE). Confirm Postgres
-      lifts that, then run more than one replica.
 - [ ] Real photography to replace `demo-photos/` and the borrowed-photo fallback.
 
-## Legal & policy — NOT BUILT
+## P2 · Marketing foundation & compliance — weeks 1–3
+
+Calendar-bound. Start in week 1; nothing ships from it until P5.
+
+- [ ] Split `mktcontacts.consent` into `consentEmail` / `consentSms` / `consentMail`,
+- [ ] `dedupeKey` per contact (lower(email) / E.164 phone), unique per seller.
+- [ ] Submit 10DLC brand + campaign registration (calendar time — start before anything else).
+- [ ] Per-reseller sending subdomains with SPF/DKIM/DMARC. Without this one reseller's
+- [ ] `/r/<clickId>` redirector + `mkt_touch` ledger + `sbx_cid` first-party cookie.
+- [ ] Add `orders.clickId` so revenue joins to a campaign in one query.
+- [ ] **Prerequisite:** the Postgres move (below) — multi-channel volume outgrows CSVs immediately.
+
+## P3 · Payments — weeks 3–7
+
+The largest gap between the demo and a site that takes money.
+
+- [ ] Stripe account + business verification. **Calendar-bound** (days to weeks of
+- [ ] Payment Intents on checkout — card, Apple/Google Pay. Never store a PAN; the
+- [ ] Webhook receiver (`payment_intent.succeeded/failed`, `charge.refunded`) as the
+- [ ] Idempotency keys on every charge so a double-tap or retry can't bill twice.
+- [ ] Order state machine: pending → authorized → captured → fulfilled → refunded,
+- [ ] Deposits + partial payments (rentals take a month's deposit; custom builds take
+- [ ] Refunds from the admin portal, with an audit row per refund.
+- [ ] Multi-tenant money: which seller is paid for which order (Stripe Connect if
+- [ ] Sales tax by delivery ZIP (Stripe Tax or Avalara) — a container delivered across
+- [ ] PCI SAQ-A questionnaire (trivial with hosted fields, but it must be filed).
+
+## P4 · Legal & content — weeks 2–8
+
+Mostly other people's calendars. Start early, chase weekly.
 
 - [ ] Terms of sale, rental agreement, privacy policy, cookie/consent banner.
 - [ ] Refund + cancellation policy stated at checkout (required before charging cards).
 - [ ] Damage-claim terms: who is liable for what, referenced by the claim document.
 - [ ] Business insurance + reseller agreements. **Calendar-bound.**
 
-## Marketing portal — multi-channel build-out
+## P5 · Audiences + email — weeks 4–7
 
-Full technical blueprint, schema and rationale: **`MARKETING-PORTAL.md`**.
-Vendors deliver messages; **our database owns contacts, consent and attribution** — two
-systems of record for consent is a legal problem, not a sync problem.
-
-**Blocked on a decision from the CMO** (see blueprint §9): one sending brand vs. per-reseller
-brands. This gates 10DLC registration, which is 2–6 weeks of calendar time we cannot compress.
-
-### Phase 0 — foundation & compliance (gates everything; start week 1)
-- [ ] Split `mktcontacts.consent` into `consentEmail` / `consentSms` / `consentMail`,
-      plus `consentSource`, `consentAt`, `consentIp` — the TCPA evidence bundle.
-      One boolean can't express "email yes, texts no", which is the common real state.
-- [ ] `dedupeKey` per contact (lower(email) / E.164 phone), unique per seller.
-- [ ] Submit 10DLC brand + campaign registration (calendar time — start before anything else).
-- [ ] Per-reseller sending subdomains with SPF/DKIM/DMARC. Without this one reseller's
-      complaint rate poisons deliverability for every other reseller.
-- [ ] `/r/<clickId>` redirector + `mkt_touch` ledger + `sbx_cid` first-party cookie.
-- [ ] Add `orders.clickId` so revenue joins to a campaign in one query.
-- [ ] **Prerequisite:** the Postgres move (below) — multi-channel volume outgrows CSVs immediately.
-
-### Phase 1 — audiences + email (weeks 3–5)
 - [ ] `mkt_audiences` — saved definitions (ZIP prefixes, tags, last-order age, never-ordered),
-      resolved at send time, not frozen at creation.
 - [ ] Klaviyo delivery integration + webhook ingest (delivered/open/click/bounce/unsub).
 - [ ] `mkt_sends` delivery ledger — one row per contact per step, with `costCents`.
 - [ ] Campaign ROI tile: delivered → opened → clicked → attributed revenue, per ZIP zone.
 
-### Phase 2 — SMS (weeks 6–8)
+## 🚀 Retail launch — week 9
+
+- [ ] Buy-only checkout live with cards, tax and refunds.
+- [ ] Rentals still quoted by phone (the Rent tab says so plainly, no dead end).
+- [ ] First real order placed, paid, assigned to a driver and delivered end to end.
+- [ ] Error tracking watched daily for the first fortnight.
+
+## P6 · SMS — weeks 9–11
+
 - [ ] SMS channel through the same audience/ledger path.
 - [ ] Quiet hours 8am–9pm **in the recipient's timezone**, derived from their ZIP.
 - [ ] STOP/HELP honoured in seconds and written back to OUR `consentSms`.
 - [ ] Per-segment cost capture (SMS bills per 160 chars — long copy silently doubles spend).
 
-### Phase 3 — direct mail (weeks 9–11)
+## P7 · Rental subscriptions — weeks 10–15
+
+Recurring billing, once the till works.
+
+- [ ] Subscription records: unit, customer, rate, start, term, renewal mode, status.
+- [ ] Stripe Subscriptions (or scheduled Payment Intents) for the monthly charge.
+- [ ] Dunning: retry schedule, failed-payment emails, and what happens on day 30
+- [ ] Proration on early return, and end-of-term: auto-renew, month-to-month, or return.
+- [ ] Deposit hold + release, tied to the return inspection the field app already runs.
+- [ ] Customer self-serve: see the subscription, change the card, schedule a return.
+- [ ] Rental revenue reporting separated from sales (MRR, churn, units on rent).
+- [ ] Return-to-inventory automation: subscription ends → unit re-enters the marketplace
+
+## P8 · Direct mail — weeks 16–18
+
 - [ ] Lob integration: postcards/letters triggered from journeys, address verification.
 - [ ] QR code = `/r/<clickId>` — the only way mail is measurable — plus a vanity short URL.
 - [ ] Per-piece cost + delivery status back into `mkt_sends`.
 
-### Phase 4 — journeys / follow-up funnels (weeks 12–15)
+## P9 · Journeys / follow-up funnels — weeks 19–22
+
 - [ ] `mkt_journeys` + `mkt_journey_steps` (wait → channel → template, with stop conditions).
 - [ ] Triggers: quote-with-no-order, order-delivered, abandoned cart, manual enrol.
 - [ ] Stop-if rules (ordered / replied / unsubscribed) evaluated before every step.
 
-### Phase 5 — AI video (weeks 16–19)
+## P10 · AI video — weeks 23–26
+
 - [ ] HeyGen base renders (~10–20 clips), then composite ZIP/city/depot/price as an overlay
-      pass we control — NOT one render per ZIP per reseller (cost/benefit doesn't hold).
 - [ ] `mkt_assets` with a human approval gate: nothing posts under a reseller's name
-      without a named approver. An AI clip that misstates a price is a claim we must honour.
 - [ ] Measure on one message × one reseller × ten ZIP zones before scaling.
 
-### Phase 6 — executive reporting (weeks 20–22)
+## P11 · Executive reporting — weeks 27–28
+
 - [ ] First-touch, last-touch and position-based (40/20/40) side by side — showing one
-      model invites the argument that the number was chosen.
 - [ ] ROI per reseller × ZIP zone × channel; scheduled executive email.
 - [ ] Optional HubSpot **read-only** mirror if the team wants a familiar CRM UI.
 
-### Explicitly NOT doing (and why)
+## Explicitly NOT doing (and why)
 - [ ] ~~GoHighLevel / HubSpot as system of record~~ — a second copy of contacts and consent
       to reconcile; GHL's sub-account model fights our reseller/territory data.
 - [ ] ~~Make.com/Zapier owning attribution~~ — ops glue only. Anything that writes a metric
