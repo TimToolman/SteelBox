@@ -232,6 +232,42 @@ try {
   const pkgMail = (await api('/outbox', { token: admin })).body.find(m => m.to === 'shipper@meridianlines.com' && m.body.includes('package.zip?t='))
   check('email carries the direct download link', !!pkgMail)
 
+  // ── The claim document + estimate: review → estimate → send ──
+  console.log('Claim document & estimate')
+  const estPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+  const estPdf = 'data:application/pdf;base64,' + Buffer.from('%PDF-1.4 fake estimate').toString('base64')
+  const estUp = await api(`/claims/${claimId}/estimate-doc`, { method: 'POST', token: supplier, body: { dataUrl: estPdf, estimateShop: 'Bayou Container Repair' } })
+  check('repair-shop estimate uploads as a PDF', estUp.status === 201 && /\.pdf$/.test(estUp.body?.estimateDocUrl || ''))
+  check('the shop name rides along', estUp.body?.estimateShop === 'Bayou Container Repair')
+  const estImg = await api(`/claims/${claimId}/estimate-doc`, { method: 'POST', token: supplier, body: { dataUrl: estPng } })
+  check('a photo of the estimate sheet works too', estImg.status === 201 && /\.png$/.test(estImg.body?.estimateDocUrl || ''))
+  const estBad = await api(`/claims/${claimId}/estimate-doc`, { method: 'POST', token: supplier, body: { dataUrl: 'data:text/plain;base64,aGk=' } })
+  check('a non-document upload is rejected', estBad.status === 400)
+
+  await api(`/claims/${claimId}`, { method: 'PATCH', token: supplier, body: { estimateAmount: 2750, estimateNotes: 'Rail section + repaint', notes: 'Corner post crushed in transit' } })
+  const docLink = await api(`/claims/${claimId}/document-link`, { token: supplier })
+  check('document link issued', docLink.status === 200 && /document\.html\?t=\d+\./.test(docLink.body?.url || ''))
+  const docRes = await fetch(`${BASE}/claims/${claimId}/document.html${new URL(docLink.body.url).search}`)
+  const docHtml = await docRes.text()
+  check('the signed link opens the document without a session', docRes.status === 200 && (docRes.headers.get('content-type') || '').includes('text/html'), `status ${docRes.status}: ${docHtml.slice(0, 120)}`)
+  check('the document carries the estimate', docHtml.includes('$2,750') && docHtml.includes('Bayou Container Repair'))
+  check('the document carries the note and scope', docHtml.includes('Corner post crushed in transit') && docHtml.includes('Rail section + repaint'))
+  check('the document embeds the damage photos by reason', docHtml.includes('<figure>') && docHtml.includes('Bent') && docHtml.includes('Rust'))
+  check('it links the shop\'s own estimate file', docHtml.includes(estImg.body.estimateDocUrl))
+  check('it offers print to PDF', docHtml.includes('window.print()'))
+  const docForged = await fetch(`${BASE}/claims/${claimId}/document.html?t=123.deadbeef`)
+  check('a forged document link is rejected', docForged.status === 401 || docForged.status === 403)
+
+  const submitted = await api(`/claims/${claimId}/share`, { method: 'POST', token: supplier, body: { mode: 'submit' } })
+  check('submitting to the shipper works', submitted.status === 200)
+  const submitMail = (await api('/outbox', { token: admin })).body.find(m => m.subject.startsWith('Damage claim for your review'))
+  check('the submission email carries all three routes in', !!submitMail
+    && submitMail.body.includes('document.html?t=') && submitMail.body.includes('package.zip?t=') && submitMail.body.includes('/shipper?claim='))
+  check('and states the estimate', !!submitMail && submitMail.body.includes('$2,750'))
+  const docMail = await api(`/claims/${claimId}/share`, { method: 'POST', token: supplier, body: { mode: 'document' } })
+  check('emailing the document alone works', docMail.status === 200)
+  check('that email points at the document', (await api('/outbox', { token: admin })).body.some(m => m.subject.startsWith('Claim document') && m.body.includes('document.html?t=')))
+
   // Supplier sells the unit as damaged: their own container, grade D.
   const sell = await api(`/containers/${dmgUnit.id}`, { method: 'PATCH', token: supplier, body: { grade: 'D', damageSeverity: 4, damagePhotos: [], condition: 'used', status: 'available' } })
   check('supplier lists own unit as damaged D·4', sell.status === 200 && sell.body?.grade === 'D' && sell.body?.damageSeverity === 4)

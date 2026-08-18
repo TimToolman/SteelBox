@@ -55,6 +55,11 @@ Working list toward go-live. Updated 2026-07-15.
 
 ## Shipped
 
+- [x] Claims are post-inspection work: the Inspections queue runs the same guided
+      walk a driver does, and a claim opens into review → estimate → send —
+      required note, estimate value and the repair shop's uploaded document, then
+      Submit to Shipper / Download ZIP / Email PDF / Email Link. The claim document
+      is one printable page with every photo, reason and note — 2026-08-18
 - [x] Guided walk-around inspection — 8 stations in walking order, each with its
       photo(s) and the condition question for that spot; a structural answer can't
       continue without a damage photo. Any finding queues the unit for an inspector

@@ -1030,6 +1030,8 @@ export interface DamageClaim {
   photos: string[]             // damage evidence — its own collection, appended
   photoReasons?: string[]      // quick reason per photo (Bent, Hole, Rust…)
   photoNotes?: string[]        // optional free note per photo
+  estimateDocUrl?: string      // uploaded repair-shop estimate (image or PDF)
+  estimateShop?: string        // who wrote the estimate
   notes: string
   estimateAmount: number       // supplier's repair estimate (USD)
   estimateNotes: string
@@ -1190,11 +1192,17 @@ export const claims = {
     request<DamageClaim>(`/claims/${id}/photos/${slot}`, { method: 'DELETE' }),
   // Email the shipper the claim packet, a login link, or the packaged .zip;
   // all land on the audit timeline and re-arm the shipper-viewed stamp.
-  share: (id: string, mode: 'packet' | 'link' | 'package') =>
+  share: (id: string, mode: 'packet' | 'link' | 'package' | 'document' | 'submit') =>
     request<DamageClaim>(`/claims/${id}/share`, { method: 'POST', body: JSON.stringify({ mode }) }),
   // Signed 30-day download link for the whole claim file (photos + summary).
   packageLink: (id: string) =>
     request<{ url: string; expiresInDays: number }>(`/claims/${id}/package-link`),
+  // The readable, printable version of the same claim — the "PDF".
+  documentLink: (id: string) =>
+    request<{ url: string; expiresInDays: number }>(`/claims/${id}/document-link`),
+  // Repair-shop estimate: a photo of the sheet or a PDF export.
+  uploadEstimate: (id: string, data: { dataUrl: string; estimateShop?: string }) =>
+    request<DamageClaim>(`/claims/${id}/estimate-doc`, { method: 'POST', body: JSON.stringify(data) }),
 }
 
 // Per-user notification preference for claim activity.
