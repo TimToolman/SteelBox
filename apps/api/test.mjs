@@ -175,7 +175,8 @@ try {
   await api(`/containers/${dmgUnit.id}`, { method: 'PATCH', token: admin, body: { supplierId: 'sup_01' } })
   const shippers = (await api('/shippers', { token: supplier })).body
   const claim = await api('/claims', { method: 'POST', token: supplier, body: { containerId: dmgUnit.id, shipperId: shippers[0].id, vesselRef: 'MV-TEST-042', notes: 'Fork damage at transship' } })
-  check('supplier files a claim (awaiting inspection)', claim.status === 201 && claim.body?.status === 'awaiting_inspection' && claim.body?.claimNumber?.startsWith('CLM-'))
+  // A claim is raised only after an inspection, so it opens at the estimate.
+  check('a filed claim opens at the estimate, not an inspection', claim.status === 201 && claim.body?.status === 'awaiting_estimate' && claim.body?.claimNumber?.startsWith('CLM-'))
   const claimId = claim.body.id
 
   // Field inspection: severity + move to estimate (driver-level access).
@@ -196,7 +197,15 @@ try {
   const shr = await api(`/claims/${claimId}/share`, { method: 'POST', token: supplier, body: { mode: 'packet' } })
   check('estimate shared with shipper (packet email)', shr.status === 200 && !!shr.body?.sharedAt)
   const evs = JSON.parse(shr.body.events || '[]')
-  check('audit timeline records the chain of custody', evs.length >= 4 && evs.some(e => e.text.includes('shared with')) && evs.some(e => e.text.includes('Damage inspected')))
+  check('audit timeline records the chain of custody', evs.length >= 3 && evs.some(e => e.text.includes('shared with')) && evs.some(e => e.text.includes('Claim filed')))
+
+  // Inspector → supplier: reviewed and priced, handed over to be filed.
+  const claimHandoff = await api(`/claims/${claimId}/share`, { method: 'POST', token: admin, body: { mode: 'handoff' } })
+  check('an inspector can hand a priced claim to the supplier', claimHandoff.status === 200)
+  const handMail = (await api('/outbox', { token: admin })).body.find(m => m.subject.startsWith('Claim ready to submit'))
+  check('the hand-off email goes to the supplier, not the line', !!handMail && handMail.to === 'supplier@oceanbox.com')
+  check('and carries the estimate and a link to the claim', !!handMail && handMail.body.includes('$2,400') && handMail.body.includes('/claim?id='))
+  check('the timeline records the hand-off', JSON.parse(claimHandoff.body.events || '[]').some(e => /handed to .* to submit/.test(e.text)))
   const outboxShare = (await api('/outbox', { token: admin })).body
   check('shipper share email queued with login link', outboxShare.some(m => m.to === 'shipper@meridianlines.com' && m.body.includes('/shipper?claim=')))
   const pref = await api('/auth/me', { method: 'PATCH', token: shipper, body: { digestFreq: 'weekly' } })

@@ -413,7 +413,7 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
       supplierId: sup?.id || '', supplierName: (sup?.name as string) || '',
       shipperId: shp?.id || '', shipperName: (shp?.name as string) || '',
       vesselRef: String(body.vesselRef || ''),
-      status: body.severity ? 'awaiting_estimate' : 'awaiting_inspection',
+      status: 'awaiting_estimate',
       severity: Number(body.severity) || 0, photos: [], notes: String(body.notes || ''),
       estimateAmount: 0, estimateNotes: '', shipperDecision: '', shipperNotes: '',
       shipperDecidedAt: null, repairShopId: '', repairShopName: '', repairDate: '',

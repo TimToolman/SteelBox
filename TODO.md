@@ -55,6 +55,10 @@ Working list toward go-live. Updated 2026-07-15.
 
 ## Shipped
 
+- [x] Claim pipeline tightened: no Awaiting-inspection stage, workspace opens
+      full-page in its own tab with the audit timeline in it, no send/download
+      shortcuts on the lists, inspector hands off to the supplier who files with
+      the line, and the shipper must open the full claim before approving — 2026-08-18
 - [x] Damage claims gated behind an admin-granted `claims` role — a driver or
       inspector can inspect and grade by role, but only reviews and submits claims
       once it's ticked on their account — 2026-08-18

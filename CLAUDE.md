@@ -58,7 +58,15 @@
   suppliers and shippers are unaffected.
 
 - A **damage claim comes after an inspection** — nothing is collected in
-  it. `pages/field/ClaimWorkspace.tsx` is three steps: review every photo
+  it, and `awaiting_inspection` is no longer a stage a claim can be in.
+  It opens at the estimate. `/claim?id=…` is the workspace as a full page
+  in its own tab (the audit timeline lives there, under Review), and the
+  claims lists carry no send/download buttons at all: everything leaves
+  through Review → Estimate → Send. An inspector's Send hands the priced
+  claim to the **supplier** (`share` mode `'handoff'`); the supplier is
+  the one who submits to the line. A shipper cannot approve or reject
+  until they have opened the full claim.
+  `pages/field/ClaimWorkspace.tsx` is three steps: review every photo
   and recorded finding → a required note + estimate value + the repair
   shop's own uploaded document → send. Four ways out: `share` mode
   `'submit'` (the formal filing; also advances the stage), the `.zip`,

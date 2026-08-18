@@ -21,7 +21,6 @@ import {
 import { GRADE_META, DAMAGE_DISCOUNT } from '../../lib/specs'
 import { FilterRail, FilterGroup, ChipRow, Chip, useSetFilter, railSelect, PeriodFilter, PERIOD_ALL, periodPasses, type Period } from '../../components/filters'
 import { ClaimTimeline, ClaimPacket, ClaimPackageActions, photoCaption } from './claimkit'
-import { ClaimWorkspace } from '../field/ClaimWorkspace'
 import { gradeLabel, damageLabel, SEVERITY_WORD } from '../../lib/grading'
 import { Snackbar } from '../../components/ui'
 import { useSnackbar } from '../../hooks'
@@ -74,7 +73,10 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
   const [rep, setRep] = useState<Record<string, { shopId: string; date: string }>>({})
   const [askPrice, setAskPrice] = useState<Record<string, string>>({})
   const [packet, setPacket] = useState<DamageClaim | null>(null)
-  const [workspace, setWorkspace] = useState<DamageClaim | null>(null)
+  // The workspace is a page of its own, in its own tab — a claim is desk work
+  // and the evidence needs the whole window.
+  const openWorkspace = (c: DamageClaim) =>
+    window.open(`${import.meta.env.BASE_URL}claim?id=${c.id}`, '_blank', 'noopener')
   const [digest, setDigest] = useState<AuthUser['digestFreq']>(user?.digestFreq || 'per_container')
 
   const supplierId = user?.supplierId || ''
@@ -196,7 +198,7 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
   const stagesPresent = [...new Set(myClaims.map(c => c.status))]
   const severitiesPresent = [...new Set(myClaims.map(c => c.severity).filter(s => s > 0))].sort()
   const STAGE_WORD: Record<string, string> = {
-    awaiting_inspection: 'Awaiting inspection', awaiting_estimate: 'Awaiting estimate',
+    awaiting_inspection: 'Awaiting inspection (legacy)', awaiting_estimate: 'Review & estimate',
     awaiting_shipper: 'Awaiting shipper', awaiting_decision: 'Awaiting decision',
     repair_scheduled: 'Repair scheduled', sell_as_damaged: 'Sell as damaged', closed: 'Closed',
   }
@@ -315,29 +317,17 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
 
                 {/* Stage-specific actions */}
                 <div style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  {c.status === 'awaiting_inspection' && (
-                    <span style={{ fontSize: '12px', color: INK3 }}>Waiting on the field team's damage inspection (Field App → Inspections → Damage claims).</span>
-                  )}
-                  {c.status === 'awaiting_estimate' && (
+                  {/* One way in: the workspace. Sending, emailing and
+                      downloading all live behind Review → Estimate → Send, so
+                      nothing leaves the building without being read first. */}
+                  {(c.status === 'awaiting_inspection' || c.status === 'awaiting_estimate' || c.status === 'awaiting_shipper') && (
                     <>
-                      {/* The full workspace: read the evidence, price it, send
-                          it. Same three steps the inspector works through. */}
-                      <button onClick={() => setWorkspace(c)} style={btn(BLUE)}>Open claim workspace →</button>
-                      <span style={{ fontSize: '11.5px', color: INK3 }}>Review the evidence, add the estimate and the shop's document, then submit.</span>
-                    </>
-                  )}
-                  {c.status === 'awaiting_shipper' && (
-                    <>
-                      <span style={{ fontSize: '12px', color: INK3, width: '100%' }}>
-                        Estimate with {c.shipperName} — their insurance carrier reviews off-platform.
-                        {c.shipperViewedAt ? ` Viewed ${new Date(c.shipperViewedAt).toLocaleDateString()} ✓` : ' Not yet viewed.'}
+                      <button onClick={() => openWorkspace(c)} style={btn(BLUE)}>Open claim workspace →</button>
+                      <span style={{ fontSize: '11.5px', color: INK3 }}>
+                        {c.status === 'awaiting_shipper'
+                          ? <>With {c.shipperName}{c.shipperViewedAt ? ` — viewed ${new Date(c.shipperViewedAt).toLocaleDateString()} ✓` : ' — not yet viewed'}. Re-open to re-send or download.</>
+                          : <>Review the evidence, add the estimate and the shop's document, then send.</>}
                       </span>
-                      <button onClick={() => setPacket(c)} style={ghost}>📄 Claim packet (PDF)</button>
-                      <button onClick={() => share(c, 'packet')} style={btn(BLUE)}>✉️ Email packet</button>
-                      <button onClick={() => share(c, 'package')} style={btn('#1B7A5A')}>✉️ Email full package (.zip)</button>
-                      <ClaimPackageActions claim={c} toast={toast} />
-                      <button onClick={() => share(c, 'link')} style={btn('#0E7490')}>✉️ Email login link</button>
-                      <button onClick={() => copyShipperLink(c)} style={ghost}>🔗 Copy login link</button>
                     </>
                   )}
                   {c.status === 'awaiting_decision' && (
@@ -378,7 +368,6 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
                     <span style={{ fontSize: '12px', fontWeight: 700, color: RED }}>Listed on the marketplace as damaged {damageLabel(c.severity || 3)} — buyers see the damage photos.</span>
                   )}
                 </div>
-                <ClaimTimeline claim={c} />
               </div>
             ))}
             {closed.length > 0 && (
@@ -414,24 +403,6 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
         </section>
       </main>
       {packet && <ClaimPacket claim={packet} onClose={() => setPacket(null)} />}
-      {/* The claim workspace, over the fleet — the same review → estimate →
-          send an inspector works through in the field app. */}
-      {workspace && (
-        <div onClick={() => { setWorkspace(null); refresh() }}
-          style={{ position: 'fixed', inset: 0, zIndex: 880, background: 'rgba(13,14,18,.5)', overflowY: 'auto', display: 'flex', justifyContent: 'center', padding: '20px 12px' }}>
-          <div onClick={e => e.stopPropagation()}
-            style={{ width: '100%', maxWidth: '620px', height: 'fit-content', background: '#F8F9FF', borderRadius: '18px', boxShadow: '0 20px 60px rgba(0,0,0,.35)', overflow: 'hidden' }}>
-            <ClaimWorkspace
-              claim={workspace}
-              unit={fleet.find(u => u.id === workspace.containerId || u.sku === workspace.containerSku) ?? null}
-              onClaim={c => { setWorkspace(c); refresh() }}
-              onClose={() => { setWorkspace(null); refresh() }}
-              toast={toast}
-            />
-          </div>
-        </div>
-      )}
-      <Snackbar message={message} open={snackOpen} onClose={snackClose} />
     </div>
   )
 }

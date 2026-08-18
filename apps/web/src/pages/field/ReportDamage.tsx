@@ -12,7 +12,7 @@
 // ============================================================
 
 import React, { useState } from 'react'
-import { containers as containersApi, DAMAGE_REASONS, type Container } from '../../lib/api'
+import { containers as containersApi, photoUrl, fileToDataUrl, DAMAGE_REASONS, type Container, type DamageFinding } from '../../lib/api'
 
 const INK = '#1A1C2E', INK2 = '#44475A', DIV = '#E1E2EC', RED = '#B3261E', AMBER = '#7B4F00'
 
@@ -26,7 +26,30 @@ export function ReportDamageSheet({ container, sku, reportedBy, onClose, onRepor
 }) {
   const [picked, setPicked] = useState<string[]>([])
   const [note, setNote] = useState('')
+  const [shot, setShot] = useState('')      // optional photo of what was found
   const [busy, setBusy] = useState(false)
+
+  const capture = async () => {
+    if (busy) return
+    const file = await new Promise<File | null>(resolve => {
+      const el = document.createElement('input')
+      el.type = 'file'
+      el.accept = 'image/*,.heic,.heif'
+      el.setAttribute('capture', 'environment')
+      el.onchange = () => resolve(el.files?.[0] ?? null)
+      window.addEventListener('focus', () => setTimeout(() => resolve(el.files?.[0] ?? null), 700), { once: true })
+      el.click()
+    })
+    if (!file || !container) return
+    setBusy(true)
+    try {
+      const { url } = await containersApi.damagePhoto(container.id, await fileToDataUrl(file))
+      setShot(url)
+      toast('Photo attached')
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not attach that photo')
+    } finally { setBusy(false) }
+  }
 
   // A walk-around finds damage in passes, not all at once — so a unit that's
   // already reported can be reported again and the findings stack up.
@@ -43,13 +66,23 @@ export function ReportDamageSheet({ container, sku, reportedBy, onClose, onRepor
     if (picked.length === 0 && !note.trim()) { toast('Pick what you saw, or add a note'); return }
     setBusy(true)
     try {
+      // Recorded as a finding so it reaches the inspector and the claim
+      // document with its photo, exactly like one raised at a stop.
+      let findings: DamageFinding[] = []
+      try { findings = JSON.parse(container.inspectionFindings || '[]') } catch { findings = [] }
+      findings.push({
+        station: 'Spotted on the job', question: 'Reported outside the walk-around',
+        level: 'minor', reasons: [...picked], note: note.trim(), photo: shot,
+        at: new Date().toISOString(), by: reportedBy,
+      })
       await containersApi.update(container.id, {
         inspectionRequired: true,
         inspectionReason: summary,
         inspectionFlaggedBy: reportedBy,
+        inspectionFindings: JSON.stringify(findings),
       } as Partial<Container>)
       toast(already ? `${sku} — added to the damage report` : `${sku} queued for inspection — held off the marketplace`)
-      setPicked([]); setNote('')
+      setPicked([]); setNote(''); setShot('')
       onReported()
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Could not report the damage — try again')
@@ -113,6 +146,13 @@ export function ReportDamageSheet({ container, sku, reportedBy, onClose, onRepor
             value={note} onChange={e => setNote(e.target.value)} placeholder="Where on the unit? (optional)"
             style={{ width: '100%', boxSizing: 'border-box', marginTop: '10px', padding: '10px 12px', border: `1.5px solid ${DIV}`, borderRadius: '11px', fontSize: '13px', fontFamily: 'inherit', outline: 'none' }}
           />
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '10px' }}>
+            {shot && <img src={photoUrl(shot)} alt="Damage" style={{ width: '76px', aspectRatio: '4 / 3', objectFit: 'contain', background: '#EEF1F6', borderRadius: '9px', flexShrink: 0 }} />}
+            <button onClick={capture} disabled={busy}
+              style={{ flex: 1, padding: '11px', borderRadius: '11px', border: `1.5px solid #C4C6D0`, background: '#fff', color: '#0057B8', fontSize: '12.5px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+              {shot ? 'Retake the photo' : 'Add a photo (optional)'}
+            </button>
+          </div>
         </div>
 
         <button onClick={send} disabled={busy}
