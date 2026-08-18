@@ -393,8 +393,18 @@ try {
 
   // The other track: sea-freight damage the field crew files a claim for.
   const claimUnit = containers.find(c => c.status === 'available' && ![unit.id, dmgUnit.id, clUnit.id, held.id, opinionUnit.id].includes(c.id))
+  // Claims are a granted privilege for the field crew, not a role perk.
+  const ungranted = await api('/claims', { method: 'POST', token: fieldDriver, body: { containerId: claimUnit.id, notes: 'Hole — left panel' } })
+  check('a driver without the claims grant cannot open one', ungranted.status === 403 || ungranted.status === 401)
+  const drvListBlocked = await api('/claims', { token: fieldDriver })
+  check('and cannot read the claim queue either', drvListBlocked.status === 403 || drvListBlocked.status === 401)
+  const grantClaims = await api(`/users/${drvAcct.body.id}`, { method: 'PATCH', token: admin, body: { roles: ['marketplace', 'claims'] } })
+  check('an admin can grant claims access', grantClaims.status === 200 && grantClaims.body?.roles.includes('claims'))
   const fieldClaim = await api('/claims', { method: 'POST', token: fieldDriver, body: { containerId: claimUnit.id, notes: 'Hole — left panel, fist-sized' } })
-  check('the field crew can open a damage claim', fieldClaim.status === 201 && fieldClaim.body?.notes.includes('left panel'))
+  check('with the grant, the field crew can open a damage claim', fieldClaim.status === 201 && fieldClaim.body?.notes.includes('left panel'))
+  check('and can read the queue', (await api('/claims', { token: fieldDriver })).status === 200)
+  const insListBlocked = await api('/claims', { token: inspector })
+  check('an inspector without the grant is refused the same way', insListBlocked.status === 403 || insListBlocked.status === 401)
   const claimHold = await api(`/containers/${claimUnit.id}`, { method: 'PATCH', token: fieldDriver, body: { inspectionRequired: true, inspectionReason: 'Hole — left panel' } })
   check('a claimed unit is held the same way', claimHold.body?.status === 'draft' && claimHold.body?.inspectionRequired === true)
   const custDenied = await api(`/containers/${claimUnit.id}`, { method: 'PATCH', token: customer, body: { inspectionRequired: false } })

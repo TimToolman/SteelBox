@@ -74,7 +74,9 @@ function accountFor(email: string): Partial<AuthUser> | null {
   // with access to the AI condition-grading flow. The old adjuster@ address
   // still works; it was the same role under its previous name.
   if (norm === 'inspector@mvpcontainer.com' || norm === 'adjuster@mvpcontainer.com') {
-    return { email: norm, role: 'inspector', name: 'Container Inspector' }
+    // Carries the 'claims' grant an admin would tick, so the demo shows the
+    // claim workspace; a driver without it sees inspections only.
+    return { email: norm, role: 'inspector', name: 'Container Inspector', roles: ['marketplace', 'claims'] }
   }
   // The walk-up demo shopper from the tester guide.
   if (norm === 'demo@mvpcontainers.com') return { email: norm, role: 'customer', name: 'Demo Customer' }

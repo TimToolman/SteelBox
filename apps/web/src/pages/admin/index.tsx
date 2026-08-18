@@ -780,7 +780,7 @@ function UserModal({ target, drivers, sellers, suppliers, shipperLines, sellerId
     if (target === 'new') setForm({ name: '', email: '', role: 'customer', phone: '', driverId: '', password: '', sellerId: sellerId || '', roles: ['marketplace'], supplierId: '', shipperId: '' })
     // An explicit empty/blocked list stays empty (admin removed every grant);
     // only a missing field (legacy account) defaults to marketplace.
-    else setForm({ name: target.name, email: target.email, role: target.role, phone: target.phone || '', driverId: target.driverId || '', password: '', sellerId: target.sellerId || '', roles: Array.isArray(target.roles) ? target.roles.filter(r => ['marketplace', 'supplier', 'shipper', 'marketing'].includes(r)) : ['marketplace'], supplierId: target.supplierId || '', shipperId: target.shipperId || '' })
+    else setForm({ name: target.name, email: target.email, role: target.role, phone: target.phone || '', driverId: target.driverId || '', password: '', sellerId: target.sellerId || '', roles: Array.isArray(target.roles) ? target.roles.filter(r => ['marketplace', 'supplier', 'shipper', 'marketing', 'claims'].includes(r)) : ['marketplace'], supplierId: target.supplierId || '', shipperId: target.shipperId || '' })
     setError('')
   }, [target, sellerId])
 
@@ -907,6 +907,18 @@ function UserModal({ target, drivers, sellers, suppliers, shipperLines, sellerId
         <label style={{ display: 'flex', alignItems: 'flex-start', gap: '9px', fontSize: '13px', cursor: 'pointer' }}>
           <input type="checkbox" checked={hasG('marketing')} onChange={() => toggleG('marketing')} style={{ marginTop: '2px' }} />
           <span><b>Marketing portal</b> — contact uploads, campaigns, ads and reports for their reseller, as a marketplace tab.</span>
+        </label>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: '9px', fontSize: '13px', cursor: 'pointer' }}>
+          <input type="checkbox" checked={hasG('claims')} onChange={() => toggleG('claims')} style={{ marginTop: '2px' }} />
+          <span>
+            <b>Damage claims</b> — lets a driver or inspector review and submit claims against a shipping line
+            from the field app. Inspections and grading do not need this; filing money claims does.
+            {hasG('claims') && !['driver', 'inspector', 'adjuster', 'admin'].includes(form.role) && (
+              <span style={{ display: 'block', color: '#7B4F00', fontWeight: 700, fontSize: '11px', marginTop: '2px' }}>
+                Only takes effect on a driver or inspector account.
+              </span>
+            )}
+          </span>
         </label>
       </div>
 

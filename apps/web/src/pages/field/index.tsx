@@ -1573,6 +1573,7 @@ export default function FieldAppPage() {
       <GradeScreen
         containers={containerList}
         inspectorName={user?.name || 'Field Inspector'}
+        canClaim={user?.role === 'admin' || (user?.roles || []).includes('claims')}
         toast={toast}
         onApplied={() => fetchContainers().catch(() => {})}
       />
