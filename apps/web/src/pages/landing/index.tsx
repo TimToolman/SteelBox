@@ -201,6 +201,7 @@ function Hero({ tenant }: { tenant: Tenant }) {
   // prevents jitter from the page shortening under the scroll position.
   const [collapsed, setCollapsed] = useState(false)
   const heroRef = React.useRef<HTMLElement>(null)
+  const zipRef = React.useRef<HTMLInputElement>(null)
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 940px)')
     const still = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -240,6 +241,14 @@ function Hero({ tenant }: { tenant: Tenant }) {
       try { localStorage.setItem('sbx_zip', v) } catch { /* private mode */ }
     }
   }
+  // Clearing the field is a full reset: the verdict goes away and the
+  // remembered ZIP is dropped, so the marketplace won't stay scoped to it.
+  const clearZip = () => {
+    setInput('')
+    setChecked('')
+    try { localStorage.removeItem('sbx_zip') } catch { /* private mode */ }
+    zipRef.current?.focus()
+  }
   return (
     <section ref={heroRef} className={`ld-hero ld-hero--portal${collapsed ? ' ld-hero--collapsed' : ''}`}>
       {/* Parallax photo layer: image + industrial scrim + steel corrugation */}
@@ -263,50 +272,37 @@ function Hero({ tenant }: { tenant: Tenant }) {
         <form className="ld-searchbar ld-rise ld-rise--4" onSubmit={submit}>
           <label htmlFor="hero-zip" style={{ position: 'absolute', left: '-9999px' }}>Delivery ZIP code</label>
           <input
-            id="hero-zip" inputMode="numeric" pattern="[0-9]{5}"
+            id="hero-zip" ref={zipRef} inputMode="numeric" pattern="[0-9]{5}"
             placeholder="Enter your delivery ZIP" value={input} maxLength={5}
             onChange={e => setInput(e.target.value.replace(/\D/g, ''))}
           />
+          {input && (
+            <button type="button" className="ld-zip-clear" onClick={clearZip} aria-label="Clear ZIP code" title="Clear ZIP code">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          )}
           <button className="ld-btn ld-btn--brand" type="submit">Check delivery</button>
         </form>
-        {/* Coverage answer — the highest-intent moment on the page, so it
-            lands as a card with the obvious next step attached. The ZIP
-            rides along in the link so the shop opens filtered + branded. */}
+        {/* Coverage answer — a slim status label under the pill. The single
+            CTA below stays constant, so the label just reports the verdict. */}
         {checked && (isZipCovered(checked) ? (
-          <div className="ld-zipres ld-zipres--yes" role="status">
-            <span className="ld-zipres-icon" aria-hidden="true">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l4 4L19 7" /></svg>
-            </span>
-            <span className="ld-zipres-copy">
-              <b>Yes — we deliver to {checked}</b>
-              <em>Typically 3–5 business days, with the delivered price shown up front.</em>
-            </span>
-            <a className="ld-btn ld-btn--accent ld-zipres-cta" href={u(`shop?zip=${checked}`)}>
-              See containers <span aria-hidden="true">→</span>
-            </a>
-          </div>
+          <p className="ld-zipres ld-zipres--yes" role="status">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7" /></svg>
+            {/* One text node keeps the copy flowing — separate children would
+                each become their own flex item and break mid-sentence. */}
+            <span>Great news — we deliver to {checked} in 3–5 business days!</span>
+          </p>
         ) : (
-          <div className="ld-zipres ld-zipres--no" role="status">
-            <span className="ld-zipres-icon" aria-hidden="true">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8v5" /><circle cx="12" cy="16.5" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="9" /></svg>
-            </span>
-            <span className="ld-zipres-copy">
-              <b>{checked} is outside our standard area</b>
-              <em>We still haul long distance — call and we'll quote it for you.</em>
-            </span>
-            <a className="ld-btn ld-btn--brand ld-zipres-cta" href={tenant.phoneHref}>Call {tenant.phone}</a>
-          </div>
+          <p className="ld-zipres ld-zipres--no" role="status">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 8v5" /><circle cx="12" cy="16.5" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="9" /></svg>
+            <span>{checked} is outside our standard area — <a href={tenant.phoneHref}>call {tenant.phone}</a> and we'll quote it.</span>
+          </p>
         ))}
-        {/* Once we've confirmed coverage the card's ZIP-scoped CTA is the
-            better next step, so the generic one steps aside rather than
-            competing with it. A miss keeps it — they may still browse. */}
-        {!(checked && isZipCovered(checked)) && (
-          <div className="ld-hero-ctas ld-rise ld-rise--4">
-            <a className="ld-btn ld-btn--accent ld-btn--hero" href={u('shop')}>
-              Browse all inventory <span aria-hidden="true">→</span>
-            </a>
-          </div>
-        )}
+        <div className="ld-hero-ctas ld-rise ld-rise--4">
+          <a className="ld-btn ld-btn--accent ld-btn--hero" href={u('shop')}>
+            Browse all inventory <span aria-hidden="true">→</span>
+          </a>
+        </div>
         <div className="ld-hero-trust ld-rise ld-rise--5">
           {HERO_TRUST.map(t => <span key={t}><CheckIcon />{t}</span>)}
         </div>
