@@ -182,8 +182,8 @@ const SCHEMAS = {
   // shipper approval → repair (retail) or sell-as-damaged (wholesale).
   claims: {
     file: 'claims.csv',
-    headers: ['id','claimNumber','containerId','containerSku','supplierId','supplierName','shipperId','shipperName','vesselRef','status','severity','photos','notes','estimateAmount','estimateNotes','shipperDecision','shipperNotes','shipperDecidedAt','repairShopId','repairShopName','repairDate','decision','inspectorName','inspectedAt','createdAt','events','sharedAt','shipperViewedAt'],
-    types: { severity: 'number', photos: 'array', estimateAmount: 'number', shipperDecidedAt: 'stringOrNull', inspectedAt: 'stringOrNull', sharedAt: 'stringOrNull', shipperViewedAt: 'stringOrNull' },
+    headers: ['id','claimNumber','containerId','containerSku','supplierId','supplierName','shipperId','shipperName','vesselRef','status','severity','photos','photoReasons','photoNotes','notes','estimateAmount','estimateNotes','shipperDecision','shipperNotes','shipperDecidedAt','repairShopId','repairShopName','repairDate','decision','inspectorName','inspectedAt','createdAt','events','sharedAt','shipperViewedAt'],
+    types: { severity: 'number', photos: 'array', photoReasons: 'array', photoNotes: 'array', estimateAmount: 'number', shipperDecidedAt: 'stringOrNull', inspectedAt: 'stringOrNull', sharedAt: 'stringOrNull', shipperViewedAt: 'stringOrNull' },
   },
   // Messages between drivers, admin dispatch, and customers. Each row is one direction;
   // toDriverId is the driver party in the conversation (whether sending or receiving).
@@ -822,6 +822,136 @@ function ensureSeedClaimTables() {
     ])
     console.log('Seeded marketing connections (3)')
   }
+}
+
+// ── Claim packaging (ZIP) ─────────────────────────────────
+// A claim's arbitration file travels as one download: every damage photo
+// (named by its reason) plus a print-ready summary. Written by hand so the
+// server keeps its zero-dependency promise — STORE method, no compression,
+// which is right anyway since JPEGs don't compress further.
+
+const CRC_TABLE = (() => {
+  const t = new Int32Array(256)
+  for (let i = 0; i < 256; i++) {
+    let c = i
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1
+    t[i] = c
+  }
+  return t
+})()
+function crc32(buf) {
+  let c = 0 ^ -1
+  for (let i = 0; i < buf.length; i++) c = (c >>> 8) ^ CRC_TABLE[(c ^ buf[i]) & 0xFF]
+  return (c ^ -1) >>> 0
+}
+// files: [{ name, data: Buffer }] → Buffer of a valid .zip
+function buildZip(files) {
+  const chunks = []
+  const central = []
+  let offset = 0
+  for (const f of files) {
+    const name = Buffer.from(f.name, 'utf8')
+    const crc = crc32(f.data)
+    const local = Buffer.alloc(30)
+    local.writeUInt32LE(0x04034b50, 0)   // local file header signature
+    local.writeUInt16LE(20, 4)           // version needed
+    local.writeUInt16LE(0, 6)            // flags
+    local.writeUInt16LE(0, 8)            // method: store
+    local.writeUInt16LE(0, 10)           // mod time
+    local.writeUInt16LE(0x21, 12)        // mod date (2000-01-01)
+    local.writeUInt32LE(crc, 14)
+    local.writeUInt32LE(f.data.length, 18)
+    local.writeUInt32LE(f.data.length, 22)
+    local.writeUInt16LE(name.length, 26)
+    local.writeUInt16LE(0, 28)
+    chunks.push(local, name, f.data)
+    const dir = Buffer.alloc(46)
+    dir.writeUInt32LE(0x02014b50, 0)     // central directory signature
+    dir.writeUInt16LE(20, 4); dir.writeUInt16LE(20, 6)
+    dir.writeUInt16LE(0, 8); dir.writeUInt16LE(0, 10)
+    dir.writeUInt16LE(0, 12); dir.writeUInt16LE(0x21, 14)
+    dir.writeUInt32LE(crc, 16)
+    dir.writeUInt32LE(f.data.length, 20)
+    dir.writeUInt32LE(f.data.length, 24)
+    dir.writeUInt16LE(name.length, 28)
+    dir.writeUInt32LE(offset, 42)
+    central.push(dir, name)
+    offset += local.length + name.length + f.data.length
+  }
+  const centralBuf = Buffer.concat(central)
+  const end = Buffer.alloc(22)
+  end.writeUInt32LE(0x06054b50, 0)       // end of central directory
+  end.writeUInt16LE(files.length, 8)
+  end.writeUInt16LE(files.length, 10)
+  end.writeUInt32LE(centralBuf.length, 12)
+  end.writeUInt32LE(offset, 16)
+  return Buffer.concat([...chunks, centralBuf, end])
+}
+
+// Shareable package link: an HMAC over the claim id, so a shipper can pull
+// the file from an email without an account. 30-day life.
+const SHARE_TTL = 30 * 24 * 60 * 60 * 1000
+function claimShareToken(claimId, expires = Date.now() + SHARE_TTL) {
+  const sig = createHmac('sha256', AUTH_SECRET).update(`pkg.${claimId}.${expires}`).digest('hex').slice(0, 32)
+  return `${expires}.${sig}`
+}
+function verifyClaimShare(claimId, token) {
+  const [exp, sig] = String(token || '').split('.')
+  if (!exp || !sig || Number(exp) < Date.now()) return false
+  const expect = createHmac('sha256', AUTH_SECRET).update(`pkg.${claimId}.${exp}`).digest('hex').slice(0, 32)
+  return sig === expect
+}
+const packageUrl = claim => `${SITE_ORIGIN.replace(/\/$/, '')}/api/claims/${claim.id}/package.zip?t=${claimShareToken(claim.id)}`
+
+// The summary sheet that rides inside the ZIP — plain HTML so it opens
+// anywhere and prints straight to PDF.
+function claimSummaryHtml(claim) {
+  const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+  const photos = (claim.photos || []).filter(Boolean)
+  const reasons = claim.photoReasons || []
+  const notes = claim.photoNotes || []
+  let events = []
+  try { events = JSON.parse(claim.events || '[]') } catch { events = [] }
+  const rows = photos.map((u, i) => `<tr><td>${i + 1}</td><td><b>${esc(reasons[i] || 'Damage')}</b></td><td>${esc(notes[i] || '')}</td><td>${esc(basename(u))}</td></tr>`).join('')
+  const timeline = events.map(e => `<tr><td>${esc(new Date(e.t).toLocaleString())}</td><td>${esc(e.actor)}</td><td>${esc(e.text)}</td></tr>`).join('')
+  return `<!doctype html><meta charset="utf-8"><title>Claim ${esc(claim.claimNumber)}</title>
+<style>body{font:14px/1.5 system-ui,Arial,sans-serif;color:#12141c;max-width:820px;margin:32px auto;padding:0 20px}
+h1{font-size:24px;margin:0 0 2px}h2{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:#5b6b7e;margin:26px 0 8px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:7px 9px;border-bottom:1px solid #e3e6ec;vertical-align:top}
+th{background:#f4f6fa;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#5b6b7e}
+.kv{display:grid;grid-template-columns:180px 1fr;gap:4px 14px;font-size:13px}.kv div:nth-child(odd){color:#5b6b7e}</style>
+<h1>Damage claim ${esc(claim.claimNumber)}</h1>
+<div style="color:#5b6b7e">Container ${esc(claim.containerSku)} · generated ${new Date().toLocaleString()}</div>
+<h2>Claim details</h2><div class="kv">
+<div>Container</div><div>${esc(claim.containerSku)}</div>
+<div>Supplier</div><div>${esc(claim.supplierName)}</div>
+<div>Shipping line</div><div>${esc(claim.shipperName)}</div>
+<div>Vessel reference</div><div>${esc(claim.vesselRef) || '—'}</div>
+<div>Severity</div><div>D·${esc(claim.severity)}</div>
+<div>Status</div><div>${esc(claim.status)}</div>
+<div>Inspector</div><div>${esc(claim.inspectorName) || '—'}</div>
+<div>Repair estimate</div><div>${claim.estimateAmount ? '$' + Number(claim.estimateAmount).toLocaleString() : '—'}</div>
+</div>
+${claim.notes ? `<h2>Inspector notes</h2><p>${esc(claim.notes)}</p>` : ''}
+<h2>Damage photos (${photos.length})</h2>
+<table><tr><th>#</th><th>Reason</th><th>Note</th><th>File</th></tr>${rows || '<tr><td colspan="4">No photos on file.</td></tr>'}</table>
+${timeline ? `<h2>Audit timeline</h2><table><tr><th>When</th><th>Who</th><th>What</th></tr>${timeline}</table>` : ''}
+`
+}
+
+function buildClaimPackage(claim) {
+  const folder = `claim-${claim.claimNumber}`
+  const files = [{ name: `${folder}/summary.html`, data: Buffer.from(claimSummaryHtml(claim), 'utf8') }]
+  const reasons = claim.photoReasons || []
+  ;(claim.photos || []).forEach((u, i) => {
+    if (!u) return
+    const path = join(PHOTO_DIR, basename(u))
+    if (!existsSync(path)) return
+    const slug = String(reasons[i] || 'damage').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'damage'
+    const ext = (basename(u).split('.').pop() || 'jpg')
+    files.push({ name: `${folder}/photos/${String(i + 1).padStart(2, '0')}-${slug}.${ext}`, data: readFileSync(path) })
+  })
+  return { filename: `${folder}.zip`, buffer: buildZip(files), count: files.length }
 }
 
 // ── Two-factor codes (SMS) ────────────────────────────────
@@ -2738,6 +2868,29 @@ async function handleRequest(req, res) {
     // ── Damage claims (sea-freight arbitration pipeline) ──
     if (seg[0] === 'claims') {
       const all = readTable('claims')
+
+      // ── Claim package (.zip) ──
+      // Placed ahead of the role gates: a signed ?t= link lets a shipping
+      // line pull the file straight from an email, no account needed.
+      if (seg.length === 3 && seg[2] === 'package.zip' && method === 'GET') {
+        const claim = all.find(c => c.id === seg[1] || c.claimNumber === seg[1])
+        if (!claim) return send(res, 404, { message: 'Claim not found' })
+        const token = url.searchParams.get('t')
+        const allowed = (token && verifyClaimShare(claim.id, token))
+          || hasRole('admin', 'driver')
+          || (hasRole('supplier') && claim.supplierId === user?.supplierId)
+          || (hasRole('shipper') && claim.shipperId === user?.shipperId)
+        if (!allowed) return denied(user ? 403 : 401, 'Not allowed to download this claim')
+        const pkg = buildClaimPackage(claim)
+        res.writeHead(200, {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': `attachment; filename="${pkg.filename}"`,
+          'Content-Length': pkg.buffer.length,
+          'Access-Control-Allow-Origin': '*',
+        })
+        return res.end(pkg.buffer)
+      }
+
       // Visibility: staff and the field crew see everything; a supplier sees
       // their own claims; a shipping line sees claims filed against it.
       const visible = () => {
@@ -2850,42 +3003,71 @@ async function handleRequest(req, res) {
       if (seg.length === 3 && seg[2] === 'share' && method === 'POST') {
         if (!hasRole('admin', 'supplier')) return denied(user ? 403 : 401, 'Supplier access required')
         const body = await readBody(req)
-        const mode = body.mode === 'packet' ? 'packet' : 'link'
+        const mode = ['packet', 'package'].includes(body.mode) ? body.mode : 'link'
         const shipperUser = readTable('users').find(x => x.shipperId === claim.shipperId)
         const to = shipperUser?.email || readTable('shippers').find(x => x.id === claim.shipperId)?.email
         const loginUrl = `${SITE_ORIGIN}/shipper?claim=${claim.claimNumber}`
         queueMessage('email', to,
-          `${mode === 'packet' ? 'Claim packet' : 'Estimate to review'} — ${claim.containerSku} (${claim.claimNumber})`,
-          mode === 'packet'
-            ? `${claim.supplierName} shared the full claim packet for ${claim.containerSku}: damage evidence, severity D·${claim.severity}, and a $${Number(claim.estimateAmount).toLocaleString()} repair estimate.\n\nSign in to review and decide: ${loginUrl}`
-            : `${claim.supplierName} requests your review of a $${Number(claim.estimateAmount).toLocaleString()} repair estimate for ${claim.containerSku}.\n\nSign in to review and decide: ${loginUrl}`,
+          `${mode === 'link' ? 'Estimate to review' : 'Claim packet'} — ${claim.containerSku} (${claim.claimNumber})`,
+          mode === 'package'
+            ? `${claim.supplierName} sent the complete claim file for ${claim.containerSku} (${claim.claimNumber}) as a download: every damage photo labelled by reason, plus a printable summary.\n\nDownload the package (.zip): ${packageUrl(claim)}\n\nOr sign in to review and decide: ${loginUrl}`
+            : mode === 'packet'
+              ? `${claim.supplierName} shared the full claim packet for ${claim.containerSku}: damage evidence, severity D·${claim.severity}, and a $${Number(claim.estimateAmount).toLocaleString()} repair estimate.\n\nSign in to review and decide: ${loginUrl}\n\nDownload everything as a .zip: ${packageUrl(claim)}`
+              : `${claim.supplierName} requests your review of a $${Number(claim.estimateAmount).toLocaleString()} repair estimate for ${claim.containerSku}.\n\nSign in to review and decide: ${loginUrl}`,
           'claim', claim.id)
         claim.sharedAt = new Date().toISOString()
-        addClaimEvent(claim, user.name || claim.supplierName, `Estimate shared with ${claim.shipperName} by email (${mode === 'packet' ? 'claim packet' : 'login link'})`)
+        addClaimEvent(claim, user.name || claim.supplierName, `Estimate shared with ${claim.shipperName} by email (${mode === 'package' ? 'claim package .zip' : mode === 'packet' ? 'claim packet' : 'login link'})`)
         all[idx] = claim
         writeTable('claims', all)
         return send(res, 200, claim)
       }
 
-      // Damage evidence photos — own slots, never the retail gallery.
+      // Damage evidence photos — their own collection, never the retail
+      // gallery. Each shot carries a quick reason (bent, hole, rust…) and an
+      // optional note; omit `slot` to append the next one.
       if (seg.length === 3 && seg[2] === 'photos' && method === 'POST') {
         const body = await readBody(req)
-        const saved = savePhoto(claim.claimNumber, Number(body.slot) || 0, body.dataUrl)
-        if (saved.error) return send(res, 400, { message: saved.error })
         const photos = [...(claim.photos || [])]
-        photos[Number(body.slot) || 0] = saved.url
+        const reasons = [...(claim.photoReasons || [])]
+        const notes = [...(claim.photoNotes || [])]
+        const slot = body.slot == null ? photos.length : Number(body.slot) || 0
+        const saved = savePhoto(claim.claimNumber, slot, body.dataUrl)
+        if (saved.error) return send(res, 400, { message: saved.error })
+        photos[slot] = saved.url
+        reasons[slot] = String(body.reason || reasons[slot] || 'Damage').slice(0, 40)
+        notes[slot] = String(body.note ?? notes[slot] ?? '').slice(0, 200)
+        for (let i = 0; i < photos.length; i++) {
+          if (photos[i] == null) photos[i] = ''
+          if (reasons[i] == null) reasons[i] = ''
+          if (notes[i] == null) notes[i] = ''
+        }
         claim.photos = photos
+        claim.photoReasons = reasons
+        claim.photoNotes = notes
         all[idx] = claim
         writeTable('claims', all)
         return send(res, 200, claim)
       }
       if (seg.length === 4 && seg[2] === 'photos' && method === 'DELETE') {
+        // Drop the slot outright so the collection stays contiguous — its
+        // reason and note go with it.
+        const i = Number(seg[3])
         const photos = [...(claim.photos || [])]
-        photos[Number(seg[3])] = ''
+        const reasons = [...(claim.photoReasons || [])]
+        const notes = [...(claim.photoNotes || [])]
+        photos.splice(i, 1); reasons.splice(i, 1); notes.splice(i, 1)
         claim.photos = photos
+        claim.photoReasons = reasons
+        claim.photoNotes = notes
         all[idx] = claim
         writeTable('claims', all)
         return send(res, 200, claim)
+      }
+
+      // A copyable/emailable download link for the packaged claim.
+      if (seg.length === 3 && seg[2] === 'package-link' && method === 'GET') {
+        if (!hasRole('admin', 'driver', 'supplier', 'shipper')) return denied(user ? 403 : 401, 'Staff access required')
+        return send(res, 200, { url: packageUrl(claim), expiresInDays: 30 })
       }
     }
 

@@ -97,6 +97,123 @@ function storedUser(): AuthUser | null {
   try { return JSON.parse(stored) as AuthUser } catch { return null }
 }
 
+// ── Claim packaging, in the browser ──────────────────────────
+// The API builds the claim .zip server-side; with no server we build the
+// same archive here (STORE method, no compression) so the demo's Download
+// and Copy-link actions hand over a real, openable file.
+
+const CRC_TABLE = (() => {
+  const t = new Int32Array(256)
+  for (let i = 0; i < 256; i++) { let c = i; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[i] = c }
+  return t
+})()
+const crc32 = (buf: Uint8Array) => {
+  let c = 0 ^ -1
+  for (let i = 0; i < buf.length; i++) c = (c >>> 8) ^ CRC_TABLE[(c ^ buf[i]) & 0xFF]
+  return (c ^ -1) >>> 0
+}
+
+function buildZip(files: { name: string; data: Uint8Array }[]): Blob {
+  const enc = new TextEncoder()
+  const chunks: Uint8Array[] = []
+  const central: Uint8Array[] = []
+  let offset = 0
+  const u32 = (n: number) => new Uint8Array([n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF])
+  const u16 = (n: number) => new Uint8Array([n & 0xFF, (n >>> 8) & 0xFF])
+  const cat = (parts: Uint8Array[]) => {
+    const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
+    let at = 0; for (const p of parts) { out.set(p, at); at += p.length }
+    return out
+  }
+  for (const f of files) {
+    const name = enc.encode(f.name)
+    const sum = crc32(f.data)
+    const local = cat([u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0), u32(sum), u32(f.data.length), u32(f.data.length), u16(name.length), u16(0), name, f.data])
+    chunks.push(local)
+    central.push(cat([u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0), u32(sum), u32(f.data.length), u32(f.data.length), u16(name.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset), name]))
+    offset += local.length
+  }
+  const dir = cat(central)
+  const eocd = cat([u32(0x06054b50), u16(0), u16(0), u16(files.length), u16(files.length), u32(dir.length), u32(offset), u16(0)])
+  return new Blob([cat(chunks), dir, eocd], { type: 'application/zip' })
+}
+
+// data:image/png;base64,… → bytes
+function dataUrlBytes(url: string): Uint8Array | null {
+  const comma = url.indexOf(',')
+  if (!url.startsWith('data:') || comma < 0) return null
+  try {
+    const bin = atob(url.slice(comma + 1))
+    const out = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
+    return out
+  } catch { return null }
+}
+
+function claimSummaryHtml(claim: Row): string {
+  const esc = (s: unknown) => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]!))
+  const photos = ((claim.photos as string[] | undefined) ?? []).filter(Boolean)
+  const reasons = (claim.photoReasons as string[] | undefined) ?? []
+  const notes = (claim.photoNotes as string[] | undefined) ?? []
+  let events: { t: string; actor: string; text: string }[] = []
+  try { events = JSON.parse(String(claim.events || '[]')) } catch { events = [] }
+  const rows = photos.map((_, i) => `<tr><td>${i + 1}</td><td><b>${esc(reasons[i] || 'Damage')}</b></td><td>${esc(notes[i] || '')}</td></tr>`).join('')
+  const timeline = events.map(e => `<tr><td>${esc(new Date(e.t).toLocaleString())}</td><td>${esc(e.actor)}</td><td>${esc(e.text)}</td></tr>`).join('')
+  return `<!doctype html><meta charset="utf-8"><title>Claim ${esc(claim.claimNumber)}</title>
+<style>body{font:14px/1.5 system-ui,Arial,sans-serif;color:#12141c;max-width:820px;margin:32px auto;padding:0 20px}
+h1{font-size:24px;margin:0 0 2px}h2{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:#5b6b7e;margin:26px 0 8px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:7px 9px;border-bottom:1px solid #e3e6ec;vertical-align:top}
+th{background:#f4f6fa;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#5b6b7e}
+.kv{display:grid;grid-template-columns:180px 1fr;gap:4px 14px;font-size:13px}.kv div:nth-child(odd){color:#5b6b7e}</style>
+<h1>Damage claim ${esc(claim.claimNumber)}</h1>
+<div style="color:#5b6b7e">Container ${esc(claim.containerSku)} · generated ${new Date().toLocaleString()}</div>
+<h2>Claim details</h2><div class="kv">
+<div>Container</div><div>${esc(claim.containerSku)}</div>
+<div>Supplier</div><div>${esc(claim.supplierName)}</div>
+<div>Shipping line</div><div>${esc(claim.shipperName)}</div>
+<div>Vessel reference</div><div>${esc(claim.vesselRef) || '—'}</div>
+<div>Severity</div><div>D·${esc(claim.severity)}</div>
+<div>Status</div><div>${esc(claim.status)}</div>
+<div>Inspector</div><div>${esc(claim.inspectorName) || '—'}</div>
+<div>Repair estimate</div><div>${claim.estimateAmount ? '$' + Number(claim.estimateAmount).toLocaleString() : '—'}</div>
+</div>
+${claim.notes ? `<h2>Inspector notes</h2><p>${esc(claim.notes)}</p>` : ''}
+<h2>Damage photos (${photos.length})</h2>
+<table><tr><th>#</th><th>Reason</th><th>Note</th></tr>${rows || '<tr><td colspan="3">No photos on file.</td></tr>'}</table>
+${timeline ? `<h2>Audit timeline</h2><table><tr><th>When</th><th>Who</th><th>What</th></tr>${timeline}</table>` : ''}
+`
+}
+
+// Photos are either shot this session (data: URLs) or seeded files that ship
+// with the demo build — both end up as bytes in the archive.
+async function photoBytes(u: string): Promise<{ bytes: Uint8Array; ext: string } | null> {
+  if (u.startsWith('data:')) {
+    const bytes = dataUrlBytes(u)
+    return bytes ? { bytes, ext: /^data:image\/(\w+)/.exec(u)?.[1] || 'jpg' } : null
+  }
+  const src = u.startsWith('/photos/') ? `${import.meta.env.BASE_URL}demo-photos/${u.slice('/photos/'.length)}` : u
+  try {
+    const res = await fetch(src)
+    if (!res.ok) return null
+    return { bytes: new Uint8Array(await res.arrayBuffer()), ext: src.split('.').pop()?.slice(0, 5) || 'jpg' }
+  } catch { return null }
+}
+
+async function demoClaimPackageUrl(claim: Row): Promise<string> {
+  const folder = `claim-${claim.claimNumber}`
+  const files: { name: string; data: Uint8Array }[] = [{ name: `${folder}/summary.html`, data: new TextEncoder().encode(claimSummaryHtml(claim)) }]
+  const reasons = (claim.photoReasons as string[] | undefined) ?? []
+  const photos = (claim.photos as string[] | undefined) ?? []
+  for (let i = 0; i < photos.length; i++) {
+    if (!photos[i]) continue
+    const got = await photoBytes(photos[i])
+    if (!got) continue
+    const slug = String(reasons[i] || 'damage').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'damage'
+    files.push({ name: `${folder}/photos/${String(i + 1).padStart(2, '0')}-${slug}.${got.ext}`, data: got.bytes })
+  }
+  return URL.createObjectURL(buildZip(files))
+}
+
 // Mirrors request<T>'s contract: resolve with the parsed payload or throw
 // an Error whose message is shown to the user.
 export async function demoRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -255,15 +372,42 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
     db.claims.push(row)
     return ok(row)
   }
+  // Damage evidence — its own collection. A POST without a slot APPENDS
+  // (that's how the field app's reason-first capture works); a POST with a
+  // slot still fills that slot, for the legacy fixed-shot callers. Reasons
+  // and notes stay index-aligned with the photos through both paths.
   const claimPhoto = route.match(/^\/claims\/([^/]+)\/photos(\/\d+)?$/)
   if (claimPhoto && (method === 'POST' || method === 'DELETE')) {
     const c = db.claims.find(x => x.id === claimPhoto[1])
     if (!c) throw new Error('Claim not found')
     const photos = [...((c.photos as string[] | undefined) ?? [])]
-    if (method === 'POST') photos[Number((body as { slot?: number }).slot ?? 0)] = String((body as { dataUrl?: string }).dataUrl || '')
-    else photos[Number(claimPhoto[2]!.slice(1))] = ''
-    c.photos = photos
+    const reasons = [...((c.photoReasons as string[] | undefined) ?? [])]
+    const notes = [...((c.photoNotes as string[] | undefined) ?? [])]
+    if (method === 'POST') {
+      const b = body as { slot?: number; dataUrl?: string; reason?: string; note?: string }
+      const at = b.slot === undefined ? photos.length : Number(b.slot)
+      photos[at] = String(b.dataUrl || '')
+      while (reasons.length < photos.length) reasons.push('')
+      while (notes.length < photos.length) notes.push('')
+      if (b.reason !== undefined) reasons[at] = String(b.reason)
+      if (b.note !== undefined) notes[at] = String(b.note)
+    } else {
+      // Splice all three together so photo N keeps its own reason and note.
+      const at = Number(claimPhoto[2]!.slice(1))
+      photos.splice(at, 1); reasons.splice(at, 1); notes.splice(at, 1)
+    }
+    c.photos = photos; c.photoReasons = reasons; c.photoNotes = notes
     return ok(c)
+  }
+
+  // Signed package link. There is no server here, so the demo builds the
+  // real .zip in the browser and hands back a blob: URL — the download is
+  // genuine, it just can't outlive the tab.
+  const pkgLink = route.match(/^\/claims\/([^/]+)\/package-link$/)
+  if (pkgLink && method === 'GET') {
+    const c = db.claims.find(x => x.id === pkgLink[1])
+    if (!c) throw new Error('Claim not found')
+    return ok({ url: await demoClaimPackageUrl(c), expiresInDays: 30 })
   }
 
   // Share the estimate with the shipping line (pretend email + audit event)
@@ -271,7 +415,8 @@ export async function demoRequest<T>(path: string, options: RequestInit = {}): P
   if (shareRoute && method === 'POST') {
     const c = db.claims.find(x => x.id === shareRoute[1])
     if (!c) throw new Error('Claim not found')
-    const mode = (body as { mode?: string }).mode === 'packet' ? 'claim packet' : 'login link'
+    const raw = (body as { mode?: string }).mode
+    const mode = raw === 'packet' ? 'claim packet' : raw === 'package' ? 'full claim package (.zip)' : 'login link'
     c.sharedAt = new Date().toISOString()
     claimEvent(c, storedUser()?.name || 'Supplier', `Estimate shared with ${c.shipperName} by email (${mode})`)
     return ok(c)

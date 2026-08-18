@@ -5,13 +5,59 @@
 // estimate, and the full chain of custody; print → save as PDF).
 // ============================================================
 
-import React from 'react'
-import { photoUrl, claimEvents, DAMAGE_SHOT_LABELS, type DamageClaim } from '../../lib/api'
+import React, { useState } from 'react'
+import { photoUrl, claimEvents, claims as claimsApi, DAMAGE_SHOT_LABELS, type DamageClaim } from '../../lib/api'
 import { damageLabel, SEVERITY_WORD } from '../../lib/grading'
 
 const INK = '#0D0E12', INK2 = '#44474F', INK3 = '#6B7280', DIV = '#E2E4E9'
 
 const fmtT = (iso: string) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+
+// Damage evidence is collected reason-first in the field app, so the reason
+// IS the caption. Claims filed before that (fixed six slots) fall back to the
+// old slot labels so historic packets still read correctly.
+export const photoCaption = (claim: DamageClaim, i: number) =>
+  claim.photoReasons?.[i] || DAMAGE_SHOT_LABELS[i] || `Photo ${i + 1}`
+
+// ── Package the whole claim: .zip download / signed link ────
+// The API bundles the evidence photos (named by reason) with a printable
+// summary; both portals offer the same two actions off that one endpoint.
+export function ClaimPackageActions({ claim, toast }: { claim: DamageClaim; toast?: (m: string) => void }) {
+  const [busy, setBusy] = useState(false)
+  const [link, setLink] = useState('')
+  const say = (m: string) => toast?.(m)
+  const photos = (claim.photos || []).filter(Boolean).length
+
+  const get = async (then: (url: string, days: number) => void) => {
+    setBusy(true)
+    try {
+      const { url, expiresInDays } = await claimsApi.packageLink(claim.id)
+      then(url, expiresInDays)
+    } catch (e) { say(e instanceof Error ? e.message : 'Could not build the claim package') } finally { setBusy(false) }
+  }
+  const style: React.CSSProperties = {
+    padding: '9px 16px', borderRadius: '999px', border: `1.5px solid ${DIV}`, background: '#fff',
+    color: INK2, fontSize: '12px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
+  }
+  if (photos === 0) return null
+  return (
+    <>
+      <button style={style} disabled={busy} title="Every damage photo plus a printable summary, as one file"
+        onClick={() => get(url => { window.open(url, '_blank', 'noopener'); say('Downloading the claim package…') })}>
+        Download .zip
+      </button>
+      <button style={style} disabled={busy} title="A signed link anyone can open — no sign-in"
+        onClick={() => get(async (url, days) => {
+          setLink(url)
+          try { await navigator.clipboard.writeText(url); say(`Link copied — good for ${days} days`) }
+          catch { say('Link ready below — select it to copy') }
+        })}>
+        Copy share link
+      </button>
+      {link && <div style={{ flexBasis: '100%', fontSize: '10px', fontFamily: 'var(--mono)', color: INK3, wordBreak: 'break-all', marginTop: '2px' }}>{link}</div>}
+    </>
+  )
+}
 
 // ── Audit timeline — who did what, when ────────────────────
 export function ClaimTimeline({ claim }: { claim: DamageClaim }) {
@@ -89,8 +135,11 @@ export function ClaimPacket({ claim, onClose }: { claim: DamageClaim; onClose: (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
               {(claim.photos || []).map((u, i) => u ? (
                 <figure key={i} style={{ margin: 0 }}>
-                  <img src={photoUrl(u)} alt={DAMAGE_SHOT_LABELS[i] ?? `Photo ${i + 1}`} style={{ width: '100%', borderRadius: '8px', display: 'block' }} />
-                  <figcaption style={{ fontSize: '10px', color: INK3, marginTop: '3px' }}>{i + 1}. {DAMAGE_SHOT_LABELS[i] ?? 'Additional photo'}</figcaption>
+                  <img src={photoUrl(u)} alt={photoCaption(claim, i)} style={{ width: '100%', borderRadius: '8px', display: 'block' }} />
+                  <figcaption style={{ fontSize: '10px', color: INK3, marginTop: '3px' }}>
+                    <b style={{ color: INK2 }}>{i + 1}. {photoCaption(claim, i)}</b>
+                    {claim.photoNotes?.[i] && <> — {claim.photoNotes[i]}</>}
+                  </figcaption>
                 </figure>
               ) : null)}
             </div>

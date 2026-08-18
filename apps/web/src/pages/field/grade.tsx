@@ -10,7 +10,8 @@
 // ============================================================
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { containers as containersApi, claims as claimsApi, photoUrl, fileToDataUrl, SHOT_LABELS, DAMAGE_SHOT_LABELS, CLAIM_STAGES, type Container, type DamageClaim } from '../../lib/api'
+import { containers as containersApi, claims as claimsApi, photoUrl, SHOT_LABELS, CLAIM_STAGES, type Container, type DamageClaim } from '../../lib/api'
+import { DamageCollect } from './DamageCollect'
 import { GRADE_META } from '../../lib/specs'
 import {
   ADJUSTER_QUESTIONS, analyzeContainerPhotos, analyzePhotoList, gradeContainer, assessDamage,
@@ -433,8 +434,9 @@ function DamageInspection({ inspectorName, toast, containers }: { inspectorName:
   const [claim, setClaim] = useState<DamageClaim | null>(null)
   const [answers, setAnswers] = useState<Record<string, number>>({})
   const [result, setResult] = useState<DamageResult | null>(null)
-  const [busySlot, setBusySlot] = useState<number | null>(null)
   const [applying, setApplying] = useState(false)
+  // Damage photos live in their own screen, not inline with the wizard.
+  const [collecting, setCollecting] = useState(false)
 
   const refresh = () => claimsApi.list().then(setClaims).catch(() => {})
   useEffect(() => { refresh() }, [])
@@ -442,40 +444,6 @@ function DamageInspection({ inspectorName, toast, containers }: { inspectorName:
   const stageLabel = (st: DamageClaim['status']) =>
     CLAIM_STAGES.find(x => x.key === st)?.label
     ?? (st === 'repair_scheduled' ? 'Repair scheduled' : st === 'sell_as_damaged' ? 'Listed as damaged' : 'Closed')
-
-  const pickFile = (): Promise<File | null> => new Promise(resolve => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = 'image/*,.heic,.heif'
-    input.setAttribute('capture', 'environment')
-    input.onchange = () => resolve(input.files?.[0] ?? null)
-    window.addEventListener('focus', () => setTimeout(() => resolve(input.files?.[0] ?? null), 700), { once: true })
-    input.click()
-  })
-
-  const capture = async (slot: number) => {
-    if (!claim || busySlot != null) return
-    const file = await pickFile()
-    if (!file) return
-    setBusySlot(slot)
-    try {
-      // Evidence stays EXACTLY as shot — no auto-crop or background removal.
-      const dataUrl = await fileToDataUrl(file)
-      const updated = await claimsApi.uploadPhoto(claim.id, { slot, label: DAMAGE_SHOT_LABELS[slot], dataUrl })
-      setClaim(updated); setResult(null)
-      toast(`${DAMAGE_SHOT_LABELS[slot]} ✓`)
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Upload failed')
-    } finally { setBusySlot(null) }
-  }
-
-  const removeShot = async (slot: number) => {
-    if (!claim) return
-    try {
-      const updated = await claimsApi.deletePhoto(claim.id, slot)
-      setClaim(updated); setResult(null)
-    } catch (e) { toast(e instanceof Error ? e.message : 'Could not remove the photo') }
-  }
 
   const photosOn = (claim?.photos || []).filter(Boolean).length
   const answered = Object.keys(answers).length
@@ -549,6 +517,18 @@ function DamageInspection({ inspectorName, toast, containers }: { inspectorName:
     )
   }
 
+  // ── Damage collection — its own screen, not a card in the wizard ──
+  if (collecting) {
+    return (
+      <DamageCollect
+        claim={claim}
+        onClaim={c => { setClaim(c); setResult(null) }}
+        onBack={() => setCollecting(false)}
+        toast={toast}
+      />
+    )
+  }
+
   // ── Inspection wizard ──
   return (
     <div>
@@ -558,35 +538,30 @@ function DamageInspection({ inspectorName, toast, containers }: { inspectorName:
         <div style={{ fontSize: '11px', color: INK2 }}>{claim.claimNumber}</div>
       </div>
 
-      {/* Damage evidence photos — dedicated slots */}
+      {/* Damage evidence — collected in its own area, tagged by reason */}
       <div style={card}>
         <div style={{ fontSize: '11px', fontWeight: 700, color: INK2, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '10px' }}>
-          1 · Damage evidence · {photosOn}/{DAMAGE_SHOT_LABELS.length} (min 2)
+          1 · Damage evidence · {photosOn} photo{photosOn === 1 ? '' : 's'} (min 2)
         </div>
-        <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
-          {DAMAGE_SHOT_LABELS.map((label, i) => {
-            const u = claim.photos?.[i]
-            return (
+        {photosOn > 0 && (
+          <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '6px' }}>
+            {(claim.photos || []).filter(Boolean).map((u, i) => (
               <div key={i} style={{ flexShrink: 0, width: '86px' }}>
-                <div style={{ position: 'relative' }}>
-                  {u
-                    ? <img src={photoUrl(u)} alt={label} style={{ width: '86px', height: '64px', objectFit: 'cover', borderRadius: '8px', display: 'block', opacity: busySlot === i ? 0.4 : 1 }} />
-                    : <div style={{ width: '86px', height: '64px', borderRadius: '8px', border: `1.5px dashed #C4C6D0`, display: 'grid', placeItems: 'center', color: INK2, fontSize: '18px' }}>+</div>}
-                  {u && busySlot == null && (
-                    <button onClick={() => removeShot(i)} aria-label={`Delete ${label}`}
-                      style={{ position: 'absolute', top: '3px', right: '3px', width: '20px', height: '20px', borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,.55)', color: '#fff', fontSize: '11px', fontWeight: 700, cursor: 'pointer', display: 'grid', placeItems: 'center', lineHeight: 0 }}>✕</button>
-                  )}
-                </div>
-                <div style={{ fontSize: '9px', color: INK2, margin: '3px 0 2px', lineHeight: 1.3 }}>{label}</div>
-                <button onClick={() => capture(i)} disabled={busySlot != null}
-                  style={{ width: '100%', padding: '4px 0', borderRadius: '7px', border: '1px solid #C4C6D0', background: '#fff', color: RED, fontSize: '10px', fontWeight: 700, cursor: 'pointer' }}>
-                  {busySlot === i ? '…' : u ? 'Retake' : 'Capture'}
-                </button>
+                <img src={photoUrl(u)} alt={(claim.photoReasons || [])[i] || 'Damage'}
+                  style={{ width: '86px', height: '64px', objectFit: 'cover', borderRadius: '8px', display: 'block' }} />
+                <div style={{ fontSize: '9.5px', fontWeight: 800, color: RED, marginTop: '3px' }}>{(claim.photoReasons || [])[i] || 'Damage'}</div>
               </div>
-            )
-          })}
+            ))}
+          </div>
+        )}
+        <button onClick={() => setCollecting(true)}
+          style={{ width: '100%', marginTop: photosOn ? '6px' : 0, padding: '13px', borderRadius: '12px', border: 'none', background: RED, color: '#fff', fontSize: '13.5px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+          {photosOn ? 'Open damage collection →' : 'Collect damage photos →'}
+        </button>
+        <div style={{ fontSize: '11px', color: INK2, marginTop: '8px', lineHeight: 1.5 }}>
+          Damage photos are their own collection — tagged by reason and packaged with the claim,
+          separate from the retail photo set.
         </div>
-        <div style={{ fontSize: '11px', color: INK2, marginTop: '8px' }}>Evidence uploads exactly as shot — no cropping or edits, for the arbitration file.</div>
       </div>
 
       {/* The five questions */}

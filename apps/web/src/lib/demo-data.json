@@ -5930,7 +5930,9 @@
    "inspectorName": "",
    "inspectedAt": null,
    "createdAt": "2026-08-06T18:20:00.000Z",
-   "events": "[{\"t\":\"2026-08-06T18:20:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Claim filed against Meridian Lines (MV KESTREL 224E)\"}]"
+   "events": "[{\"t\":\"2026-08-06T18:20:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Claim filed against Meridian Lines (MV KESTREL 224E)\"}]",
+   "photoReasons": [],
+   "photoNotes": []
   },
   {
    "id": "clm_demo2",
@@ -5961,7 +5963,15 @@
    "inspectorName": "J. Alvarez",
    "inspectedAt": "2026-08-05T15:10:00.000Z",
    "createdAt": "2026-08-04T12:00:00.000Z",
-   "events": "[{\"t\":\"2026-08-04T12:00:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Claim filed against Meridian Lines (MV KESTREL 221E)\"},{\"t\":\"2026-08-05T15:10:00Z\",\"actor\":\"J. Alvarez\",\"text\":\"Damage inspected \u2014 severity D\u00b73\"}]"
+   "events": "[{\"t\":\"2026-08-04T12:00:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Claim filed against Meridian Lines (MV KESTREL 221E)\"},{\"t\":\"2026-08-05T15:10:00Z\",\"actor\":\"J. Alvarez\",\"text\":\"Damage inspected \u2014 severity D\u00b73\"}]",
+   "photoReasons": [
+    "Rust",
+    "Bent"
+   ],
+   "photoNotes": [
+    "Rear corner post, waterline",
+    "Top rail bowed inward ~2in"
+   ]
   },
   {
    "id": "clm_demo3",
@@ -5993,7 +6003,15 @@
    "inspectedAt": "2026-08-03T10:30:00.000Z",
    "createdAt": "2026-08-02T09:00:00.000Z",
    "events": "[{\"t\":\"2026-08-02T09:00:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Claim filed against Meridian Lines (MV PELICAN 087W)\"},{\"t\":\"2026-08-03T10:30:00Z\",\"actor\":\"J. Alvarez\",\"text\":\"Damage inspected \u2014 severity D\u00b74\"},{\"t\":\"2026-08-04T08:15:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Repair estimate $2,400 submitted to Meridian Lines\"},{\"t\":\"2026-08-04T08:16:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Estimate shared with Meridian Lines by email (login link)\"}]",
-   "sharedAt": "2026-08-04T08:16:00Z"
+   "sharedAt": "2026-08-04T08:16:00Z",
+   "photoReasons": [
+    "Hole",
+    "Scrape"
+   ],
+   "photoNotes": [
+    "Left panel, fist-sized",
+    "Full-length gouge, door side"
+   ]
   },
   {
    "id": "clm_demo4",
@@ -6024,7 +6042,13 @@
    "inspectedAt": "2026-08-05T09:00:00.000Z",
    "createdAt": "2026-08-01T08:00:00.000Z",
    "events": "[{\"t\":\"2026-08-01T08:00:00Z\",\"actor\":\"Marcus Webb\",\"text\":\"Claim filed against Austral Shipping (MV IBIS 314N)\"},{\"t\":\"2026-08-05T09:00:00Z\",\"actor\":\"M. Torres\",\"text\":\"Damage inspected \u2014 severity D\u00b72\"},{\"t\":\"2026-08-05T14:00:00Z\",\"actor\":\"Marcus Webb\",\"text\":\"Repair estimate $1,150 submitted to Austral Shipping\"},{\"t\":\"2026-08-06T19:45:00Z\",\"actor\":\"Austral Shipping\",\"text\":\"Shipper signed in and viewed the claim\"},{\"t\":\"2026-08-06T20:00:00Z\",\"actor\":\"Austral Shipping\",\"text\":\"Shipper approved the estimate \u2014 \u201cApproved at quoted amount\u201d\"}]",
-   "shipperViewedAt": "2026-08-06T19:45:00Z"
+   "shipperViewedAt": "2026-08-06T19:45:00Z",
+   "photoReasons": [
+    "Warped"
+   ],
+   "photoNotes": [
+    "Door frame out of square \u2014 will not seal"
+   ]
   }
  ],
  "meetpoints": [
