@@ -189,6 +189,33 @@
 }
 .ld-hero--portal .ld-hero-secondary { color: rgba(255, 255, 255, .95); margin-top: 14px; }
 .ld-hero--portal .ld-hero-secondary a { color: #fff; text-decoration: underline; font-weight: 700; }
+
+/* ZIP coverage answer — a solid card under the search pill, not a caption.
+   Left status rail + icon, the verdict in bold, and the next step attached. */
+.ld-zipres {
+  display: flex; align-items: center; gap: 15px; text-align: left;
+  max-width: 620px; margin: 16px auto 0; padding: 15px 17px;
+  background: #fff; color: var(--ld-ink); border-radius: 17px;
+  border-left: 5px solid #0E8A5F;
+  box-shadow: 0 18px 46px rgba(4, 16, 32, .4);
+}
+.ld-zipres--no { border-left-color: #C77700; }
+.ld-zipres-icon { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; }
+.ld-zipres--yes .ld-zipres-icon { background: #E3F7EE; color: #0E8A5F; }
+.ld-zipres--no .ld-zipres-icon { background: #FFF3DF; color: #C77700; }
+.ld-zipres-copy { flex: 1; min-width: 0; }
+.ld-zipres-copy b { display: block; font-size: 17px; font-weight: 800; letter-spacing: -.2px; line-height: 1.25; }
+.ld-zipres-copy em { display: block; font-style: normal; font-size: 13px; color: #5b6b7e; margin-top: 3px; line-height: 1.45; }
+.ld-zipres-cta { flex-shrink: 0; font-size: 14px; padding: 12px 20px; border-radius: 13px; }
+@media (prefers-reduced-motion: no-preference) {
+  .ld-zipres { animation: ld-pop .44s cubic-bezier(.2, 1.5, .5, 1) backwards; }
+  @keyframes ld-pop { from { opacity: 0; transform: translateY(12px) scale(.95); } }
+}
+@media (max-width: 560px) {
+  .ld-zipres { flex-wrap: wrap; gap: 12px; padding: 14px; }
+  .ld-zipres-copy { flex: 1 1 60%; }
+  .ld-zipres-cta { flex: 1 1 100%; justify-content: center; }
+}
 /* Bottom fade into the page surface. */
 .ld-hero-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 110px; z-index: 2; pointer-events: none; background: linear-gradient(to top, #f4f7fb, rgba(244, 247, 251, 0)); }
 
