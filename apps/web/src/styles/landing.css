@@ -109,72 +109,182 @@
 /* ── Hero ── */
 .ld-hero { background: linear-gradient(160deg, #f4f8fc 55%, #e8f0f9); border-bottom: 1px solid #e6e9ee; }
 
-/* Home hero — bright portal style (think Yahoo landing): vivid brand
-   gradient, centered copy, one big search-pill ZIP bar, quick-link chips.
-   City pages keep the light two-column .ld-hero-grid layout below. */
+/* Home hero — deep industrial steel. A parallax photo layer under a
+   blue-black scrim and a corrugation texture, centered copy, live-status
+   badge, search-pill ZIP bar. City pages keep the light two-column
+   .ld-hero-grid layout below.
+   Parallax/opacity come from --ld-par-bg / --ld-par-fg / --ld-par-o, set
+   by Hero's rAF scroll listener (effect-only, so SSG output is static). */
 .ld-hero--portal {
   position: relative; overflow: hidden; text-align: center; color: #fff;
-  background: linear-gradient(140deg, #4795E4 0%, var(--ld-brand) 45%, #1A5EA8 100%);
+  display: flex; align-items: center; justify-content: center;
+  min-height: min(88vh, 780px);
+  background: linear-gradient(150deg, #0E2A4E 0%, #10467F 42%, #0B2440 100%);
   border-bottom: none;
+  --ld-par-bg: 0px; --ld-par-fg: 0px; --ld-par-o: 1;
 }
-.ld-hero-bgimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 62%; opacity: .15; pointer-events: none; }
-.ld-hero-inner { position: relative; max-width: 880px; margin: 0 auto; padding: 54px 20px 50px; }
-.ld-hero--portal h1 { font-size: clamp(30px, 4.4vw, 48px); font-weight: 800; letter-spacing: -1px; }
-.ld-hero--portal .ld-hero-sub { color: rgba(255, 255, 255, .92); margin: 14px auto 0; }
+.ld-hero-bglayer {
+  position: absolute; inset: -6% 0 -20%; z-index: 0; pointer-events: none;
+  transform: translate3d(0, var(--ld-par-bg), 0); opacity: var(--ld-par-o);
+  will-change: transform, opacity;
+}
+.ld-hero-bgimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 58%; opacity: .5; }
+/* Industrial scrim — keeps every headline/AA contrast over the photo. */
+.ld-hero-scrim {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom, rgba(9, 26, 48, .74) 0%, rgba(12, 46, 84, .62) 45%, rgba(8, 24, 45, .84) 100%);
+}
+/* Corrugated-steel texture: vertical container ridges, barely there. */
+.ld-hero-texture {
+  position: absolute; inset: 0; opacity: .5; mix-blend-mode: overlay;
+  background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.10) 0 1px, rgba(255,255,255,0) 1px 7px, rgba(0,0,0,.10) 7px 8px, rgba(255,255,255,0) 8px 14px);
+}
+.ld-hero-inner { position: relative; z-index: 2; max-width: 880px; margin: 0 auto; padding: 62px 20px 66px; transform: translate3d(0, var(--ld-par-fg), 0); }
+/* Live-status badge */
+.ld-hero-badge {
+  display: inline-flex; align-items: center; gap: 9px; margin-bottom: 22px;
+  padding: 7px 16px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  background: rgba(255, 255, 255, .12); border: 1px solid rgba(255, 255, 255, .22);
+  backdrop-filter: blur(8px); color: rgba(255, 255, 255, .95);
+}
+.ld-hero-badge i { width: 8px; height: 8px; border-radius: 50%; background: #34D399; flex-shrink: 0; }
+.ld-hero--portal h1 { font-size: clamp(32px, 5vw, 56px); font-weight: 800; letter-spacing: -1.4px; line-height: 1.08; }
+.ld-hero-accent { color: #FF9E4A; display: block; }
+.ld-hero--portal .ld-hero-sub { color: rgba(226, 238, 252, .93); margin: 18px auto 0; max-width: 40ch; font-size: clamp(15px, 1.7vw, 19px); }
 .ld-searchbar {
-  display: flex; align-items: center; gap: 8px; max-width: 620px; margin: 26px auto 0;
-  background: #fff; border-radius: 999px; padding: 6px 6px 6px 22px;
-  box-shadow: 0 12px 34px rgba(9, 30, 54, .28);
+  display: flex; align-items: center; gap: 8px; max-width: 620px; margin: 30px auto 0;
+  background: #fff; border-radius: 18px; padding: 6px 6px 6px 22px;
+  box-shadow: 0 14px 40px rgba(4, 16, 32, .42);
+  transition: transform .28s cubic-bezier(.34, 1.4, .64, 1), box-shadow .28s ease;
+}
+/* ZIP focus: the whole pill lifts and takes a warm ring. */
+.ld-searchbar:focus-within {
+  transform: scale(1.025);
+  box-shadow: 0 18px 48px rgba(4, 16, 32, .5), 0 0 0 4px rgba(255, 158, 74, .42);
 }
 .ld-searchbar input {
   flex: 1; min-width: 0; border: none; outline: none; background: transparent;
   font: 600 17px var(--sans); color: var(--ld-ink); letter-spacing: .5px;
 }
 .ld-searchbar input::placeholder { color: #7b8b9c; }
-.ld-searchbar .ld-btn { flex-shrink: 0; }
-.ld-hero-ctas { display: flex; justify-content: center; margin-top: 24px; }
-/* Hero primary CTA — oversized with a breathing glow so it's the obvious
-   next step. Animation is skipped for reduced-motion users. */
+.ld-searchbar .ld-btn { flex-shrink: 0; border-radius: 13px; }
+.ld-hero-ctas { display: flex; justify-content: center; margin-top: 22px; }
+/* Hero primary CTA — oversized, lifts on hover. */
 .ld-btn--hero {
-  font-size: 17px; padding: 17px 38px;
-  box-shadow: 0 8px 26px rgba(230, 81, 0, .5);
+  font-size: 17px; padding: 17px 38px; border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(230, 81, 0, .45);
+  transition: transform .22s cubic-bezier(.34, 1.4, .64, 1), box-shadow .22s ease, background .18s ease;
 }
-.ld-btn--hero:hover { transform: translateY(-1px); }
+.ld-btn--hero:hover { transform: translateY(-3px); box-shadow: 0 18px 42px rgba(230, 81, 0, .62); }
+/* Trust row — emerald checks under the fold line. */
+.ld-hero-trust {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 26px;
+  margin-top: 30px; font-size: 14px; color: rgba(219, 233, 250, .92);
+}
+.ld-hero-trust span { display: inline-flex; align-items: center; gap: 7px; }
+.ld-hero-trust svg { color: #34D399; flex-shrink: 0; }
+.ld-hero-tagline {
+  margin-top: 20px; font-size: 11.5px; font-weight: 700; letter-spacing: .8px;
+  text-transform: uppercase; color: rgba(255, 255, 255, .62);
+}
+.ld-hero--portal .ld-hero-secondary { color: rgba(255, 255, 255, .95); margin-top: 14px; }
+.ld-hero--portal .ld-hero-secondary a { color: #fff; text-decoration: underline; font-weight: 700; }
+/* Bottom fade into the page surface. */
+.ld-hero-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 110px; z-index: 2; pointer-events: none; background: linear-gradient(to top, #f4f7fb, rgba(244, 247, 251, 0)); }
+
+/* Entrance cascade — mirrors the spec's stagger (badge → h1 → sub → form → trust). */
 @media (prefers-reduced-motion: no-preference) {
-  .ld-btn--hero { animation: ld-cta-pulse 2.4s ease-in-out infinite; }
-  @keyframes ld-cta-pulse {
-    0%, 100% { box-shadow: 0 8px 26px rgba(230, 81, 0, .5); transform: scale(1); }
-    50% { box-shadow: 0 12px 36px rgba(230, 81, 0, .8); transform: scale(1.04); }
+  /* `backwards` (not `forwards`): the from-state applies during the delay,
+     but once the animation ends the element goes back to its OWN styles —
+     so an element that rises can still own a transform later (the ZIP
+     pill's focus scale). `forwards` would pin transform:none forever. */
+  .ld-rise { animation: ld-rise .68s cubic-bezier(.22, 1, .36, 1) backwards; }
+  .ld-rise--1 { animation-delay: .04s; }
+  .ld-rise--2 { animation-delay: .12s; }
+  .ld-rise--3 { animation-delay: .21s; }
+  .ld-rise--4 { animation-delay: .3s; }
+  .ld-rise--5 { animation-delay: .46s; }
+  @keyframes ld-rise { from { opacity: 0; transform: translate3d(0, 26px, 0); } to { opacity: 1; transform: none; } }
+  .ld-hero-badge i { animation: ld-live 2s ease-in-out infinite; }
+  @keyframes ld-live {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, .7); opacity: 1; }
+    50% { box-shadow: 0 0 0 6px rgba(52, 211, 153, 0); opacity: .65; }
   }
 }
-.ld-hero--portal .ld-hero-points { justify-content: center; color: #fff; margin-top: 22px; }
-.ld-hero--portal .ld-hero-points span::before { color: #4DFFB4; }
-.ld-hero-tagline {
-  margin-top: 18px; font-size: 12px; font-weight: 700; letter-spacing: .8px;
-  text-transform: uppercase; color: rgba(255, 255, 255, .75);
-}
-.ld-hero--portal .ld-hero-secondary { color: rgba(255, 255, 255, .9); }
-.ld-hero--portal .ld-hero-secondary a { color: #fff; text-decoration: underline; font-weight: 700; }
 
 /* Mobile scroll-collapse: once the shopper scrolls, the hero shrinks to
    headline + ZIP bar (class set by Hero's scroll listener, phones only). */
+.ld-hero--portal .ld-hero-badge,
 .ld-hero--portal .ld-hero-sub,
 .ld-hero--portal .ld-hero-ctas,
-.ld-hero--portal .ld-hero-points,
+.ld-hero--portal .ld-hero-trust,
 .ld-hero--portal .ld-hero-tagline {
   overflow: hidden; max-height: 220px;
   transition: max-height .25s ease, opacity .25s ease, margin .25s ease;
 }
+.ld-hero--collapsed .ld-hero-badge,
 .ld-hero--collapsed .ld-hero-sub,
 .ld-hero--collapsed .ld-hero-ctas,
-.ld-hero--collapsed .ld-hero-points,
+.ld-hero--collapsed .ld-hero-trust,
 .ld-hero--collapsed .ld-hero-tagline { max-height: 0; opacity: 0; margin: 0; }
-.ld-hero--collapsed .ld-hero-bgimg { opacity: 0; }
+.ld-hero--collapsed { min-height: 0; }
+.ld-hero--collapsed .ld-hero-bglayer { opacity: 0; }
+.ld-hero--collapsed .ld-hero-fade { opacity: 0; }
 .ld-hero--portal .ld-hero-inner { transition: padding .25s ease; }
 .ld-hero--collapsed .ld-hero-inner { padding: 16px 20px 18px; }
 .ld-hero--portal h1 { transition: font-size .25s ease; }
 .ld-hero--collapsed h1 { font-size: 20px; }
+.ld-hero--collapsed .ld-hero-accent { display: inline; }
 .ld-hero--collapsed .ld-searchbar { margin-top: 12px; }
+
+/* ── How it works — interactive step cards ── */
+.ld-hiw-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; margin-top: 34px; }
+.ld-hiw-card {
+  position: relative; display: block; overflow: hidden; text-decoration: none;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 18px; padding: 24px 22px 22px;
+  box-shadow: 0 1px 3px rgba(15, 33, 58, .06);
+  transition: transform .3s cubic-bezier(.34, 1.3, .64, 1), box-shadow .3s ease, border-color .3s ease;
+}
+.ld-hiw-card:hover { transform: translateY(-10px); box-shadow: 0 22px 44px rgba(15, 33, 58, .16); border-color: #93B4E4; }
+.ld-hiw-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.ld-hiw-num { font-size: 30px; font-weight: 800; color: #e2e8f0; letter-spacing: -1px; transition: color .3s ease; }
+.ld-hiw-card:hover .ld-hiw-num { color: #BFD6F5; }
+.ld-hiw-icon {
+  width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; flex-shrink: 0;
+  background: #EAF2FD; color: var(--ld-brand); transition: background .3s ease, color .3s ease, transform .3s ease;
+}
+.ld-hiw-card:hover .ld-hiw-icon { background: var(--ld-brand); color: #fff; transform: scale(1.06); }
+.ld-hiw-card h3 { font-size: 17px; font-weight: 700; color: var(--ld-ink); margin: 0 0 8px; transition: color .3s ease; }
+.ld-hiw-card:hover h3 { color: #10467F; }
+.ld-hiw-card p { font-size: 13.5px; line-height: 1.6; color: #56657a; margin: 0 0 18px; }
+.ld-hiw-go { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 700; color: var(--ld-brand); }
+.ld-hiw-go svg { transition: transform .3s cubic-bezier(.34, 1.3, .64, 1); }
+.ld-hiw-card:hover .ld-hiw-go svg { transform: translateX(6px); }
+/* Steel accent sweeps in along the bottom edge on hover. */
+.ld-hiw-accent {
+  position: absolute; left: 22px; right: 22px; bottom: 0; height: 3px; border-radius: 3px;
+  background: linear-gradient(90deg, var(--ld-brand), var(--ld-accent));
+  transform: scaleX(0); transform-origin: left; transition: transform .34s cubic-bezier(.22, 1, .36, 1);
+}
+.ld-hiw-card:hover .ld-hiw-accent { transform: scaleX(1); }
+/* Scroll-triggered cascade (IntersectionObserver adds .is-in). */
+.ld-hiw-card { opacity: 1; }
+@media (prefers-reduced-motion: no-preference) {
+  .ld-hiw-reveal .ld-hiw-card { opacity: 0; transform: translateY(30px) scale(.96); }
+  .ld-hiw-reveal.is-in .ld-hiw-card {
+    opacity: 1; transform: none;
+    transition: opacity .5s ease, transform .62s cubic-bezier(.24, 1.4, .5, 1), box-shadow .3s ease, border-color .3s ease;
+  }
+  .ld-hiw-reveal.is-in .ld-hiw-card:nth-child(1) { transition-delay: .04s; }
+  .ld-hiw-reveal.is-in .ld-hiw-card:nth-child(2) { transition-delay: .17s; }
+  .ld-hiw-reveal.is-in .ld-hiw-card:nth-child(3) { transition-delay: .3s; }
+  .ld-hiw-reveal.is-in .ld-hiw-card:nth-child(4) { transition-delay: .43s; }
+  /* Restate the hover lift at reveal specificity — the settled-state rule
+     above sets transform:none and would otherwise win over :hover. */
+  .ld-hiw-reveal.is-in .ld-hiw-card:hover { transform: translateY(-10px); transition-delay: 0s; }
+}
+@media (max-width: 980px) { .ld-hiw-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .ld-hiw-grid { grid-template-columns: 1fr; gap: 14px; } }
 
 .ld-hero-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 40px; align-items: center; padding: 44px 0 40px; }
 .ld-hero h1 { font-size: clamp(28px, 4vw, 42px); font-weight: 800; letter-spacing: -0.8px; }
