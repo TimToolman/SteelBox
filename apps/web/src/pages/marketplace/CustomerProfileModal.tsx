@@ -7,6 +7,7 @@ import { Button, Modal, Input, StatusBadge } from '../../components/ui'
 import { LoginForm } from '../../lib/auth'
 import { useAuth } from '../../hooks'
 import { customers as customersApi, orders, messages as messagesApi, marketingApi, CUSTOM_STAGES, type AuthUser, type Customer, type Message, type Order } from '../../lib/api'
+import { Icon } from '../../components/icons'
 
 // ── Customer Profile ───────────────────────────────────────
 // Email-identified profile (no password in the prototype — RBAC will bring
@@ -285,7 +286,7 @@ export function CustomerProfileModal({ open, initialTab, onClose, onMessageDrive
             <div>
               {myOrders.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '26px 12px', color: 'var(--ink3)' }}>
-                  <div style={{ fontSize: '26px', marginBottom: '8px' }}>📦</div>
+                  <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'center', color: 'var(--ink3)' }}><Icon name="box" size={30} /></div>
                   <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '3px', color: 'var(--ink)' }}>No orders yet</div>
                   <div style={{ fontSize: '12px' }}>Orders placed with {customer.email} will show up here.</div>
                 </div>
@@ -314,7 +315,7 @@ export function CustomerProfileModal({ open, initialTab, onClose, onMessageDrive
                                 {o.status === 'estimate_in_progress' && '📞 Estimate in progress — expect our call'}
                                 {o.status === 'estimate_sent' && `📄 Estimate sent — $${(o.amount || 0).toLocaleString()} · approve on our call`}
                                 {o.status === 'estimate_approved' && '✅ Estimate approved — scheduling your build'}
-                                {o.status === 'custom_in_progress' && <>🔧 In fabrication{o.scheduledDate ? ` — estimated complete ${fmtDate(o.scheduledDate)}` : ' — completion date coming soon'}</>}
+                                {o.status === 'custom_in_progress' && <><Icon name="wrench" size={13} /> In fabrication{o.scheduledDate ? ` — estimated complete ${fmtDate(o.scheduledDate)}` : ' — completion date coming soon'}</>}
                               </div>
                             )}
                           </>

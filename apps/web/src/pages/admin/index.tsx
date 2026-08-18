@@ -17,6 +17,7 @@ import { DriverApplicationsView } from './DriverApplications'
 import { AnalyticsView } from './Analytics'
 import { claims as claimsAdminApi } from '../../lib/api'
 import { Lightbox, useLightbox } from '../../components/Lightbox'
+import { Icon } from '../../components/icons'
 
 // Every size/type code, for the container add/edit selects.
 const SIZE_SELECT_OPTIONS = Object.entries(SIZE_LABEL) as [ContainerSize, string][]
@@ -858,7 +859,7 @@ function UserModal({ target, drivers, sellers, suppliers, shipperLines, sellerId
             </div>
           ) : (
             <select style={inp} value={form.sellerId} onChange={e => setForm(p => ({ ...p, sellerId: e.target.value }))}>
-              <option value="">🌐 SteelBox Co. HQ — every reseller (spoof access)</option>
+              <option value="">SteelBox Co. HQ — every reseller (spoof access)</option>
               {sellers.map(s => <option key={s.id} value={s.id}>{s.name} — this reseller only</option>)}
             </select>
           )}
@@ -2366,7 +2367,7 @@ export default function AdminPage() {
               onChange={e => setScopeSel(e.target.value)}
               style={{ width: '100%', padding: '9px 10px', borderRadius: 'var(--r8)', fontSize: '12px', fontWeight: 700, cursor: 'pointer', outline: 'none', fontFamily: 'var(--sans)', border: `1.5px solid ${scope === 'global' ? 'var(--div)' : (scopeSeller?.brandPrimary || 'var(--primary)')}`, background: 'var(--surf-w)', color: scope === 'global' ? 'var(--ink)' : (scopeSeller?.brandPrimary || 'var(--primary)') }}
             >
-              <option value="global">🌐 SteelBox Co. HQ — all resellers</option>
+              <option value="global">SteelBox Co. HQ — all resellers</option>
               {sellerList.map(sl => <option key={sl.id} value={sl.id}>Spoof: {sl.name}</option>)}
             </select>
           )}
@@ -2519,7 +2520,7 @@ export default function AdminPage() {
               {customContainers.length > 0 && (
                 <div style={{ background: 'var(--surf-w)', borderRadius: 'var(--r16)', border: '1.5px solid #6D28D9', boxShadow: 'var(--sh1)', overflow: 'hidden', marginBottom: '22px' }}>
                   <div style={{ background: '#6D28D9', padding: '10px 18px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontSize: '14px' }}>🔧</span>
+                    <span style={{ display: 'inline-flex', color: 'var(--ink2)' }}><Icon name="wrench" size={15} /></span>
                     <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff', flex: 1 }}>Custom Orders — estimates settled by phone, then build & delivery · customer notified at every stage</span>
                     <span style={{ background: 'rgba(255,255,255,.25)', color: '#fff', borderRadius: 'var(--pill)', padding: '2px 10px', fontSize: '11px', fontWeight: 700 }}>{customContainers.length}</span>
                   </div>
@@ -3552,7 +3553,7 @@ export default function AdminPage() {
                 </div>
                 {mpList.map(mp2 => (
                   <div key={mp2.id} style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--div)', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 700, minWidth: '190px' }}>🔁 {mp2.name}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 700, minWidth: '190px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Icon name="refresh" size={13} />{mp2.name}</span>
                     <span style={{ fontFamily: 'var(--mono)', fontSize: '12px', color: 'var(--ink2)' }}>{mp2.zip}</span>
                     <span style={{ fontSize: '12px', color: 'var(--ink3)', flex: 1, minWidth: '160px' }}>{mp2.address || '—'}</span>
                     {scope === 'global' && !lockedSellerId && (
@@ -3702,7 +3703,7 @@ export default function AdminPage() {
                         <React.Fragment key={sh.id}>
                         <tr style={{ opacity: sh.active === false ? 0.5 : 1 }}>
                           <Td>
-                            <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '7px' }}>⚓ {sh.name}</div>
+                            <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '7px' }}><Icon name="anchor" size={15} /> {sh.name}</div>
                             <div style={{ fontSize: '11px', color: 'var(--ink3)', fontFamily: 'var(--mono)' }}>{sh.id}</div>
                           </Td>
                           <Td>{sh.line || '—'}</Td>
@@ -3991,7 +3992,7 @@ export default function AdminPage() {
                             </Td>
                             <Td>
                               {u.role === 'admin' && !u.sellerId
-                                ? <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--primary)', whiteSpace: 'nowrap' }}>🌐 SteelBox Co. HQ</span>
+                                ? <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--primary)', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Icon name="globe" size={11} />SteelBox Co. HQ</span>
                                 : (
                                   <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                                     {userSellerIds(u).map(id => <SellerChip key={id} id={id} />)}

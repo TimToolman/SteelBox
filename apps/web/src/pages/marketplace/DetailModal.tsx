@@ -30,9 +30,11 @@ interface DetailModalProps {
   // Territory check: whose turf is a delivery ZIP, and the relay quote when
   // it crosses reseller territories (two legs via a SteelBox Co. meet point).
   relayInfo?: (c: Container, zip: string) => { owner: SellerT | null; cross: boolean; quote: RelayQuote | null } | null
+  // Checking delivery here answers for the whole session, not just this card.
+  onZipChecked?: (zip: string) => void
 }
 
-export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onNavigate, index, total, seller, relayInfo }: DetailModalProps) {
+export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onNavigate, index, total, seller, relayInfo, onZipChecked }: DetailModalProps) {
   const isMobile = useIsMobile()
   const [delivery, setDelivery] = useState('Enter your ZIP above')
   const [zip, setZip] = useState('')
@@ -82,6 +84,7 @@ export function DetailModal({ container, onClose, onAddToCart, mode, inCart, onN
   const checkDelivery = async () => {
     if (!zip || zip.length < 5) return
     setDelivery('Checking…')
+    onZipChecked?.(zip)
     setDelivery(await estimateDelivery(zip))
   }
 

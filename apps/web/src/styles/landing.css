@@ -145,15 +145,16 @@
 @media (max-width: 640px) {
   /* The 88vh stage with vertically-centred copy is what leaves a phone
      staring at empty steel: on a small screen the hero is exactly as tall
-     as what it says, starting right under the nav. */
+     as what it says, starting right under the nav — and every gap between
+     its rows is sized for a thumb's reach, not a desktop's breathing room. */
   .ld-hero--portal { min-height: 0; align-items: flex-start; }
-  .ld-hero-inner { padding: 22px 18px 30px; }
-  .ld-hero--portal h1 { line-height: 1.06; }
-  .ld-hero--portal .ld-hero-sub { margin-top: 12px; }
-  .ld-hero-ctas { margin-top: 16px; }
-  .ld-searchbar { margin-top: 20px; }
-  .ld-hero-trust { margin-top: 18px; gap: 8px 18px; }
-  .ld-hero-tagline { margin-top: 10px; }
+  .ld-hero-inner { padding: 18px 16px 22px; }
+  .ld-hero--portal h1 { line-height: 1.05; }
+  .ld-hero--portal .ld-hero-sub { margin-top: 9px; font-size: 14.5px; line-height: 1.45; }
+  .ld-searchbar { margin-top: 14px; padding: 5px 5px 5px 16px; }
+  .ld-hero-ctas { margin-top: 11px; }
+  .ld-hero-trust { margin-top: 13px; gap: 6px 16px; font-size: 13px; }
+  .ld-hero-tagline { margin-top: 7px; }
 }
 /* Live-status badge */
 .ld-hero-badge {

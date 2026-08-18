@@ -22,6 +22,7 @@ import { GRADE_META, DAMAGE_DISCOUNT } from '../../lib/specs'
 import { FilterRail, FilterGroup, ChipRow, Chip, useSetFilter, railSelect, PeriodFilter, PERIOD_ALL, periodPasses, type Period } from '../../components/filters'
 import { ClaimTimeline, ClaimPacket, ClaimPackageActions, photoCaption, claimShots } from './claimkit'
 import { Lightbox, useLightbox } from '../../components/Lightbox'
+import { Icon } from '../../components/icons'
 import { gradeLabel, damageLabel, SEVERITY_WORD } from '../../lib/grading'
 import { Snackbar } from '../../components/ui'
 import { useSnackbar } from '../../hooks'
@@ -377,7 +378,7 @@ export default function SupplierPortalPage({ embedded = false }: { embedded?: bo
                   )}
                   {c.status === 'repair_scheduled' && (
                     <>
-                      <span style={{ fontSize: '12px', color: INK2 }}>🔧 {c.repairShopName} · {c.repairDate}</span>
+                      <span style={{ fontSize: '12px', color: INK2, display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Icon name="wrench" size={13} />{c.repairShopName} · {c.repairDate}</span>
                       <button onClick={() => markRepaired(c)} style={btn(GREEN)}>Repair complete — keep retail</button>
                       {/* Policy: the supplier may still pull it and sell as-is. */}
                       <button onClick={() => sellAsDamaged(c)} style={ghost}>Sell as damaged instead</button>

@@ -4,6 +4,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { Modal } from '../../components/ui'
+import { Icon } from '../../components/icons'
 import { LoginForm } from '../../lib/auth'
 import { useIsMobile } from '../../hooks'
 import { auth as authApi, photoUrl, type AuthUser } from '../../lib/api'
@@ -32,13 +33,16 @@ interface CartModalProps {
   onLongTermInquiry: () => void
   onPlaceOrder: (d: CheckoutDetails) => Promise<void>
   relayInfo?: (c: Container, zip: string) => { owner: Seller | null; cross: boolean; quote: RelayQuote | null } | null
+  // The ZIP the shopper already gave — in the hero, the filter rail, or a
+  // unit's delivery check. Checkout starts from it instead of asking again.
+  knownZip?: string
 }
 
 const fieldLabel: React.CSSProperties = { display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase', color: 'var(--ink3)', marginBottom: '5px' }
 const fieldInput: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '13px', outline: 'none', fontFamily: 'var(--sans)', background: 'var(--surf-w)' }
 const sectionTitle: React.CSSProperties = { fontSize: '14px', fontWeight: 700, marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }
 
-export function CartModal({ open, cart, user, onClose, onRemove, onUpdateItem, onLongTermInquiry, onPlaceOrder, relayInfo }: CartModalProps) {
+export function CartModal({ open, cart, user, onClose, onRemove, onUpdateItem, onLongTermInquiry, onPlaceOrder, relayInfo, knownZip }: CartModalProps) {
   const isMobile = useIsMobile()
   const [form, setForm] = useState<CheckoutDetails>(EMPTY_CHECKOUT)
   const [placing, setPlacing] = useState(false)
@@ -50,6 +54,15 @@ export function CartModal({ open, cart, user, onClose, onRemove, onUpdateItem, o
     { stage: 'idle', sending: false, code: '', devCode: '', error: '' })
 
   const set = (k: keyof CheckoutDetails, v: string | boolean) => setForm(p => ({ ...p, [k]: v }))
+
+  // Carry the delivery ZIP the shopper already entered into checkout. A
+  // relay fee quoted on the unit page has to survive the trip to the cart —
+  // otherwise the total silently drops it until they retype the same five
+  // digits. Editing the delivery address here takes over from then on.
+  useEffect(() => {
+    if (!open || !knownZip) return
+    setForm(p => (p.zip ? p : { ...p, zip: knownZip }))
+  }, [open, knownZip])
 
   // Prefill contact details from the signed-in account.
   useEffect(() => {
@@ -312,7 +325,7 @@ export function CartModal({ open, cart, user, onClose, onRemove, onUpdateItem, o
           {rentItems.length > 0 && <div style={{ fontSize: '11px', color: 'var(--ink3)', marginBottom: '12px', textAlign: 'right' }}>{num(rentContract)} rental + {num(deposit)} deposit</div>}
           {relays.length > 0 && (
             <div style={{ fontSize: '11px', color: 'var(--ink2)', background: 'var(--surf-w)', border: '1px solid var(--div)', borderRadius: 'var(--r8)', padding: '8px 10px', marginBottom: '12px', lineHeight: 1.5 }}>
-              🔁 Your delivery ZIP is in <b>{relays[0].t!.owner!.name}</b>'s territory. The container hands off at a
+              <Icon name="refresh" size={14} /> Your delivery ZIP is in <b>{relays[0].t!.owner!.name}</b>'s territory. The container hands off at a
               SteelBox Co. meet point and {relays[0].t!.owner!.name} runs the final leg — the relay fee covers both drivers.
             </div>
           )}

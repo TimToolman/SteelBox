@@ -5,6 +5,7 @@
 import React, { useState, useEffect } from 'react'
 import { Button, Modal } from '../../components/ui'
 import { customBuilds as customBuildsApi, type AuthUser, type ContainerSize, type CustomBuild, type Order } from '../../lib/api'
+import { Icon } from '../../components/icons'
 
 // ── Order a Custom Build ───────────────────────────────────
 // Open to everyone — no account needed. Estimates are confirmed over the
@@ -61,7 +62,7 @@ export function OrderBuildModal({ build, user, onClose, onPlaced, toast }: {
     return (
       <Modal open onClose={onClose} maxWidth={480} closeLabel="Close">
         <div style={{ textAlign: 'center', padding: '18px 8px' }}>
-          <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: '#EDE9FE', border: '2px solid #6D28D9', display: 'grid', placeItems: 'center', margin: '0 auto 14px' }}>🔧</div>
+          <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: '#EDE9FE', border: '2px solid #6D28D9', display: 'grid', placeItems: 'center', margin: '0 auto 14px', color: '#6D28D9' }}><Icon name="wrench" size={26} /></div>
           <h2 style={{ fontSize: '21px', fontWeight: 700, marginBottom: '8px' }}>Estimate requested!</h2>
           <p style={{ fontSize: '13px', color: 'var(--ink3)', lineHeight: 1.6, maxWidth: '360px', margin: '0 auto 16px' }}>
             {build.name} · <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--ink)' }}>{placed.orderNumber}</span>.
