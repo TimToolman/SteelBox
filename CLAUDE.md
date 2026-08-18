@@ -154,6 +154,13 @@
   written until they choose. Both outcomes return to the job at its
   Load step, not the home screen.
 
+- `TODO.md` is the single work list — blockers, roadmap horizon,
+  per-area breakdowns, and a dated Shipped section. Do not start a
+  second roadmap or backlog file: a roadmap kept apart from the task
+  list drifts within a week and then neither is trusted. Design docs
+  (`MARKETING-PORTAL.md`, `SEO-LANDING.md`) carry rationale and
+  schema; their *tasks* live in TODO.md.
+
 - The reseller marketing portal's multi-channel blueprint (schema,
   vendor choices, attribution model, compliance, phased rollout) is
   `MARKETING-PORTAL.md`, tasked out in TODO.md. The governing rule:

@@ -35,6 +35,29 @@ Working list toward go-live. Updated 2026-07-15.
 - [x] Serialized request handling so concurrent writes can't lose updates.
 - Keep Railway at exactly 1 API replica (CSV storage + SSE assume a single instance).
 
+## How this file works
+
+**One list, three horizons.** Everything lives here — blockers, roadmap, per-portal
+work, and what shipped. There is no second roadmap document: a roadmap kept apart from
+the task list drifts within a week, and then neither one is trusted.
+
+- **Go-live blockers** — stops a launch.
+- **Major roadmap** — the horizon. Big enough to need a decision before it needs a task.
+- **Per-area sections** (marketing portal, etc.) — a roadmap item broken into work.
+- **Shipped** — dated, so the roadmap doesn't quietly re-grow what already exists.
+
+A roadmap item graduates by growing its own section, then its entries move to Shipped.
+
+### Findings from demo/beta testing
+
+Use the blue **Report an issue** tab in any portal — it captures the page, the browser
+and the recent console errors with your note, and files into **Admin → Beta Issues**,
+where each one has a *Copy as prompt* button. That is the intake; nothing needs to be
+retyped here by hand. Findings get triaged into the sections above at merge time.
+
+Anything from a separate document (workflow designs, UX notes) merges in here too —
+send it over and it lands under the section it belongs to.
+
 ## Major roadmap
 
 - [ ] **Multi-tenant resellers** (added 2026-07-15) — make the entire site multi-tenant so
