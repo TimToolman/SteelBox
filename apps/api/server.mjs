@@ -3084,6 +3084,38 @@ async function handleRequest(req, res) {
         const supplierId = hasRole('supplier') ? user.supplierId : (body.supplierId || cont.supplierId || '')
         const sup = readTable('suppliers').find(x => x.id === supplierId)
         const shp = readTable('shippers').find(x => x.id === body.shipperId) || readTable('shippers')[0]
+        // A claim is evidence or it is nothing. Photos come from the body, or
+        // from the walk-around findings already recorded against the unit.
+        let photos = (Array.isArray(body.photos) ? body.photos : []).filter(Boolean)
+        let photoReasons = Array.isArray(body.photoReasons) ? [...body.photoReasons] : []
+        let photoNotes = Array.isArray(body.photoNotes) ? [...body.photoNotes] : []
+        if (photos.length === 0) {
+          let findings = []
+          try { findings = JSON.parse(cont.inspectionFindings || '[]') } catch { findings = [] }
+          for (const f of findings) {
+            if (!f?.photo) continue
+            photos.push(f.photo)
+            photoReasons.push((f.reasons || []).join(', ') || f.question || 'Damage')
+            photoNotes.push(f.note || '')
+          }
+        }
+        if (photos.length === 0) {
+          return send(res, 400, { message: 'A claim needs at least one damage photo — inspect the unit first.' })
+        }
+        // Evidence that arrives inline has to land on disk like every other
+        // damage shot — the .zip and the claim document read files, not data
+        // URLs, so an unsaved photo would quietly drop out of the package.
+        for (let i = 0; i < photos.length; i++) {
+          if (!/^data:/.test(photos[i])) continue
+          const saved = savePhoto(`DMG-${cont.sku}`, i, photos[i])
+          if (saved.error) return send(res, 400, { message: saved.error })
+          photos[i] = saved.url
+        }
+        for (let i = 0; i < photos.length; i++) {
+          if (photoReasons[i] == null) photoReasons[i] = 'Damage'
+          if (photoNotes[i] == null) photoNotes[i] = ''
+        }
+
         const record = {
           id: uid('clm'),
           claimNumber: `CLM-${String(all.length + 1).padStart(4, '0')}`,
@@ -3094,7 +3126,8 @@ async function handleRequest(req, res) {
           // Raised off a completed inspection, so it skips straight to the
           // estimate with the severity the inspection already established.
           status: 'awaiting_estimate',
-          severity: Number(body.severity) || 0, photos: [], notes: String(body.notes || ''),
+          severity: Number(body.severity) || 0, photos, photoReasons, photoNotes,
+          notes: String(body.notes || ''),
           estimateAmount: 0, estimateNotes: '',
           shipperDecision: '', shipperNotes: '', shipperDecidedAt: null,
           repairShopId: '', repairShopName: '', repairDate: '', decision: '',

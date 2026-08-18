@@ -93,7 +93,15 @@ export function GradeScreen({ containers, inspectorName, canClaim, toast, onAppl
       // it starts at the estimate rather than asking the same questions again.
       const majors = findings.filter(f => f.level === 'major').length
       const severity = majors >= 2 ? 5 : majors === 1 ? 4 : findings.length >= 2 ? 3 : 2
-      const created = await claimsApi.create({ containerId: unit.id, notes: summary, severity, inspectorName, inspectedAt: new Date().toISOString() })
+      // Every claim opens with its evidence attached — the photos taken at
+      // the stops where the damage was found.
+      const shot = findings.filter(f => f.photo)
+      const created = await claimsApi.create({
+        containerId: unit.id, notes: summary, severity, inspectorName, inspectedAt: new Date().toISOString(),
+        photos: shot.map(f => f.photo),
+        photoReasons: shot.map(f => f.reasons.join(', ') || f.question),
+        photoNotes: shot.map(f => f.note),
+      })
       // The evidence was captured on the walk — the claim opens straight into
       // its workspace, at the estimate, rather than sending anyone to collect.
       toast(`${created.claimNumber} opened — review it and add the repair estimate`)
@@ -258,6 +266,14 @@ export function GradeScreen({ containers, inspectorName, canClaim, toast, onAppl
                 driver's job screen, and never on a second-opinion hold. */}
             {!secondOpinion && canClaim && (() => {
               const existing = openClaimFor(unit)
+              // No photo, no claim — the API refuses one without evidence, so
+              // the button says what is missing rather than failing on tap.
+              if (!existing && !findings.some(f => f.photo)) return (
+                <div style={{ marginTop: '11px', fontSize: '11px', color: INK2, lineHeight: 1.5 }}>
+                  A damage claim needs at least one photo of the damage. Walk the unit below and
+                  photograph what you find.
+                </div>
+              )
               return (
                 <button onClick={() => existing ? goToClaim(existing.id) : raiseClaim()} disabled={claiming}
                   style={{ marginTop: '11px', padding: '9px 14px', borderRadius: '999px', border: `1.5px solid ${RED}`, background: '#fff', color: RED, fontSize: '12px', fontWeight: 700, cursor: claiming ? 'wait' : 'pointer', fontFamily: 'inherit' }}>

@@ -21,6 +21,7 @@ import {
   type DamageClaim, type Container, type DamageFinding,
 } from '../../lib/api'
 import { damageLabel, SEVERITY_WORD } from '../../lib/grading'
+import { Lightbox, useLightbox, type LightboxShot } from '../../components/Lightbox'
 
 const INK = '#1A1C2E', INK2 = '#44475A', INK3 = '#6B7280', DIV = '#E1E2EC'
 const BLUE = '#0057B8', RED = '#B3261E', GREEN = '#1B7A5A', AMBER = '#7B4F00'
@@ -68,6 +69,19 @@ export function ClaimWorkspace({ claim, unit, role = 'supplier', onClaim, onClos
   const findings: DamageFinding[] = useMemo(() => findingsOf(unit), [unit])
   const timeline = useMemo(() => claimEvents(claim), [claim])
   const unitPhotos = (unit?.photos || []).filter(Boolean)
+  const lb = useLightbox()
+
+  // Each gallery opens as its own set, so next/previous stays within the
+  // group the photo came from.
+  const findingShots: LightboxShot[] = useMemo(() => findings.filter(f => f.photo).map(f => ({
+    url: photoUrl(f.photo), caption: `${f.station} · ${f.reasons.join(', ') || f.question}`, sub: f.note,
+  })), [findings])
+  const evidenceShots: LightboxShot[] = useMemo(() => photos.map((u, i) => ({
+    url: photoUrl(u), caption: reasons[i] || 'Damage', sub: notes[i],
+  })), [photos, reasons, notes])
+  const unitShots: LightboxShot[] = useMemo(() => unitPhotos.map((u, i) => ({
+    url: photoUrl(u), caption: `Unit documentation ${i + 1} of ${unitPhotos.length}`, sub: claim.containerSku,
+  })), [unitPhotos, claim.containerSku])
 
   const money = Number(amount) || 0
   const estimateReady = note.trim().length > 0 && money > 0
@@ -230,7 +244,9 @@ export function ClaimWorkspace({ claim, unit, role = 'supplier', onClaim, onClos
               {findings.map((f, i) => (
                 <div key={i} style={{ display: 'flex', gap: '11px', alignItems: 'flex-start', padding: '9px 0', borderTop: i ? `1px solid ${DIV}` : 'none' }}>
                   {f.photo
-                    ? <img src={photoUrl(f.photo)} alt={f.reasons.join(', ')} style={{ width: '76px', aspectRatio: '4 / 3', objectFit: 'contain', background: '#EEF1F6', borderRadius: '8px', flexShrink: 0 }} />
+                    ? <img src={photoUrl(f.photo)} alt={f.reasons.join(', ')} title="Click for a closer look"
+                        onClick={() => lb.show(findingShots, findings.filter(x => x.photo).findIndex(x => x.photo === f.photo))}
+                        style={{ width: '76px', aspectRatio: '4 / 3', objectFit: 'contain', background: '#EEF1F6', borderRadius: '8px', flexShrink: 0, cursor: 'zoom-in' }} />
                     : <span style={{ width: '76px', aspectRatio: '4 / 3', borderRadius: '8px', background: '#F4F6FA', flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: '9px', color: INK3 }}>no photo</span>}
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: '12.5px', fontWeight: 700, color: f.level === 'major' ? RED : INK }}>
@@ -251,7 +267,9 @@ export function ClaimWorkspace({ claim, unit, role = 'supplier', onClaim, onClos
               : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px' }}>
                   {photos.map((u, i) => (
                     <figure key={i} style={{ margin: 0 }}>
-                      <img src={photoUrl(u)} alt={reasons[i] || 'Damage'} style={{ width: '100%', aspectRatio: '4 / 3', objectFit: 'contain', background: '#EEF1F6', borderRadius: '9px', display: 'block' }} />
+                      <img src={photoUrl(u)} alt={reasons[i] || 'Damage'} title="Click for a closer look"
+                        onClick={() => lb.show(evidenceShots, i)}
+                        style={{ width: '100%', aspectRatio: '4 / 3', objectFit: 'contain', background: '#EEF1F6', borderRadius: '9px', display: 'block', cursor: 'zoom-in' }} />
                       <figcaption style={{ fontSize: '10.5px', color: INK2, marginTop: '3px', lineHeight: 1.35 }}>
                         <b>{reasons[i] || 'Damage'}</b>{notes[i] ? ` — ${notes[i]}` : ''}
                       </figcaption>
@@ -265,7 +283,9 @@ export function ClaimWorkspace({ claim, unit, role = 'supplier', onClaim, onClos
               <div style={label}>Unit documentation · {unitPhotos.length}</div>
               <div style={{ display: 'flex', gap: '7px', overflowX: 'auto', paddingBottom: '4px' }}>
                 {unitPhotos.map((u, i) => (
-                  <img key={i} src={photoUrl(u)} alt="" style={{ width: '96px', aspectRatio: '4 / 3', objectFit: 'contain', background: '#EEF1F6', borderRadius: '8px', flexShrink: 0 }} />
+                  <img key={i} src={photoUrl(u)} alt={`Unit documentation ${i + 1}`} title="Click for a closer look"
+                    onClick={() => lb.show(unitShots, i)}
+                    style={{ width: '96px', aspectRatio: '4 / 3', objectFit: 'contain', background: '#EEF1F6', borderRadius: '8px', flexShrink: 0, cursor: 'zoom-in' }} />
                 ))}
               </div>
             </div>
@@ -415,6 +435,10 @@ export function ClaimWorkspace({ claim, unit, role = 'supplier', onClaim, onClos
             <div style={{ marginTop: '4px', padding: '10px 12px', background: '#F4F6FA', borderRadius: '10px', fontSize: '10.5px', fontFamily: 'monospace', wordBreak: 'break-all', color: INK2 }}>{link}</div>
           )}
         </>
+      )}
+
+      {lb.open && (
+        <Lightbox shots={lb.open.shots} index={lb.open.index} onIndex={lb.setIndex} onClose={lb.close} />
       )}
     </div>
   )
