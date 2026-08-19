@@ -1,154 +1,34 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 268" role="img"
+  aria-label="Transfer hub network: a central hub linked to Houston, New Orleans, Jackson, Mobile, Atlanta, Tampa, Miami, Jacksonville, Savannah, Charleston and Wilmington.">
   <defs>
-    <!-- Drop Shadow for the Map Base -->
-    <filter id="map-shadow" x="-10%" y="-10%" width="130%" height="130%">
-      <feDropShadow dx="3" dy="12" stdDeviation="8" flood-color="#000000" flood-opacity="0.25"/>
-    </filter>
-    
-    <!-- Deep Container Shadow -->
-    <filter id="container-shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="5"/>
-      <feOffset dx="-2" dy="15" result="offsetblur"/>
-      <feComponentTransfer>
-        <feFuncA type="linear" slope="0.35"/>
-      </feComponentTransfer>
-      <feMerge> 
-        <feMergeNode/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-
-    <!-- Linear Gradients for Map Extrusion 3D effect -->
-    <linearGradient id="map-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#7BB3DE" />
-      <stop offset="100%" stop-color="#4B89BE" />
+    <linearGradient id="land" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#60a5fa" stop-opacity=".52"/>
+      <stop offset="1" stop-color="#2563eb" stop-opacity=".42"/>
     </linearGradient>
-
-    <!-- Glow effect for nodes -->
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="3" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    <filter id="lift" x="-8%" y="-8%" width="116%" height="120%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity=".3"/>
     </filter>
   </defs>
-
   <style>
-    .map-base { fill: url(#map-gradient); filter: url(#map-shadow); }
-    .spoke-line { fill: none; stroke: #ffffff; stroke-width: 3; stroke-dasharray: 6,5; stroke-linecap: round; opacity: 0.9; }
-    .hub-node { fill: #2EC4B6; stroke: #ffffff; stroke-width: 2.5; filter: url(#glow); }
-    .hub-text { font-family: 'DM Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 700; fill: #f8fafc; text-anchor: start; }
-    .central-title { font-family: 'DM Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 26px; font-weight: 900; fill: #ffffff; letter-spacing: 2px; }
+    .spokes line { stroke: rgba(255,255,255,.42); stroke-width: 1.1; stroke-dasharray: 5 4; stroke-linecap: round; }
+    .halo { fill: rgba(16,185,129,.28); }
+    .dot { fill: #10b981; stroke: #fff; stroke-width: 1.2; }
+    text { font: 700 7.8px 'DM Sans', system-ui, sans-serif; fill: rgba(255,255,255,.92); letter-spacing: .02em; }
+    .hub-label { font-size: 8px; letter-spacing: .1em; fill: #fff; }
   </style>
-
-  <!-- Transparent background for dark hero card -->
-  <g transform="translate(40, 20)">
-    <!-- HIGHLY ACCURATE 3D-STYLED SIMPLIFIED VECTOR MAP OF THE USA -->
-    <!-- Structured to feature precise positions for the Central and Southeast nodes -->
-    <path class="map-base" d="
-      M 150,150 
-      L 220,145 L 300,160 L 400,165 L 550,170 L 650,165 L 750,190 L 800,180 L 840,140 L 880,130 
-      L 910,100 L 920,120 L 960,110 L 950,150 L 980,140 L 970,170 L 1010,210 L 1000,240 L 960,260
-      L 970,300 L 940,320 L 920,380 L 930,420 L 940,490 L 960,560 L 955,590 L 940,610 L 920,590
-      L 900,530 L 890,460 L 880,410 L 850,410 L 830,440 L 805,445 L 810,480 L 815,510 L 805,530
-      L 775,480 L 760,450 L 745,450 L 725,485 L 685,490 L 650,470 L 630,480 L 615,510 L 590,520
-      L 580,500 L 555,515 L 520,550 L 500,560 L 475,500 L 450,455 L 420,445 L 375,430 L 320,440
-      L 260,405 L 245,340 L 220,335 L 210,310 L 180,265 L 160,250 L 175,200 Z
-    " />
-
-    <!-- LOGISTICS LOGICAL SPOKES (Dashed Connecting Lines Radiating from the Hub) -->
-    <!-- Center of the Hub / Hub Base Connection Coordinate: (520, 350) -->
-    <g id="spokes">
-      <!-- To Western/Inland Network Context -->
-      <path class="spoke-line" d="M 520,330 Q 400,240 280,220" />
-      <path class="spoke-line" d="M 520,340 Q 380,310 260,310" />
-      <path class="spoke-line" d="M 520,350 Q 380,380 290,420" />
-      
-      <!-- To Explicit Named Node Destinations Requested -->
-      <path class="spoke-line" d="M 540,360 Q 535,420 530,475" /> <!-- Houston -->
-      <path class="spoke-line" d="M 545,365 Q 575,430 610,475" /> <!-- New Orleans -->
-      <path class="spoke-line" d="M 550,370 Q 600,430 655,470" /> <!-- Mobile -->
-      <path class="spoke-line" d="M 550,365 Q 630,420 705,480" /> <!-- Tampa -->
-      <path class="spoke-line" d="M 555,360 Q 680,410 740,545" /> <!-- Miami -->
-      <path class="spoke-line" d="M 560,355 Q 690,380 755,445" /> <!-- Jacksonville -->
-      <path class="spoke-line" d="M 560,350 Q 720,360 780,395" /> <!-- Savannah -->
-      <path class="spoke-line" d="M 560,340 Q 730,320 815,355" /> <!-- Charleston -->
-      <path class="spoke-line" d="M 560,330 Q 750,280 840,310" /> <!-- Wilmington -->
-      <path class="spoke-line" d="M 555,345 Q 640,345 700,340" /> <!-- Atlanta -->
-      <path class="spoke-line" d="M 540,355 Q 580,385 615,405" /> <!-- Mississippi (Jackson) -->
-    </g>
-
-    <!-- HUB DESTINATIONS & LABELS -->
-    <g id="nodes-and-labels">
-      <!-- Houston, TX -->
-      <circle class="hub-node" cx="530" cy="475" r="9" />
-      <text class="hub-text" x="545" y="480">HOUSTON</text>
-
-      <!-- New Orleans, LA -->
-      <circle class="hub-node" cx="610" cy="475" r="9" />
-      <text class="hub-text" x="570" y="498">NEW ORLEANS</text>
-
-      <!-- Mobile, AL -->
-      <circle class="hub-node" cx="655" cy="470" r="9" />
-      <text class="hub-text" x="650" y="455">MOBILE</text>
-
-      <!-- Mississippi (Jackson) -->
-      <circle class="hub-node" cx="615" cy="405" r="9" />
-      <text class="hub-text" x="580" y="392">MISSISSIPPI</text>
-
-      <!-- Atlanta, GA -->
-      <circle class="hub-node" cx="700" cy="340" r="11" fill="#10b981" />
-      <!-- Inline Minimal plane SVG representation inside node -->
-      <path d="M 696,336 L 704,344 M 702,336 L 698,344" stroke="#ffffff" stroke-width="2"/>
-      <text class="hub-text" x="715" y="345">ATLANTA</text>
-
-      <!-- Florida Ports -->
-      <!-- Tampa, FL -->
-      <circle class="hub-node" cx="705" cy="480" r="9" />
-      <text class="hub-text" x="655" y="495">TAMPA</text>
-
-      <!-- Jacksonville, FL -->
-      <circle class="hub-node" cx="755" cy="445" r="9" />
-      <text class="hub-text" x="770" y="450">JACKSONVILLE</text>
-
-      <!-- Miami, FL -->
-      <circle class="hub-node" cx="740" cy="545" r="9" />
-      <text class="hub-text" x="755" y="550">MIAMI</text>
-
-      <!-- The Carolinas & Georgia Ports -->
-      <!-- Savannah, GA -->
-      <circle class="hub-node" cx="780" cy="395" r="9" />
-      <text class="hub-text" x="795" y="400">SAVANNAH</text>
-
-      <!-- Charleston, SC -->
-      <circle class="hub-node" cx="815" cy="355" r="9" />
-      <text class="hub-text" x="830" y="360">CHARLESTON</text>
-
-      <!-- Wilmington, NC -->
-      <circle class="hub-node" cx="840" cy="310" r="9" />
-      <text class="hub-text" x="855" y="315">WILMINGTON</text>
-    </g>
-
-    <!-- CORE CENTRAL NODE: ICONIC 3D ISOMETRIC CONEX SHIPPING CONTAINER -->
-    <!-- Positioned squarely over the geographical heart of the model -->
-    <text class="central-title" x="420" y="250">CENTRAL HUB</text>
-    
-    <g id="isometric-conex-box" filter="url(#container-shadow)" transform="translate(450, 270)">
-      <!-- Left Facing Facing Side Panel (Shadowed Orange) -->
-      <path d="M 0,40 L 70,75 L 70,145 L 0,110 Z" fill="#C25323" stroke="#A43D14" stroke-width="1.5" />
-      <!-- Corrugation lines for Conex feel Left Side -->
-      <path d="M 10,48 L 10,115 M 20,53 L 20,120 M 30,58 L 30,125 M 40,62 L 40,130 M 50,67 L 50,135 M 60,71 L 60,140" stroke="#94330B" stroke-width="1.5" opacity="0.6"/>
-
-      <!-- Right Facing Main Side Panel (Highlighted Orange-Red) -->
-      <path d="M 70,75 L 150,35 L 150,105 L 70,145 Z" fill="#E86229" stroke="#A43D14" stroke-width="1.5" />
-      <!-- Corrugation lines Right Side -->
-      <path d="M 80,138 L 80,68 M 90,133 L 90,63 M 100,128 L 100,58 M 110,123 L 110,53 M 120,118 L 120,48 M 130,113 L 130,43 M 140,108 L 140,38" stroke="#B84414" stroke-width="1.5" opacity="0.7"/>
-
-      <!-- Top Panel View -->
-      <path d="M 0,40 L 70,75 L 150,35 L 80,0 Z" fill="#FFA372" stroke="#D35019" stroke-width="1.2" />
-      
-      <!-- Structural Corner Posts & Locks Details to emphasize real 3D container asset quality -->
-      <path d="M 70,75 L 70,145" stroke="#FFFFFF" stroke-width="2" opacity="0.4" />
-      <path d="M 0,40 L 0,110" stroke="#FFFFFF" stroke-width="1.5" opacity="0.3" />
-      <path d="M 150,35 L 150,105" stroke="#5C1D02" stroke-width="2" />
-    </g>
+  <g filter="url(#lift)">
+    <path d="M351.6,251.1L354.3,248.5L356.2,249.4L351.6,251.1ZM275.2,47.6L279.7,44.8L276.7,47.2L277.2,47.3L276,47.9L275.2,47.6ZM73.9,23.2L75.3,21.9L75.6,23L74.2,23.2L74.7,24.6L75.6,26.2L75.3,26.6L74.5,25.8L74.6,24L73.9,23.2ZM62.3,20.2L63.3,18.5L66.7,21.6L70.8,23.3L71.6,23L72.7,25L72.9,24L73.7,23.9L74,26.4L72.5,27.7L72.6,26.7L69.4,30L70.9,30.1L69.7,29.8L74.1,26.7L74.1,25.9L74.5,26.3L72.8,31.7L72.3,32.2L72.3,30.8L71.9,31L72.1,32.2L71.5,32.7L71,31.4L71.5,30.8L70.9,31.2L70.7,32.1L71.6,33L73,31.4L73.4,32L74.3,31.5L74.4,28.6L76.4,26.3L76,23.8L75.5,24L75.7,25.3L75.1,24.4L75.3,23.4L76,23.6L76.2,22.9L74.8,21.2L75.5,20.9L76.2,21.6L76.8,20.6L76.6,18.9L76,19.4L75.7,19L75.8,16.6L95.1,21.8L119.8,27.4L144.5,31.9L165.7,34.9L196.8,37.8L228.5,39L239.1,39L239.1,35.6L240.3,35.7L241.1,36.3L242.3,41.2L247.1,42.2L247.4,43.2L252.2,42.1L254.4,42.7L253.9,43.4L255.2,43.5L256.1,45.5L256.7,44.3L257.9,44.2L258.7,45.3L261.1,46.3L261,46.9L265.1,44.9L265.9,46.2L269.7,45.8L271.3,46.9L273.7,46.4L265.5,51L258.5,58.1L259.3,59.2L265.8,56.4L266.6,57L265.5,59.7L266.7,58.7L268.7,59.8L272.5,57.3L274.7,56.9L277.5,55.2L280.8,51.6L283.2,50.5L284.9,51.1L283.4,51.3L281.9,53.1L280.6,57.2L282.6,55.2L281.8,56.5L283,55.6L284.7,55.7L287.9,58.9L289.9,58.4L291.2,59.2L292,59.1L291.8,58.2L292.6,58.8L295.2,56.7L299.3,56.1L301.1,55.2L302.5,55L302.3,57.6L304.7,57.3L305,57.9L307.8,56.5L308.2,59.1L307.4,59.8L308.2,59.6L310,61.1L310.6,60.8L310.2,60.1L311.7,60L312.3,61.4L306.9,62L305,61.2L304.7,63.2L302.8,61.8L299.7,61.4L298.6,62.7L295,63.3L293.2,66.5L292.5,66L293.4,63.9L291.9,64.4L291,66.1L290.5,64.7L287.3,71.4L287.3,72.8L286,73.3L285.3,75.3L285,76.7L285.8,76.9L287.6,74L289,73.6L289.7,70.8L291.2,69.6L288.7,76.5L288.7,79.9L287.8,81.4L287.9,84.5L286.9,88.6L288.2,92.6L288.1,97L290.7,102.3L292,102.9L295.9,100.7L298.2,95.6L298.3,91L295.5,84.3L296,82.7L295.3,80.5L296.6,77.6L296.3,74.5L297.3,73.9L297.5,72.3L298.9,71.9L300.4,69.4L300,72.7L300.4,73.4L301,71.3L300.9,73.5L301.6,71.8L301.4,68.7L304.1,67.3L302.6,65.8L303.6,64.4L303.1,64L304.6,63.6L308.3,64.6L309,65.6L313.9,67.2L314.9,69.3L313.7,69.3L315.2,72L315.3,75.4L314.1,76.4L314.1,78.2L312.3,79.3L312,81.3L314,82.5L315.2,81.1L315.2,79.6L315.8,79.7L315.4,79.3L318.3,77.5L320.3,79.2L322.9,87L322.7,90.3L321.8,91.2L322,89.9L320.9,90.1L320.5,92.6L319.5,93.4L319.3,95.5L317.7,99.2L321.4,100.5L321.9,99.7L324.6,101.3L327.5,99.6L329.3,99.6L332,96.7L337.7,93.3L344.8,87.2L346.3,84.8L344.4,82.5L344.1,80.8L348.4,79L352.2,78.6L354,79.2L357.7,78.1L360.7,75.2L361.8,74.9L360.8,72.2L361.8,71.5L360,70.6L360.1,69L362.3,67L365.2,62.1L367,60.3L388.4,54.8L388.2,52.8L389,51.9L390.1,52.2L390.6,51.1L391.8,51.8L391.8,50L392.8,50.1L392,49.1L392.2,48.2L393.9,45.1L393,42.6L393.8,40.2L393.5,37.7L396.2,29.8L397.4,29.7L397.8,31.2L398.8,31.6L401.6,29.8L401.8,29.1L402.9,29.1L405.7,30.6L409.3,42.6L411.6,42.6L412.2,45.5L413.5,46.5L413.7,45.9L414.6,45.9L416.6,48.5L415.4,50.8L414.9,50.1L414.3,50.5L414.7,50.8L413.6,51.8L414.2,52.3L413.8,52.8L412.5,52.3L411.3,54.7L410.4,54.5L410.7,55.8L409.4,56L408.8,55.3L409.3,54.7L408.5,54.6L408.6,55.1L408.4,54.6L408,55.2L408.7,58.5L407.6,56.4L406.6,56.3L406.4,54.7L405.2,55.6L405.9,59.7L404.7,61.1L404.6,60.4L403.7,60.5L403.6,61.6L403.2,61.3L401.7,63.4L401.1,62.9L399.8,64.2L399,67.4L398.3,68L397.7,72.6L398.3,73.9L399.6,73.8L398.1,75.3L397.9,77.9L398.6,77.4L399.9,78L400.7,78.9L400.5,79.9L403,81.5L405.3,80.5L404.3,78.4L403.3,78.3L404.7,78.5L405.9,80.1L406.2,82.5L405.8,81.5L403.6,82.4L400.3,85.4L401.9,83.7L401.7,82.2L401,82.2L400,84.5L398.6,85.4L397.9,84.1L398.3,85.3L397.7,85.8L398.1,83.5L397.6,84L396.6,82.9L396.9,86.7L390.3,89.5L388,90.2L387.8,89.7L386.7,91.4L383.6,93.5L383.2,95.5L384.8,93.7L386.5,93.7L390.3,92L392.2,89.9L392,90.4L393.7,91.1L395.2,90L387.3,96.1L382.6,98L381.6,97L381.6,98L380.6,99L382.5,98.9L383.2,105.2L379.7,113.7L379,113.8L379.2,111.8L377.4,111.9L374.2,110L373.8,108L373.8,110.1L375.5,111.7L376.7,114.5L378.4,115.2L379.5,118.6L379.1,122L377.5,124.8L376,131.8L375,129.8L376.2,123.6L374.7,124.3L374.8,122.3L373.8,122.5L374.5,121.6L374.1,120.3L373.6,121.5L373.1,120.4L373,121.8L371.4,121.2L370.6,119.8L370.8,118.7L372.6,118.7L370.7,117.5L370.2,118.1L370.4,116.5L371,116.7L370.7,115.8L369.7,116.7L369.8,115L370.8,115.1L370.8,114.2L370.2,114.9L369.8,113.9L370.1,112.3L371.2,111.6L371.1,109.8L370.3,110.2L370.7,110.9L369.7,112L369.4,111.2L369.4,112.6L368.8,111.8L369.1,113L368.5,113.7L367.5,113.3L369.2,115.3L368.6,117.7L371.5,123.9L370.5,122.9L370.4,123.5L369.4,122.7L367.9,122.8L367.5,121.8L367.6,122.7L366.9,122.5L366,121.2L364.5,122.1L364.3,120.6L365,119.7L364.1,119.8L363.9,121.6L364.5,122.6L365.9,121.6L366.8,123.2L369.3,123.3L372.4,125.1L372.1,127.7L371,127.7L367.6,125.3L370.8,127.9L372.6,128.1L373.2,130.3L372.1,129.7L372.8,130.7L371.8,131.1L373.4,131.9L373.6,133.1L372.8,133.5L370.8,131.6L368.7,132L370.2,132.4L370.6,131.9L371.1,133.3L372.5,134.3L373.7,134.1L373.9,133.4L375.9,133.3L381.4,142.7L379.6,141.1L377.9,137.6L376.7,136.8L378.9,140.6L377.7,139.3L378,139.9L377.2,139.9L375.8,139.2L376.9,140.3L375.5,140.3L375.9,141L374,140.6L375.3,141.1L373.5,142.3L372.8,142.2L372.2,140.1L372,141.3L373,143.1L377.2,141.7L377.9,144.6L378.1,141.8L379.1,141.6L380.3,144.5L377.9,147.7L375.4,147.9L374.4,146.8L375.2,146.2L374,146.9L374.7,147.9L371.2,147.4L375.7,148.8L375.3,150.4L373.8,152L372.4,151.4L372.5,151.9L374.2,152.3L376,150.5L376.7,151.3L377.4,150.8L376.3,154.1L375.5,153.3L375.2,154.1L376.4,154.3L379.1,150L376.4,154.9L375.2,154.2L372.7,155L369.4,157.9L367.8,160.6L367.4,163.5L364.2,163.7L361.4,165.7L359.8,168.4L359.6,171L358.5,173L356.9,173.3L357.1,174.2L354.7,175.7L355.1,176.6L354.4,177.4L351,179L351.4,180.5L350.1,181.3L349.2,181L350,181.7L348.4,183.5L348.9,184.2L348.1,185.3L347.5,185.2L347.6,186.2L346.7,186.8L347.3,187.6L346.5,188.4L347.1,188.6L346.7,191.5L345.5,193.8L346.2,193.7L346.5,198L348.9,203.9L352.3,209.8L356,214L356.8,218.3L362.9,229.1L363.7,238.3L363.6,239.3L363.3,238.6L362.5,239.8L362.4,242.5L363,242.5L363.7,240.9L362.7,244.1L360.6,246.7L362,243.8L356.3,245L356.1,243.1L354.4,240.6L351.4,239.1L350.9,239.6L348.8,235.2L347,233.9L346.7,234.5L345.8,232.9L346.6,232.9L346.4,230.3L345.1,232.6L340.3,225.9L340.6,226.2L341.6,225.1L342.4,222.3L341.8,222.2L342.1,223.1L341.4,222.9L341.3,221.9L340.1,221.5L339.9,222.2L341.2,223.3L340.3,225.2L339,223.1L338.5,220L339.3,221.3L339.7,217.8L339,213.7L337.8,211.6L335.8,212.1L335.5,211L332.7,209L332.4,207.6L330.4,205.9L327.2,204.3L325.3,204.6L324.6,205.5L324.9,206.5L323.4,206.6L320.9,208.5L320.6,208.1L319.1,208.8L320,209.6L322.4,208L319.8,209.9L317.3,209.6L316.7,208L317.4,209.3L317.6,208.2L316.5,207L309.3,204L305.8,204.1L296.3,206.5L298.1,205.7L296.8,204.8L296.6,202.9L295.8,202.4L295.1,205.7L289.2,205.5L286.2,206.6L286,205.9L285.1,207.7L282,209.6L283.6,210.7L284.8,208.7L285.7,208.9L285.3,209.6L285.8,210.1L287,209.5L285.5,212.5L284.7,211.9L285.1,212.8L283.6,212.9L285.1,215L287.5,215.1L288.3,216.4L289.2,216.5L288.5,216.7L288.9,216.9L288.2,218.3L287.3,217.5L286.1,219L287,216.7L286.2,217.2L284.1,215.9L282.5,215.7L279.6,218L277.9,215.8L276.7,216.1L276.9,216.8L274.6,218.6L273.8,217.5L270.8,216.6L271.3,216L272.5,216.9L272.3,216.1L271.6,215.3L270.7,215.7L270.5,214.7L269.7,215.1L268.9,213.6L268.2,213.7L268.3,212.8L266.5,213.1L266.7,212L263.8,212.8L264.6,214L265.3,214L263.5,214.7L256.2,212.9L253.8,213L248.7,214.2L244.1,216.8L244.5,215.8L245.9,215.3L244,215.4L244.3,213.3L243.3,213.3L241.8,214.5L242.8,217.3L240.7,218.4L240.7,219.1L243.3,217L244.1,217.1L238.9,221.4L232.3,224.7L228.3,227.7L224.4,232.7L222.9,237.5L224.6,246.3L223.6,242.2L222.9,242L223.5,241.8L222.7,239L223.1,234.9L225.4,229.9L230.7,225.5L228.6,226.3L228,225.5L227.7,227.1L226.6,228L225.8,227.5L224.9,227.9L224.4,228.4L225.7,228.2L225.9,228.7L224.6,230.6L221.9,230.4L223,230.5L223.1,231.4L224,231.8L222.7,235.2L221.9,235.6L221.9,234.8L220.8,235.6L222.6,235.7L222.3,241.6L223.6,244.6L223.5,245.7L224.6,246.5L224.7,247.5L223,247.7L222.8,248.4L220.6,246.8L216.1,246.4L214,244.8L208.7,242.8L207.6,239.1L206.2,237.4L205.9,232.6L203,230.3L202.7,228.7L199.9,225.8L197.2,218.4L194.4,215L192.8,214.3L192.9,213.4L192.6,213.9L191.7,212.1L186.8,211.6L184.9,210.6L184.1,211.6L181.9,211.6L179.8,216.3L177.9,218.2L176.6,218.1L170.9,214.6L167.5,211.4L165,202.4L161.6,199.8L157.8,194.8L156,193.7L154.4,190.8L141.1,189L140.6,193.1L118.8,189.9L92.7,174.5L93.8,172.7L75.6,170.5L75.6,169.2L75,169.1L75.3,165L74.5,162.8L71,158.3L68.7,157.7L69.1,156.8L68.4,154.8L66.4,154.7L64.3,153.2L61.9,149.7L55.5,147.7L54.6,146.5L55.9,141.5L54.5,140.3L54.7,138.1L52.8,135.6L51.9,132.1L50,128.9L50,126.2L51.4,125.5L51.7,123.2L50,122.6L48.6,119.9L49.3,114.5L50.1,114.5L49.9,116.5L51.7,118.3L50.3,113.1L51.7,112.7L51.6,112.1L50.3,111.7L50.1,113.8L49.3,114.2L47.4,111.7L46.5,111.6L47.4,109.6L44.1,101.9L45.6,94L43.4,89.2L43.6,87.6L46.7,83.9L48.5,79.6L48.2,76.2L49,74.4L48.4,71.9L49.4,69.2L49.1,66.5L54.5,58L59.2,46.5L61.5,38.1L62.2,39.1L64.3,38.7L61.1,37.7L62.1,34.6L62.2,37L62.8,34.8L63.8,34.3L62.3,33.6L62.4,32.1L64.2,32.3L62.9,31L62.2,31.9L63,24.5L62.2,22.8L62.3,20.2ZM379.3,149.9L382.3,147.3L382.1,144.3L381.4,142.9L382.2,144.3L382.5,147.6L379.3,149.9Z" fill="url(#land)" stroke="rgba(191,219,254,.5)" stroke-width="1" stroke-linejoin="round"/>
   </g>
+  <g class="spokes"><line x1="244.8" y1="147.5" x2="239" y2="213.3"/><line x1="244.8" y1="147.5" x2="280.3" y2="210.2"/><line x1="244.8" y1="147.5" x2="295.6" y2="202.3"/><line x1="244.8" y1="147.5" x2="342" y2="221.9"/><line x1="244.8" y1="147.5" x2="363.2" y2="238.5"/><line x1="244.8" y1="147.5" x2="345.1" y2="199.8"/><line x1="244.8" y1="147.5" x2="347" y2="183.5"/><line x1="244.8" y1="147.5" x2="354.6" y2="175.8"/><line x1="244.8" y1="147.5" x2="366.9" y2="160.2"/><line x1="244.8" y1="147.5" x2="320.3" y2="171.9"/><line x1="244.8" y1="147.5" x2="278.2" y2="189"/></g>
+  <g transform="translate(220.8,126.5)">
+    <rect x="3" y="11" width="42" height="24" rx="2" fill="#ea580c" stroke="#c2410c" stroke-width="1"/>
+    <rect x="3" y="7" width="42" height="7" rx="1.5" fill="#f97316"/>
+    <line x1="13" y1="11" x2="13" y2="35" stroke="rgba(0,0,0,.18)" stroke-width="1"/>
+    <line x1="24" y1="11" x2="24" y2="35" stroke="rgba(0,0,0,.18)" stroke-width="1"/>
+    <line x1="35" y1="11" x2="35" y2="35" stroke="rgba(0,0,0,.18)" stroke-width="1"/>
+    <rect x="0" y="13" width="5" height="16" rx="1" fill="#c2410c"/>
+    <rect x="43" y="13" width="5" height="16" rx="1" fill="#9a3412"/>
+  </g>
+  <text class="hub-label" x="244.8" y="119.5" text-anchor="middle">CENTRAL HUB</text>
+  <g><circle cx="239" cy="213.3" r="6" class="halo"/><circle cx="239" cy="213.3" r="3.4" class="dot"/><text x="231" y="218.3" text-anchor="end">HOUSTON</text></g><g><circle cx="280.3" cy="210.2" r="6" class="halo"/><circle cx="280.3" cy="210.2" r="3.4" class="dot"/><text x="280.3" y="225.2" text-anchor="middle">NEW ORLEANS</text></g><g><circle cx="295.6" cy="202.3" r="6" class="halo"/><circle cx="295.6" cy="202.3" r="3.4" class="dot"/><text x="303.6" y="209.3" text-anchor="start">MOBILE</text></g><g><circle cx="342" cy="221.9" r="6" class="halo"/><circle cx="342" cy="221.9" r="3.4" class="dot"/><text x="350" y="225.9" text-anchor="start">TAMPA</text></g><g><circle cx="363.2" cy="238.5" r="6" class="halo"/><circle cx="363.2" cy="238.5" r="3.4" class="dot"/><text x="371.2" y="241.5" text-anchor="start">MIAMI</text></g><g><circle cx="345.1" cy="199.8" r="6" class="halo"/><circle cx="345.1" cy="199.8" r="3.4" class="dot"/><text x="353.1" y="202.8" text-anchor="start">JACKSONVILLE</text></g><g><circle cx="347" cy="183.5" r="6" class="halo"/><circle cx="347" cy="183.5" r="3.4" class="dot"/><text x="355" y="186.5" text-anchor="start">SAVANNAH</text></g><g><circle cx="354.6" cy="175.8" r="6" class="halo"/><circle cx="354.6" cy="175.8" r="3.4" class="dot"/><text x="362.6" y="175.8" text-anchor="start">CHARLESTON</text></g><g><circle cx="366.9" cy="160.2" r="6" class="halo"/><circle cx="366.9" cy="160.2" r="3.4" class="dot"/><text x="374.9" y="161.2" text-anchor="start">WILMINGTON</text></g><g><circle cx="320.3" cy="171.9" r="6" class="halo"/><circle cx="320.3" cy="171.9" r="3.4" class="dot"/><text x="312.3" y="171.9" text-anchor="end">ATLANTA</text></g><g><circle cx="278.2" cy="189" r="6" class="halo"/><circle cx="278.2" cy="189" r="3.4" class="dot"/><text x="270.2" y="191" text-anchor="end">JACKSON</text></g>
 </svg>
