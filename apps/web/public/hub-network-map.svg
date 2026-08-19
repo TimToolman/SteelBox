@@ -6,8 +6,9 @@
   directly. It carries its own stat cards, so the hero card renders it as a
   single image with no HTML overlay.
 
-  Live hubs are the teal nodes; the dashed grey ones are markets not yet
-  opened. Update BOTH the node and the "11+" stat card when that changes.
+  Live hubs are the teal nodes; the dashed yellow ones are markets not yet
+  opened (the legend bottom-left points at the ZIP engine). Update BOTH the
+  node and the "11+" stat card when a hub opens.
 -->
 <svg id="hub-map" viewBox="-491 -213 965 514" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -56,13 +57,13 @@
       <path class="spoke-line" d="M 505.95 422.955 C 533.317 392.161 560.472 377.504 587.428 378.984" style="fill: none; opacity: 0.85; stroke: rgb(255, 255, 255); stroke-dasharray: 5px, 4px; stroke-linecap: round; stroke-width: 2px;"/>
     </g>
 
-    <circle class="hub-ghost" cx="-361.03" cy="107.555" r="6" style="fill: rgba(148, 163, 184, 0.15); stroke: rgb(148, 163, 184); stroke-dasharray: 3px, 2px; stroke-width: 1.5;"/>
+    <circle class="hub-ghost" cx="-361.03" cy="107.555" r="6" style="fill: rgb(240, 243, 124); stroke: rgb(148, 163, 184); stroke-dasharray: 3px, 2px; stroke-width: 1.5;"/>
     <text class="hub-text-ghost" style="fill: rgb(255, 255, 255); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10px; font-weight: 600; white-space: pre; stroke-width: 1;" x="-351.03" y="112.555">LOS ANGELES</text>
-    <circle class="hub-ghost" cx="-420.36" cy="-169.78" r="6" style="stroke: rgb(148, 163, 184); stroke-dasharray: 3px, 2px; stroke-width: 1.5; fill: rgba(255, 255, 255, 0.15);"/>
+    <circle class="hub-ghost" cx="-420.36" cy="-169.78" r="6" style="stroke: rgb(148, 163, 184); stroke-dasharray: 3px, 2px; stroke-width: 1.5; fill: rgb(240, 243, 124);"/>
     <text class="hub-text-ghost" style="fill: rgb(255, 255, 255); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10px; font-weight: 600; white-space: pre;" x="-418.38" y="-146.76">SEATTLE</text>
-    <circle class="hub-ghost" cx="182.518" cy="-45.909" r="6" style="stroke: rgb(148, 163, 184); stroke-dasharray: 3px, 2px; stroke-width: 1.5; fill: rgba(247, 249, 251, 0.15);"/>
+    <circle class="hub-ghost" cx="182.518" cy="-45.909" r="6" style="stroke: rgb(148, 163, 184); stroke-dasharray: 3px, 2px; stroke-width: 1.5; fill: rgb(240, 243, 124);"/>
     <text class="hub-text-ghost" style="fill: rgb(255, 255, 255); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10px; font-weight: 600; white-space: pre; stroke-width: 1;" x="185.668" y="-25.483">DETROIT</text>
-    <circle class="hub-ghost" cx="343.87" cy="-23.945" r="6" style="stroke: rgb(148, 163, 184); stroke-dasharray: 3px, 2px; stroke-width: 1.5; fill: rgba(255, 255, 255, 0.15);"/>
+    <circle class="hub-ghost" cx="343.87" cy="-23.945" r="6" style="stroke: rgb(148, 163, 184); stroke-dasharray: 3px, 2px; stroke-width: 1.5; fill: rgb(240, 243, 124);"/>
     <text class="hub-text-ghost" style="fill: rgb(255, 255, 255); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10px; font-weight: 600; white-space: pre; stroke-width: 1;" x="271.87" y="-18.945">NEW YORK</text>
 
     <g id="nodes-active" transform="matrix(1, 0, 0, 1, -503.829773, -235.345123)">
@@ -101,16 +102,18 @@
       <path d="M 40,52 L 40,100" stroke="#FFFFFF" stroke-width="1.5" opacity="0.35"/>
     </g>
 
-    <g class="stat-card" transform="matrix(1, 0, 0, 1, -472.819702, -53.436962)">
+    <g class="stat-card" transform="matrix(2.156878, 0, 0, 2.156878, -472.819702, -53.436962)">
       <rect x="0" y="0" width="118" height="56" rx="12" fill="rgba(13,20,36,0.92)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
       <text x="16" y="28" fill="#ff6b2c" font-family="system-ui,sans-serif" font-size="20" font-weight="700" style="white-space: pre;">3–5 days</text>
       <text x="16" y="44" fill="#94a3b8" font-family="system-ui,sans-serif" font-size="10" font-weight="600" letter-spacing="0.06em" style="white-space: pre;">AVG DELIVERY</text>
     </g>
-    <g class="stat-card" transform="matrix(1, 0, 0, 1, 316.170227, 164.654877)">
+    <g class="stat-card" transform="matrix(1.996367, 0, 0, 1.996367, -42.247044, -172.767471)">
       <rect x="0" y="0" width="150" height="56" rx="12" fill="rgba(13,20,36,0.92)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
       <text x="16" y="28" fill="#ff6b2c" font-family="system-ui,sans-serif" font-size="22" font-weight="700" style="white-space: pre;">11+</text>
       <text x="73" y="28" fill="#f1f5f9" font-family="system-ui,sans-serif" font-size="14" font-weight="600" style="white-space: pre;">ACTIVE</text>
       <text x="16" y="44" fill="#94a3b8" font-family="system-ui,sans-serif" font-size="10" font-weight="600" letter-spacing="0.06em" style="white-space: pre;">HUBS · GROWING</text>
     </g>
+    <text class="hub-text-ghost" style="fill: rgb(75, 140, 208); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 10px; font-weight: 600; white-space: pre;" x="-368.81" y="186.487" transform="matrix(1, 0, 0, 1, -24.825481, 8.216991)"><tspan x="-368.81" dy="0">Some markets not yet opened.</tspan><tspan x="-368.81" dy="1.2em">Check using our Zip Code Delivery Engine.</tspan></text>
+    <circle class="hub-ghost" cx="-409.08" cy="196.263" r="6" style="stroke: rgb(148, 163, 184); stroke-dasharray: 3px, 2px; stroke-width: 1.5; paint-order: fill; fill: rgba(238, 242, 6, 0.65);"/>
   </g>
 </svg>
