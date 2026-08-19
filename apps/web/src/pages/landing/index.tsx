@@ -302,20 +302,12 @@ function Hero({ tenant }: { tenant: Tenant }) {
         <aside className="ld-hero-map" aria-label="Nationwide transfer hub network">
           <div className="ld-hubcard">
             <p className="ld-hubcard-label">Nationwide hub network</p>
+            {/* The stat cards live inside the artwork, so there is no HTML
+                overlay to keep aligned with it. */}
             <img
-              className="ld-hubcard-img" src={u('hub-network-map.svg')} width="460" height="268"
-              alt="Central hub connected to regional port hubs: Houston, New Orleans, Mobile, Tampa, Miami, Jacksonville, Savannah, Charleston, Wilmington, Atlanta and Jackson."
+              className="ld-hubcard-img" src={u('hub-network-map.svg')} width="965" height="514"
+              alt="Hub-and-spoke network: a central Gulf hub connected to Houston, New Orleans, Mobile, Jackson, Atlanta, Tampa, Miami, Jacksonville, Savannah, Charleston and Wilmington. Average delivery 3–5 days across 11+ active hubs."
             />
-            {/* The two numbers the map is making an argument about, pulled out
-                of it so they read before the map does. */}
-            <div className="ld-hubstat ld-hubstat--delivery">
-              <span className="ld-hubstat-v"><b>3</b>–5 days</span>
-              <span className="ld-hubstat-k">Avg delivery</span>
-            </div>
-            <div className="ld-hubstat ld-hubstat--hubs">
-              <span className="ld-hubstat-v"><b>11</b>+</span>
-              <span className="ld-hubstat-k">Active hubs</span>
-            </div>
           </div>
         </aside>
       </div>
