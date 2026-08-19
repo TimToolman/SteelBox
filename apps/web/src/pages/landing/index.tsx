@@ -314,18 +314,18 @@ function Hero({ tenant }: { tenant: Tenant }) {
   )
 }
 
-// ── Lifetime warranty bar ─────────────────────────────────
+// ── Warranty bar ──────────────────────────────────────────
 
 export function WarrantyBar() {
   return (
-    <section className="ld-warranty" aria-label="Lifetime warranty">
+    <section className="ld-warranty" aria-label="Warranty">
       <div className="ld-wrap ld-warranty-row">
         <svg className="ld-warranty-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M9 12l2 2 4-4" />
         </svg>
         <div>
-          <strong>Lifetime Warranty</strong>
-          <span>Structural integrity covered for the life of the container on every unit we sell.</span>
+          <strong>90-Day Warranty</strong>
+          <span>Doors and seals covered for 90 days from delivery on every unit we sell.</span>
         </div>
         <button className="ld-btn ld-btn--ghost ld-btn--sm" type="button" onClick={() => notBuilt('The warranty page')}>
           Learn more
@@ -465,8 +465,8 @@ export function TrustBand({ tenant }: { tenant: Tenant }) {
       icon: <><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></>,
     },
     {
-      t: 'Lifetime Warranty',
-      d: 'Structural integrity covered for the life of every container we sell. Peace of mind that lasts.',
+      t: '90-day warranty',
+      d: 'Doors and seals are covered for 90 days from delivery on every container we sell — the two things that decide whether a box actually keeps weather out.',
       icon: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
     },
   ]
@@ -711,7 +711,7 @@ export function SiteFooter({ tenant }: { tenant: Tenant }) {
         </div>
         <div className="ld-footer-bottom">
           <span>© {new Date().getFullYear()} {tenant.legalName}. All rights reserved.</span>
-          <span>Lifetime structural warranty on every sale.</span>
+          <span>90-day warranty on doors and seals.</span>
         </div>
       </div>
     </footer>
