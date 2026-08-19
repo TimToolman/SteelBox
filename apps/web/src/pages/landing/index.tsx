@@ -679,7 +679,7 @@ export function SiteFooter({ tenant }: { tenant: Tenant }) {
       <div className="ld-wrap">
         <div className="ld-footer-grid">
           <div>
-            <img src={u('logo-nsb.svg')} alt={`${tenant.name} — Buy, Ship, Deliver`} style={{ width: '190px', maxWidth: '100%', height: 'auto', marginBottom: '10px' }} />
+            <img src={u('logo-nsb.png')} alt={`${tenant.name} — buy, rent, finance`} width="720" height="496" style={{ width: '250px', maxWidth: '100%', height: 'auto', marginBottom: '12px' }} />
             <h4>{tenant.name}</h4>
             <p>{tenant.address.street}<br />{tenant.address.city}, {tenant.address.state} {tenant.address.zip}</p>
             <p style={{ marginTop: 8 }}>{tenant.hours}</p>
