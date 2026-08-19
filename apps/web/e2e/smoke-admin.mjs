@@ -17,13 +17,19 @@ ok(await phone.locator('.ld-hero-badge').count() === 0, 'the Live inventory badg
 ok(!/Live inventory · Real photos/.test(await text(phone)), 'and its copy with it')
 const navBottom = (await phone.locator('header').first().boundingBox()).y
   + (await phone.locator('header').first().boundingBox()).height
+// The redesign opens the hero with an eyebrow line, so the first thing under
+// the nav is that, not the h1 — measure what the shopper actually sees first.
+const eyebrow = phone.locator('.ld-hero-eyebrow').first()
+const eyebrowBox = await eyebrow.boundingBox()
+ok(eyebrowBox.y - navBottom < 40, `the hero starts right under the nav on a phone (${Math.round(eyebrowBox.y - navBottom)}px gap)`)
+ok(eyebrowBox.height < 26, `and its eyebrow stays on one line (${Math.round(eyebrowBox.height)}px tall)`)
 const h1Top = (await phone.locator('h1').first().boundingBox()).y
-ok(h1Top - navBottom < 60, `the headline sits right under the nav on a phone (${Math.round(h1Top - navBottom)}px gap)`)
+ok(h1Top - navBottom < 90, `with the headline right behind it (${Math.round(h1Top - navBottom)}px gap)`)
 ok(/How it works|From browsing to a box/i.test(await text(phone)), 'and the next section is reachable on the first screen')
 await phone.screenshot({ path: `${SHOTS}/hero-mobile.png` })
 
 const wide = await open(browser, { path: '', width: 1440, height: 900 })
-const heroH = (await wide.locator('.ld-hero--portal').boundingBox()).height
+const heroH = (await wide.locator('.ld-hero').boundingBox()).height
 ok(heroH > 600, `desktop keeps its full-stage hero (${Math.round(heroH)}px)`)
 
 // ══ 1. Marketplace rail + card hover ══
