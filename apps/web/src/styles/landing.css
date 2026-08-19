@@ -278,7 +278,7 @@
 }
 .ld-section-sub { font-size: 1.05rem; color: var(--slate-600); line-height: 1.55; }
 
-/* ── Lifetime warranty bar ── */
+/* ── Warranty bar ── */
 .ld-warranty { background: var(--slate-50); border-bottom: 1px solid var(--slate-200); padding: 16px 0; }
 .ld-warranty-row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
 .ld-warranty-icon { color: var(--success); flex-shrink: 0; }

@@ -832,7 +832,7 @@ export default function MarketplacePage() {
           { icon: 'truck', text: '3–5 day delivery' },
           { icon: 'camera', text: '12-photo documentation' },
           { icon: 'calendar', text: 'Flexible rental terms' },
-          { icon: 'check', text: 'Lifetime warranty' },
+          { icon: 'check', text: '90-day door & seal warranty' },
         ].map(item => (
           <div key={item.text} className="mkt-trust-item">
             <span className="mkt-trust-icon"><Icon name={item.icon} size={16} /></span>

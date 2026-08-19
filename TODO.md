@@ -325,8 +325,8 @@ destinations the site does not have. Both currently say so out loud via the
 - [ ] **Reseller sign-up** — the "Sign up your container company" flow the new
       Partners section sells: consignment listing, exclusive ZIPs, SLA and NPS
       terms. Overlaps the consignment work in the Aarcadian section.
-- [ ] **Lifetime Warranty page** — the warranty bar's "Learn more" has nowhere to
-      go. Needs the actual warranty terms, which is a P4 legal item.
+- [ ] **Warranty page** — the warranty bar's "Learn more" has nowhere to go. Needs
+      the actual terms of the 90-day doors-and-seals warranty, which is a P4 legal item.
 - [ ] Rebuild `og/container-hero.jpg` at a landscape size. It is 750×1000
       portrait and the redesign uses it full-bleed behind the hero, so it is
       upscaled well past its resolution on any desktop viewport.
