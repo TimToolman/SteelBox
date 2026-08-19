@@ -28,6 +28,20 @@ ok(h1Top - navBottom < 90, `with the headline right behind it (${Math.round(h1To
 ok(/How it works|From browsing to a box/i.test(await text(phone)), 'and the next section is reachable on the first screen')
 await phone.screenshot({ path: `${SHOTS}/hero-mobile.png` })
 
+// Back-to-top: hidden at the top, appears once the hero is off-screen,
+// stays clear of the call bar, and actually returns to the top.
+ok(await phone.locator('.ld-totop').count() === 0, 'no back-to-top button while the hero is on screen')
+await phone.evaluate(() => window.scrollTo(0, 2500))
+await phone.waitForTimeout(400)
+const up = await phone.locator('.ld-totop').boundingBox()
+ok(!!up, 'the back-to-top button appears after scrolling')
+const callbar = await phone.locator('.ld-callbar').boundingBox()
+ok(up.y + up.height < callbar.y, `and floats above the call bar (${Math.round(callbar.y - up.y - up.height)}px clear)`)
+await phone.locator('.ld-totop').click()
+await phone.waitForTimeout(1200)
+ok((await phone.evaluate(() => window.scrollY)) === 0, 'tapping it lands back at the top')
+ok(await phone.locator('.ld-totop').count() === 0, 'where it disappears again')
+
 const wide = await open(browser, { path: '', width: 1440, height: 900 })
 const heroH = (await wide.locator('.ld-hero').boundingBox()).height
 ok(heroH > 600, `desktop keeps its full-stage hero (${Math.round(heroH)}px)`)

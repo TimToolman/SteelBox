@@ -731,6 +731,41 @@ export function CallBar({ tenant }: { tenant: Tenant }) {
   )
 }
 
+// ── Back to top (mobile) ──────────────────────────────────
+// The mobile page is nine screens tall and the ZIP checker — the thing a
+// shopper most wants back — lives at the very top. Appears once the hero
+// is well off-screen; sits above the call bar, left of the report tab.
+
+export function ScrollTopButton() {
+  const [shown, setShown] = useState(false)
+  useEffect(() => {
+    let ticking = false
+    const onScroll = () => {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(() => {
+        setShown(window.scrollY > 600)
+        ticking = false
+      })
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+  if (!shown) return null
+  const toTop = () => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' })
+  }
+  return (
+    <button className="ld-totop" type="button" onClick={toTop} aria-label="Back to top" title="Back to top">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 19V5M5 12l7-7 7 7" />
+      </svg>
+    </button>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────
 
 export interface LandingPageProps {
@@ -767,6 +802,7 @@ export default function LandingPage({ tenant }: LandingPageProps) {
       </main>
       <SiteFooter tenant={tenant} />
       <CallBar tenant={tenant} />
+      <ScrollTopButton />
       <NotBuiltToast />
       <JsonLd data={jsonLdLocalBusiness(tenant)} />
       <JsonLd data={jsonLdBreadcrumb([{ name: 'Home', path: '/' }], tenant.primaryDomain)} />
