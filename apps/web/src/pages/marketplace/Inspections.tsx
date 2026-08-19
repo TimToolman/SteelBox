@@ -22,7 +22,7 @@ import {
   type Container, type DamageClaim, type AuthUser,
 } from '../../lib/api'
 import { INSPECTOR_QUESTIONS, gradeLabel, damageLabel } from '../../lib/grading'
-import { GRADE_META } from '../../lib/specs'
+import { GRADE_META, DAMAGE_DISCOUNT } from '../../lib/specs'
 import { ClaimWorkspace } from '../field/ClaimWorkspace'
 import { Lightbox, useLightbox } from '../../components/Lightbox'
 
@@ -102,6 +102,51 @@ export function InspectionsPortal({ user, canClaim, toast }: {
     const existing = claimFor(open)
     const shots = findings.filter(f => f.photo)
 
+    // Same severity read the claim uses — two majors is a 5, one is a 4…
+    const severityOf = () => {
+      const majors = findings.filter(f => f.level === 'major').length
+      return majors >= 2 ? 5 : majors === 1 ? 4 : findings.length >= 2 ? 3 : 2
+    }
+
+    // The other honest exit: no liable line, or a claim isn't worth the
+    // paperwork — list the unit as-is at its damaged grade instead. Same
+    // write the supplier portal does after a claim, minus the claim:
+    // grade D with the walk's severity, the damage photos on the listing,
+    // a severity-scaled discount, and the hold released.
+    const sellAsIs = async () => {
+      if (busy) return
+      const severity = severityOf()
+      const disc = DAMAGE_DISCOUNT[severity] ?? 0.28
+      const was = open.buyPrice
+      const now = Math.round(was * (1 - disc) / 25) * 25
+      if (!window.confirm(
+        `List ${open.sku} for sale as-is at grade D·${severity}?
+
+` +
+        `Price: $${now.toLocaleString()} (was $${was.toLocaleString()}, −${Math.round(disc * 100)}% for the damage).
+` +
+        `The ${shots.length} damage photo${shots.length === 1 ? '' : 's'} go on the listing. No claim is opened — ` +
+        `the supplier can still adjust the price from their portal.`)) return
+      setBusy(true)
+      try {
+        const summary = findings.length
+          ? findings.map(f => [f.reasons.join(', '), f.note].filter(Boolean).join(' — ') || f.question).join('; ')
+          : (open.inspectionReason || 'Damage verified by the inspector')
+        await containersApi.update(open.id, {
+          grade: 'D', damageSeverity: severity, damagePhotos: shots.map(f => f.photo),
+          condition: 'used', status: 'available', listingType: 'buy',
+          buyPrice: now, preDamagePrice: was,
+          inspectionRequired: false, inspectionReason: summary,
+          inspectorName: user?.name || 'Inspector', inspectedAt: new Date().toISOString(),
+        } as Partial<Container>)
+        setOpen(null)
+        refreshUnits()
+        toast(`${open.sku} listed as damaged D·${severity} at $${now.toLocaleString()} — live on the marketplace`)
+      } catch (e) {
+        toast(e instanceof Error ? e.message : 'Could not list the unit')
+      } finally { setBusy(false) }
+    }
+
     const raiseClaim = async () => {
       if (busy) return
       setBusy(true)
@@ -109,8 +154,7 @@ export function InspectionsPortal({ user, canClaim, toast }: {
         const summary = findings.length
           ? findings.map(f => [f.reasons.join(', '), f.note].filter(Boolean).join(' — ') || f.question).join('; ')
           : (open.inspectionReason || 'Damage verified by the inspector')
-        const majors = findings.filter(f => f.level === 'major').length
-        const severity = majors >= 2 ? 5 : majors === 1 ? 4 : findings.length >= 2 ? 3 : 2
+        const severity = severityOf()
         const created = await claimsApi.create({
           containerId: open.id, notes: summary, severity,
           inspectorName: user?.name || 'Inspector', inspectedAt: new Date().toISOString(),
@@ -243,12 +287,19 @@ export function InspectionsPortal({ user, canClaim, toast }: {
                 <div style={eyebrow}>Liable shipping line?</div>
                 <div style={{ fontSize: '13px', color: 'var(--ink2)', margin: '8px 0 12px', lineHeight: 1.6 }}>
                   Opening a claim carries this walk's {shots.length} damage photo{shots.length === 1 ? '' : 's'} in as its evidence,
-                  then takes you to the estimate.
+                  then takes you to the estimate. Not claiming? List the unit for sale as-is at its damaged
+                  grade instead — photos on the listing, price discounted for the damage.
                 </div>
-                <button onClick={raiseClaim} disabled={busy}
-                  style={{ padding: '12px 22px', borderRadius: 'var(--pill)', border: 'none', background: 'var(--cta)', color: '#fff', fontSize: '13.5px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
-                  {busy ? 'Opening…' : 'Open a damage claim'}
-                </button>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  <button onClick={raiseClaim} disabled={busy}
+                    style={{ padding: '12px 22px', borderRadius: 'var(--pill)', border: 'none', background: 'var(--cta)', color: '#fff', fontSize: '13.5px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                    {busy ? 'Working…' : 'Open a damage claim'}
+                  </button>
+                  <button onClick={sellAsIs} disabled={busy}
+                    style={{ padding: '12px 22px', borderRadius: 'var(--pill)', border: '1.5px solid #B3261E', background: 'var(--surf-w)', color: '#B3261E', fontSize: '13.5px', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+                    Sell as is / Damaged
+                  </button>
+                </div>
               </>
             )}
           </div>
