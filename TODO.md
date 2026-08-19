@@ -315,6 +315,24 @@ Charted alongside the phases in `roadmap.html`.
 - [x] 3D spinner simplified: real front/back photos on the ends, size callout on the
       sides, top/bottom unchanged — 2026-07-15
 
+## Homepage redesign — what the new design promises but doesn't yet have
+
+The homepage was rebuilt from the supplied prototype on 2026-08-19. The design
+positions SteelBox as a marketplace of local resellers, which introduces two
+destinations the site does not have. Both currently say so out loud via the
+"not built yet" toast rather than dead-ending.
+
+- [ ] **Reseller sign-up** — the "Sign up your container company" flow the new
+      Partners section sells: consignment listing, exclusive ZIPs, SLA and NPS
+      terms. Overlaps the consignment work in the Aarcadian section.
+- [ ] **Lifetime Warranty page** — the warranty bar's "Learn more" has nowhere to
+      go. Needs the actual warranty terms, which is a P4 legal item.
+- [ ] Rebuild `og/container-hero.jpg` at a landscape size. It is 750×1000
+      portrait and the redesign uses it full-bleed behind the hero, so it is
+      upscaled well past its resolution on any desktop viewport.
+- [ ] Decide where **Insights** lives. The redesign gave its nav slot to
+      Partners; the shop tab still works by URL but nothing links to it.
+
 ## Nice-to-have / later
 
 - [ ] Code-split the web bundle (HEIC converter + background-removal model warn at >500 kB).

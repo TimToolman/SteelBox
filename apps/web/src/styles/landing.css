@@ -1,472 +1,511 @@
 /* ============================================================
-   Landing / city pages — marketplace-first public storefront.
+   Landing page — marketplace-first public storefront.
+
    Brand colors arrive as CSS vars set by the tenant config on
    the .ld root (--ld-brand / --ld-accent / --ld-ink), so a
-   second tenant restyles by config, not by CSS edits.
+   second tenant restyles by config, not by CSS edits. The navy
+   and slate scale below are structural, not brand: they carry
+   the same weight for every tenant.
+
+   The nav here is shared with the marketplace (SiteNav in
+   pages/landing/index.tsx) — changing it changes both.
    ============================================================ */
+
+/* Structural tokens live at :root, not on .ld — the header is rendered
+   outside the .ld wrapper on the marketplace, and scoping these to .ld left
+   it with an undefined background there. Brand hues stay per-tenant
+   (--ld-brand / --ld-accent, set inline by SiteNav). */
+:root {
+  --navy: #0c1e3a;
+  --navy-mid: #152a4a;
+  --slate-50: #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-300: #cbd5e1;
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --success: #059669;
+  --flame: #fb923c;          /* the orange that reads on navy */
+  --radius: 12px;
+  --radius-lg: 16px;
+  --shadow: 0 4px 24px rgba(12, 30, 58, .08);
+  --shadow-lg: 0 12px 40px rgba(12, 30, 58, .12);
+  --nav-h: 72px;
+}
 
 .ld {
   font-family: var(--sans);
-  color: var(--ld-ink, #13293D);
+  color: var(--slate-700);
   background: #fff;
-  line-height: 1.55;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
 .ld * { box-sizing: border-box; }
 .ld img { max-width: 100%; }
-.ld a { color: inherit; }
-.ld h1, .ld h2, .ld h3 { line-height: 1.15; margin: 0; }
-.ld p { margin: 0; }
+.ld a { text-decoration: none; }
+
+/* The element resets go through :where() so they carry ZERO specificity.
+   Written plainly (`.ld p { margin: 0 }`) they are (0,1,1) and silently beat
+   every (0,1,0) component class — which is how the hero headline ended up
+   navy-on-navy and every section margin collapsed to nothing. */
+:where(.ld) :where(a) { color: inherit; }
+:where(.ld) :where(h1, h2, h3) { line-height: 1.15; margin: 0; color: var(--navy); }
+:where(.ld) :where(p) { margin: 0; }
+:where(.ld) :where(ul) { list-style: none; margin: 0; padding: 0; }
 
 .ld-wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
 
+.ld-vh {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;
+}
+
+/* ── Buttons ── */
 .ld-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  border: none; cursor: pointer; text-decoration: none; white-space: nowrap;
-  font: 700 15px/1 var(--sans); border-radius: 999px; padding: 14px 24px;
-  transition: filter .15s, transform .15s;
+  border: 2px solid transparent; cursor: pointer; text-decoration: none; white-space: nowrap;
+  font: 600 15px/1.2 var(--sans); border-radius: 999px; padding: 12px 24px;
+  transition: background .15s, border-color .15s, color .15s, transform .1s;
 }
-.ld-btn:hover { filter: brightness(.92); }
+.ld-btn:active { transform: scale(.98); }
 .ld-btn:focus-visible { outline: 3px solid var(--ld-brand); outline-offset: 2px; }
-.ld-btn--accent { background: var(--ld-accent); color: #fff; box-shadow: 0 2px 10px rgba(230, 81, 0, .3); }
-.ld-btn--brand { background: var(--ld-brand); color: #fff; }
-.ld-btn--ghost { background: #fff; color: var(--ld-ink); border: 1.5px solid #d5dbe3; }
-.ld-btn--sm { padding: 10px 16px; font-size: 13px; }
+.ld-btn--accent { background: var(--ld-accent); border-color: var(--ld-accent); color: #fff; }
+.ld-btn--accent:hover { filter: brightness(.92); }
+.ld-btn--brand { background: var(--ld-accent); border-color: var(--ld-accent); color: #fff; }
+.ld-btn--brand:hover { filter: brightness(.92); }
+.ld-btn--navy { background: var(--navy); border-color: var(--navy); color: #fff; }
+.ld-btn--navy:hover { background: var(--navy-mid); border-color: var(--navy-mid); }
+.ld-btn--ghost { background: transparent; color: var(--navy); border-color: var(--slate-300); }
+.ld-btn--ghost:hover { border-color: var(--navy); background: var(--slate-50); }
+.ld-btn--sm { padding: 8px 16px; font-size: 14px; }
+.ld-btn--lg { padding: 14px 28px; font-size: 16px; }
+
+/* The primary CTA is the accent; "Check delivery" is the one blue button on
+   the page, so the two never compete for the same click. */
+.ld-zipcheck .ld-btn--accent { background: var(--ld-brand); border-color: var(--ld-brand); }
 
 /* ── Nav ──
-   The one site-wide header (landing, city pages, AND the marketplace —
-   see SiteNav in pages/landing/index.tsx). Full-width bar so it reads
-   identically on the 1180px-capped landing and the full-width shop. */
-.ld-nav { position: sticky; top: 0; z-index: 400; background: #fff; border-bottom: 1px solid #e6e9ee; color: var(--ld-ink, #13293D); }
-.ld-nav-wrap { position: relative; padding: 0 20px; }
-.ld-nav-row { display: flex; align-items: center; gap: 12px; height: 60px; }
-.ld-logo { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 18px; text-decoration: none; letter-spacing: -0.4px; white-space: nowrap; flex-shrink: 0; }
-.ld-logo-badge { width: 32px; height: 32px; border-radius: 8px; background: var(--ld-brand); display: grid; place-items: center; flex-shrink: 0; }
-.ld-logo-mark { display: block; flex-shrink: 0; border-radius: 8px; }
-.ld-logo-brand { color: var(--ld-brand); }
-.ld-logo-accent { color: var(--ld-accent); }
-.ld-nav-main { min-width: 0; }
-.ld-nav-links { display: flex; align-items: center; gap: 2px; list-style: none; margin: 0 0 0 6px; padding: 0; }
-.ld-nav-links a, .ld-nav-links button {
-  text-decoration: none; font: 600 13px/1.4 var(--sans); padding: 7px 13px; border-radius: 999px;
-  color: #33475c; white-space: nowrap; display: block; background: none; border: none; cursor: pointer;
+   The one site-wide header (landing AND the marketplace — see SiteNav in
+   pages/landing/index.tsx). Navy bar, full width, so it reads identically
+   on the 1180px-capped landing and the full-width shop. */
+.ld-nav {
+  position: sticky; top: 0; z-index: 400;
+  background: var(--navy); color: #fff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, .15);
 }
-.ld-nav-links a:hover, .ld-nav-links button:hover { background: #f0f4f9; color: var(--ld-ink); }
-.ld-nav-links .ld-nav-cat { color: var(--ld-brand); font-weight: 700; }
-.ld-nav-links .ld-nav-cat:hover { background: rgba(43, 127, 212, .1); color: var(--ld-brand); }
-.ld-nav-links .ld-nav-cat--active, .ld-nav-links .ld-nav-cat--active:hover { background: var(--ld-brand); color: #fff; }
-.ld-nav-div { width: 1px; height: 20px; background: #e2e7ee; margin: 0 8px; }
-.ld-nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.ld-nav-wrap { max-width: 1280px; margin: 0 auto; padding: 0 20px; }
+.ld-nav-row { display: flex; align-items: center; gap: 20px; height: var(--nav-h); }
+
+.ld-logo { display: flex; align-items: center; gap: 10px; flex-shrink: 0; color: #fff; }
+.ld-logo-mark { width: 40px; height: 40px; display: block; border-radius: 8px; }
+.ld-logo-word { font-size: 18px; font-weight: 500; letter-spacing: -.02em; white-space: nowrap; }
+.ld-logo-brand { color: #fff; }
+.ld-logo-accent { font-weight: 700; color: var(--flame); }
+
+.ld-nav-main { flex: 1; min-width: 0; }
+.ld-nav-links { display: flex; align-items: center; gap: 2px; }
+.ld-nav-cat, .ld-nav-sec a {
+  display: inline-block; padding: 8px 12px; border-radius: 6px;
+  font: 500 14px/1.4 var(--sans); color: rgba(255, 255, 255, .85);
+  background: none; border: none; cursor: pointer; white-space: nowrap;
+}
+.ld-nav-cat:hover, .ld-nav-sec a:hover { color: #fff; background: rgba(255, 255, 255, .08); }
+.ld-nav-cat--active { color: #fff; background: rgba(255, 255, 255, .14); font-weight: 600; }
+.ld-nav-div { width: 1px; height: 16px; background: rgba(255, 255, 255, .2); margin: 0 8px; }
+
+.ld-nav-right { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.ld-nav-phone { font-size: 14px; font-weight: 500; color: rgba(255, 255, 255, .9); white-space: nowrap; }
+.ld-nav-phone:hover { color: #fff; }
+.ld-nav .ld-btn--ghost { color: #fff; border-color: rgba(255, 255, 255, .35); }
+.ld-nav .ld-btn--ghost:hover { background: rgba(255, 255, 255, .1); border-color: rgba(255, 255, 255, .6); }
+
 .ld-nav-profile {
-  display: flex; align-items: center; justify-content: center; width: 38px; height: 38px;
-  border-radius: 50%; border: 1.5px solid #d5dbe3; color: var(--ld-brand); flex-shrink: 0;
+  width: 40px; height: 40px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; border: 1px solid rgba(255, 255, 255, .25);
+  color: rgba(255, 255, 255, .9); background: transparent;
 }
-.ld-nav-profile:hover { background: #f0f4f9; }
-/* Contact Us dropdown card — phone first, then email and yard address. */
-.ld-nav-contactwrap { position: relative; display: inline-flex; flex-shrink: 0; }
+.ld-nav-profile:hover { background: rgba(255, 255, 255, .1); color: #fff; }
+
+.ld-nav-burger {
+  display: none; flex-direction: column; gap: 5px; align-items: center; justify-content: center;
+  width: 40px; height: 40px; padding: 8px; background: none; border: none; cursor: pointer;
+}
+.ld-nav-burger span { display: block; width: 20px; height: 2px; background: #fff; border-radius: 1px; }
+
+.ld-nav-contactwrap { position: relative; }
 .ld-contact-pop {
-  position: absolute; top: calc(100% + 12px); right: 0; min-width: 230px; z-index: 70;
-  background: #fff; border: 1px solid #e2e7ee; border-radius: 14px;
-  box-shadow: 0 14px 36px rgba(19, 41, 61, .16); padding: 14px 16px;
-  display: flex; flex-direction: column; gap: 8px;
+  position: absolute; right: 0; top: calc(100% + 10px); z-index: 10;
+  display: grid; gap: 6px; min-width: 240px;
+  background: #fff; color: var(--slate-700);
+  border: 1px solid var(--slate-200); border-radius: var(--radius);
+  padding: 14px 16px; box-shadow: var(--shadow-lg);
 }
-.ld-contact-pop a { text-decoration: none; }
 .ld-contact-phone { font-size: 17px; font-weight: 800; color: var(--ld-brand); }
-.ld-contact-email { font-size: 14px; font-weight: 600; color: var(--ld-ink); }
+.ld-contact-email { font-size: 14px; font-weight: 600; color: var(--navy); }
 .ld-contact-email:hover, .ld-contact-phone:hover { text-decoration: underline; }
-.ld-contact-addr { font-style: normal; font-size: 13px; line-height: 1.5; color: #5b6b7c; }
-.ld-nav-phone { text-decoration: none; font-weight: 700; font-size: 14px; white-space: nowrap; }
-.ld-nav-burger { display: none; background: none; border: 1px solid #d5dbe3; border-radius: 8px; padding: 8px 10px; cursor: pointer; font-size: 16px; flex-shrink: 0; }
-/* Burger dropdown — a floating panel anchored under the nav bar, not an
-   inline block (inline pushes the hero down and reads as broken layout).
-   Rendered only while open (React conditional), so no width gate.
-   Anchored left to match the burger button at the far left of the bar. */
-.ld-nav-mobile {
-  position: absolute; top: calc(100% + 6px); left: 20px; min-width: 250px;
-  background: #fff; border: 1px solid #e2e7ee; border-radius: 14px;
-  box-shadow: 0 14px 36px rgba(19, 41, 61, .16); padding: 8px; z-index: 70;
-}
-.ld-nav-mobile a, .ld-nav-mobile button {
-  display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: 8px;
-  text-decoration: none; font: 600 15px/1.4 var(--sans); color: inherit;
-  background: none; border: none; cursor: pointer;
-}
-.ld-nav-mobile a:hover, .ld-nav-mobile button:hover { background: #f0f4f9; }
-/* Above the phone breakpoint the category links are already in the
-   bar — don't duplicate them inside the panel. */
-@media (min-width: 941px) { .ld-nav-mobile .ld-m-cat { display: none; } }
+.ld-contact-addr { font-style: normal; font-size: 13px; line-height: 1.5; color: var(--slate-500); }
 
-/* Anchor jumps (#how-it-works etc.) must clear the sticky header. */
-.ld [id] { scroll-margin-top: 76px; }
-
-/* Mid widths: the full link set doesn't fit — collapse the section
-   links (and divider) into the burger menu, keep the category tabs. */
-@media (max-width: 1150px) {
-  .ld-nav-sec { display: none; }
-  .ld-nav-burger { display: block; }
+.ld-nav-mobile { display: grid; gap: 2px; padding: 8px 0 16px; }
+.ld-nav-mobile a, .ld-nav-mobile .ld-m-cat {
+  display: block; width: 100%; text-align: left;
+  padding: 13px 14px; border-radius: 8px; background: none; border: none; cursor: pointer;
+  font: 500 16px/1.3 var(--sans); color: rgba(255, 255, 255, .9);
 }
+.ld-nav-mobile a:hover, .ld-nav-mobile .ld-m-cat:hover { background: rgba(255, 255, 255, .08); color: #fff; }
+
+@media (max-width: 980px) {
+  .ld-nav-main, .ld-nav-phone { display: none; }
+  .ld-nav-burger { display: flex; }
+}
+@media (min-width: 981px) { .ld-nav-mobile { display: none; } }
+@media (max-width: 600px) { .ld-nav-contact { display: none; } }
+@media (max-width: 400px) { .ld-logo-word { display: none; } }
 
 /* ── Hero ── */
-.ld-hero { background: linear-gradient(160deg, #f4f8fc 55%, #e8f0f9); border-bottom: 1px solid #e6e9ee; }
-
-/* Home hero — deep industrial steel. A parallax photo layer under a
-   blue-black scrim and a corrugation texture, centered copy, live-status
-   badge, search-pill ZIP bar. City pages keep the light two-column
-   .ld-hero-grid layout below.
-   Parallax/opacity come from --ld-par-bg / --ld-par-fg / --ld-par-o, set
-   by Hero's rAF scroll listener (effect-only, so SSG output is static). */
-.ld-hero--portal {
-  position: relative; overflow: hidden; text-align: center; color: #fff;
-  display: flex; align-items: center; justify-content: center;
-  min-height: min(88vh, 780px);
-  background: linear-gradient(150deg, #0E2A4E 0%, #10467F 42%, #0B2440 100%);
-  border-bottom: none;
-  --ld-par-bg: 0px; --ld-par-fg: 0px; --ld-par-o: 1;
+.ld-hero {
+  position: relative; display: flex; align-items: center;
+  min-height: 640px; color: #fff; overflow: hidden;
 }
-.ld-hero-bglayer {
-  position: absolute; inset: -6% 0 -20%; z-index: 0; pointer-events: none;
-  transform: translate3d(0, var(--ld-par-bg), 0); opacity: var(--ld-par-o);
-  will-change: transform, opacity;
-}
-.ld-hero-bgimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 58%; opacity: .5; }
-/* Industrial scrim — keeps every headline/AA contrast over the photo. */
-.ld-hero-scrim {
+.ld-hero-bg { position: absolute; inset: 0; }
+.ld-hero-bgimg { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
+.ld-hero-overlay {
   position: absolute; inset: 0;
-  background: linear-gradient(to bottom, rgba(9, 26, 48, .74) 0%, rgba(12, 46, 84, .62) 45%, rgba(8, 24, 45, .84) 100%);
+  background: linear-gradient(105deg, rgba(12, 30, 58, .94) 0%, rgba(12, 30, 58, .82) 50%, rgba(12, 30, 58, .55) 100%);
 }
-/* Corrugated-steel texture: vertical container ridges, barely there. */
-.ld-hero-texture {
-  position: absolute; inset: 0; opacity: .5; mix-blend-mode: overlay;
-  background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.10) 0 1px, rgba(255,255,255,0) 1px 7px, rgba(0,0,0,.10) 7px 8px, rgba(255,255,255,0) 8px 14px);
+.ld-hero-layout {
+  position: relative; z-index: 1; width: 100%;
+  max-width: 1280px; margin: 0 auto; padding: 56px 20px 72px;
+  display: grid; grid-template-columns: 1fr; gap: 32px; align-items: center;
 }
-.ld-hero-inner { position: relative; z-index: 2; max-width: 880px; margin: 0 auto; padding: 62px 20px 66px; transform: translate3d(0, var(--ld-par-fg), 0); }
-/* On a phone the headline should be the first thing under the nav, not a
-   screenful down. Padding and the gaps between hero rows all tighten. */
-@media (max-width: 640px) {
-  /* The 88vh stage with vertically-centred copy is what leaves a phone
-     staring at empty steel: on a small screen the hero is exactly as tall
-     as what it says, starting right under the nav — and every gap between
-     its rows is sized for a thumb's reach, not a desktop's breathing room. */
-  .ld-hero--portal { min-height: 0; align-items: flex-start; }
-  .ld-hero-inner { padding: 18px 16px 22px; }
-  .ld-hero--portal h1 { line-height: 1.05; }
-  .ld-hero--portal .ld-hero-sub { margin-top: 9px; font-size: 14.5px; line-height: 1.45; }
-  .ld-searchbar { margin-top: 14px; padding: 5px 5px 5px 16px; }
-  .ld-hero-ctas { margin-top: 11px; }
-  .ld-hero-trust { margin-top: 13px; gap: 6px 16px; font-size: 13px; }
-  .ld-hero-tagline { margin-top: 7px; }
+.ld-hero-content { width: 100%; }
+.ld-hero-eyebrow {
+  font-size: 14px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--flame); margin-bottom: 12px;
 }
-/* Live-status badge */
-.ld-hero-badge {
-  display: inline-flex; align-items: center; gap: 9px; margin-bottom: 22px;
-  padding: 7px 16px; border-radius: 999px; font-size: 13px; font-weight: 600;
-  background: rgba(255, 255, 255, .12); border: 1px solid rgba(255, 255, 255, .22);
-  backdrop-filter: blur(8px); color: rgba(255, 255, 255, .95);
+.ld-hero-title {
+  font-size: clamp(2.4rem, 5.5vw, 3.75rem); font-weight: 700; line-height: 1.1;
+  letter-spacing: -.03em; margin-bottom: 20px; max-width: 14ch; color: #fff;
 }
-.ld-hero-badge i { width: 8px; height: 8px; border-radius: 50%; background: #34D399; flex-shrink: 0; }
-.ld-hero--portal h1 { font-size: clamp(32px, 5vw, 56px); font-weight: 800; letter-spacing: -1.4px; line-height: 1.08; }
-.ld-hero-accent { color: #FF9E4A; display: block; }
-.ld-hero--portal .ld-hero-sub { color: rgba(226, 238, 252, .93); margin: 18px auto 0; max-width: 40ch; font-size: clamp(15px, 1.7vw, 19px); }
+.ld-hero-accent { color: var(--flame); }
+.ld-hero-sub {
+  font-size: 1.125rem; line-height: 1.55; color: rgba(255, 255, 255, .88);
+  max-width: 40ch; margin-bottom: 28px;
+}
+.ld-hero-benefits { display: flex; flex-wrap: wrap; gap: 12px 20px; margin-bottom: 32px; }
+.ld-hero-benefits li {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 500; color: rgba(255, 255, 255, .95);
+}
+.ld-check { width: 18px; height: 18px; color: #4ade80; flex-shrink: 0; }
+.ld-hero-ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 28px; }
+.ld-hero .ld-btn--navy { background: rgba(12, 30, 58, .85); border-color: rgba(255, 255, 255, .3); }
+.ld-hero .ld-btn--navy:hover { background: rgba(12, 30, 58, 1); border-color: rgba(255, 255, 255, .55); }
+
+.ld-zipcheck { max-width: 440px; }
 .ld-searchbar {
-  display: flex; align-items: center; gap: 8px; max-width: 620px; margin: 30px auto 0;
-  background: #fff; border-radius: 18px; padding: 6px 6px 6px 22px;
-  box-shadow: 0 14px 40px rgba(4, 16, 32, .42);
-  transition: transform .28s cubic-bezier(.34, 1.4, .64, 1), box-shadow .28s ease;
-}
-/* ZIP focus: the whole pill lifts and takes a warm ring. */
-.ld-searchbar:focus-within {
-  transform: scale(1.025);
-  box-shadow: 0 18px 48px rgba(4, 16, 32, .5), 0 0 0 4px rgba(255, 158, 74, .42);
+  display: flex; align-items: center; gap: 4px;
+  background: #fff; border-radius: 999px; padding: 4px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .2);
 }
 /* Input + its clear button as one unit, so the × can never break onto
    a row of its own when the pill stacks on a phone. */
 .ld-zipwrap { position: relative; display: flex; align-items: center; flex: 1; min-width: 0; }
 .ld-searchbar input {
   flex: 1; min-width: 0; border: none; outline: none; background: transparent;
-  font: 600 17px var(--sans); color: var(--ld-ink); letter-spacing: .5px;
-  padding-right: 32px;
+  font: 500 15px/1.4 var(--sans); color: var(--slate-700);
+  padding: 12px 34px 12px 20px;
 }
-.ld-searchbar input::placeholder { color: #7b8b9c; }
-.ld-searchbar .ld-btn { flex-shrink: 0; border-radius: 13px; }
-.ld-hero-ctas { display: flex; justify-content: center; margin-top: 22px; }
-/* Hero primary CTA — oversized, lifts on hover. */
-.ld-btn--hero {
-  font-size: 17px; padding: 17px 38px; border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(230, 81, 0, .45);
-  transition: transform .22s cubic-bezier(.34, 1.4, .64, 1), box-shadow .22s ease, background .18s ease;
-}
-.ld-btn--hero:hover { transform: translateY(-3px); box-shadow: 0 18px 42px rgba(230, 81, 0, .62); }
-/* Trust row — emerald checks under the fold line. */
-.ld-hero-trust {
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 26px;
-  margin-top: 30px; font-size: 14px; color: rgba(219, 233, 250, .92);
-}
-.ld-hero-trust span { display: inline-flex; align-items: center; gap: 7px; }
-.ld-hero-trust svg { color: #34D399; flex-shrink: 0; }
-.ld-hero-tagline {
-  margin-top: 20px; font-size: 11.5px; font-weight: 700; letter-spacing: .8px;
-  text-transform: uppercase; color: rgba(255, 255, 255, .62);
-}
-.ld-hero--portal .ld-hero-secondary { color: rgba(255, 255, 255, .95); margin-top: 14px; }
-.ld-hero--portal .ld-hero-secondary a { color: #fff; text-decoration: underline; font-weight: 700; }
-
-/* ZIP coverage answer — a slim tinted label under the search pill. The
-   hero's single CTA never moves, so this just reports the verdict. */
-.ld-zipres {
-  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-  max-width: 620px; margin: 14px auto 0; padding: 10px 20px;
-  border-radius: 13px; font-size: 15px; font-weight: 600; line-height: 1.4;
-  color: #fff; text-align: left;
-}
-.ld-zipres svg { flex-shrink: 0; }
-.ld-zipres--yes { background: rgba(52, 211, 153, .17); border: 1px solid rgba(52, 211, 153, .6); }
-.ld-zipres--yes svg { color: #6EE7B7; }
-.ld-zipres--no { background: rgba(245, 158, 11, .17); border: 1px solid rgba(245, 158, 11, .62); }
-.ld-zipres--no svg { color: #FCD34D; }
-.ld-zipres a { color: #fff; font-weight: 800; text-decoration: underline; }
-@media (prefers-reduced-motion: no-preference) {
-  .ld-zipres { animation: ld-pop .4s cubic-bezier(.2, 1.5, .5, 1) backwards; }
-  @keyframes ld-pop { from { opacity: 0; transform: translateY(10px) scale(.96); } }
-}
-@media (max-width: 560px) { .ld-zipres { font-size: 14px; padding: 10px 15px; } }
-
-/* Clear (reset) the typed ZIP — pinned inside the field's right edge. */
+.ld-searchbar input::placeholder { color: var(--slate-400); }
 .ld-zip-clear {
   position: absolute; right: 0; top: 50%; transform: translateY(-50%);
   width: 30px; height: 30px; border: none; border-radius: 50%;
-  background: transparent; color: #8496a8; display: grid; place-items: center;
-  cursor: pointer; padding: 0; transition: background .16s ease, color .16s ease;
+  background: transparent; color: var(--slate-400); display: grid; place-items: center;
+  cursor: pointer; padding: 0; transition: background .16s, color .16s;
 }
-.ld-zip-clear:hover { background: #eef2f7; color: var(--ld-ink); }
-/* Bottom fade into the page surface. */
-.ld-hero-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 110px; z-index: 2; pointer-events: none; background: linear-gradient(to top, #f4f7fb, rgba(244, 247, 251, 0)); }
-
-/* Entrance cascade — mirrors the spec's stagger (badge → h1 → sub → form → trust). */
-@media (prefers-reduced-motion: no-preference) {
-  /* `backwards` (not `forwards`): the from-state applies during the delay,
-     but once the animation ends the element goes back to its OWN styles —
-     so an element that rises can still own a transform later (the ZIP
-     pill's focus scale). `forwards` would pin transform:none forever. */
-  .ld-rise { animation: ld-rise .68s cubic-bezier(.22, 1, .36, 1) backwards; }
-  .ld-rise--1 { animation-delay: .04s; }
-  .ld-rise--2 { animation-delay: .12s; }
-  .ld-rise--3 { animation-delay: .21s; }
-  .ld-rise--4 { animation-delay: .3s; }
-  .ld-rise--5 { animation-delay: .46s; }
-  @keyframes ld-rise { from { opacity: 0; transform: translate3d(0, 26px, 0); } to { opacity: 1; transform: none; } }
-  .ld-hero-badge i { animation: ld-live 2s ease-in-out infinite; }
-  @keyframes ld-live {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, .7); opacity: 1; }
-    50% { box-shadow: 0 0 0 6px rgba(52, 211, 153, 0); opacity: .65; }
-  }
+.ld-zip-clear:hover { background: var(--slate-100); color: var(--navy); }
+.ld-zipresult {
+  margin-top: 12px; font-size: 14px; font-weight: 500;
+  padding: 10px 16px; border-radius: 8px;
+  background: rgba(255, 255, 255, .12); backdrop-filter: blur(8px);
 }
+.ld-zipresult--yes { color: #4ade80; }
+.ld-zipresult--no { color: #fed7aa; }
+.ld-zipresult a { color: #fff; font-weight: 700; text-decoration: underline; }
 
-/* Mobile scroll-collapse: once the shopper scrolls, the hero shrinks to
-   headline + ZIP bar (class set by Hero's scroll listener, phones only). */
-.ld-hero--portal .ld-hero-badge,
-.ld-hero--portal .ld-hero-sub,
-.ld-hero--portal .ld-hero-ctas,
-.ld-hero--portal .ld-hero-trust,
-.ld-hero--portal .ld-hero-tagline {
-  overflow: hidden; max-height: 220px;
-  transition: max-height .25s ease, opacity .25s ease, margin .25s ease;
+.ld-hero-map { display: none; }
+.ld-hubcard {
+  background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: var(--radius-lg); padding: 12px; backdrop-filter: blur(12px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .25);
 }
-.ld-hero--collapsed .ld-hero-badge,
-.ld-hero--collapsed .ld-hero-sub,
-.ld-hero--collapsed .ld-hero-ctas,
-.ld-hero--collapsed .ld-hero-trust,
-.ld-hero--collapsed .ld-hero-tagline { max-height: 0; opacity: 0; margin: 0; }
-.ld-hero--collapsed { min-height: 0; }
-.ld-hero--collapsed .ld-hero-bglayer { opacity: 0; }
-.ld-hero--collapsed .ld-hero-fade { opacity: 0; }
-.ld-hero--portal .ld-hero-inner { transition: padding .25s ease; }
-.ld-hero--collapsed .ld-hero-inner { padding: 16px 20px 18px; }
-.ld-hero--portal h1 { transition: font-size .25s ease; }
-.ld-hero--collapsed h1 { font-size: 20px; }
-.ld-hero--collapsed .ld-hero-accent { display: inline; }
-.ld-hero--collapsed .ld-searchbar { margin-top: 12px; }
-
-/* ── How it works — interactive step cards ── */
-.ld-hiw-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; margin-top: 34px; }
-.ld-hiw-card {
-  position: relative; display: block; overflow: hidden; text-decoration: none;
-  background: #fff; border: 1px solid #e2e8f0; border-radius: 18px; padding: 24px 22px 22px;
-  box-shadow: 0 1px 3px rgba(15, 33, 58, .06);
-  transition: transform .3s cubic-bezier(.34, 1.3, .64, 1), box-shadow .3s ease, border-color .3s ease;
+.ld-hubcard-label {
+  font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  color: rgba(255, 255, 255, .55); margin-bottom: 8px; padding-left: 2px;
 }
-.ld-hiw-card:hover { transform: translateY(-10px); box-shadow: 0 22px 44px rgba(15, 33, 58, .16); border-color: #93B4E4; }
-.ld-hiw-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
-.ld-hiw-num { font-size: 30px; font-weight: 800; color: #e2e8f0; letter-spacing: -1px; transition: color .3s ease; }
-.ld-hiw-card:hover .ld-hiw-num { color: #BFD6F5; }
-.ld-hiw-icon {
-  width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; flex-shrink: 0;
-  background: #EAF2FD; color: var(--ld-brand); transition: background .3s ease, color .3s ease, transform .3s ease;
+.ld-hubcard-img { width: 100%; height: auto; display: block; border-radius: 8px; }
+
+@media (min-width: 960px) {
+  .ld-hero-layout { grid-template-columns: 1fr minmax(320px, 420px); gap: 40px; }
+  .ld-hero-map { display: block; }
 }
-.ld-hiw-card:hover .ld-hiw-icon { background: var(--ld-brand); color: #fff; transform: scale(1.06); }
-.ld-hiw-card h3 { font-size: 17px; font-weight: 700; color: var(--ld-ink); margin: 0 0 8px; transition: color .3s ease; }
-.ld-hiw-card:hover h3 { color: #10467F; }
-.ld-hiw-card p { font-size: 13.5px; line-height: 1.6; color: #56657a; margin: 0 0 18px; }
-.ld-hiw-go { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 700; color: var(--ld-brand); }
-.ld-hiw-go svg { transition: transform .3s cubic-bezier(.34, 1.3, .64, 1); }
-.ld-hiw-card:hover .ld-hiw-go svg { transform: translateX(6px); }
-/* Steel accent sweeps in along the bottom edge on hover. */
-.ld-hiw-accent {
-  position: absolute; left: 22px; right: 22px; bottom: 0; height: 3px; border-radius: 3px;
-  background: linear-gradient(90deg, var(--ld-brand), var(--ld-accent));
-  transform: scaleX(0); transform-origin: left; transition: transform .34s cubic-bezier(.22, 1, .36, 1);
-}
-.ld-hiw-card:hover .ld-hiw-accent { transform: scaleX(1); }
-/* Scroll-triggered cascade (IntersectionObserver adds .is-in). */
-.ld-hiw-card { opacity: 1; }
-@media (prefers-reduced-motion: no-preference) {
-  .ld-hiw-reveal .ld-hiw-card { opacity: 0; transform: translateY(30px) scale(.96); }
-  .ld-hiw-reveal.is-in .ld-hiw-card {
-    opacity: 1; transform: none;
-    transition: opacity .5s ease, transform .62s cubic-bezier(.24, 1.4, .5, 1), box-shadow .3s ease, border-color .3s ease;
-  }
-  .ld-hiw-reveal.is-in .ld-hiw-card:nth-child(1) { transition-delay: .04s; }
-  .ld-hiw-reveal.is-in .ld-hiw-card:nth-child(2) { transition-delay: .17s; }
-  .ld-hiw-reveal.is-in .ld-hiw-card:nth-child(3) { transition-delay: .3s; }
-  .ld-hiw-reveal.is-in .ld-hiw-card:nth-child(4) { transition-delay: .43s; }
-  /* Restate the hover lift at reveal specificity — the settled-state rule
-     above sets transform:none and would otherwise win over :hover. */
-  .ld-hiw-reveal.is-in .ld-hiw-card:hover { transform: translateY(-10px); transition-delay: 0s; }
-}
-@media (max-width: 980px) { .ld-hiw-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px) { .ld-hiw-grid { grid-template-columns: 1fr; gap: 14px; } }
-
-.ld-hero-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 40px; align-items: center; padding: 44px 0 40px; }
-.ld-hero h1 { font-size: clamp(28px, 4vw, 42px); font-weight: 800; letter-spacing: -0.8px; }
-.ld-hero-sub { font-size: 17px; color: #3d5166; margin-top: 12px; max-width: 54ch; }
-.ld-zip-form { display: flex; gap: 10px; margin-top: 22px; flex-wrap: wrap; }
-.ld-zip-input {
-  flex: 0 1 190px; padding: 13px 16px; font: 600 16px var(--sans);
-  border: 1.5px solid #c8d1dc; border-radius: 999px; outline: none; min-width: 150px;
-}
-.ld-zip-input:focus { border-color: var(--ld-brand); box-shadow: 0 0 0 3px rgba(43, 127, 212, .18); }
-.ld-hero-secondary { margin-top: 14px; font-size: 14px; }
-.ld-hero-secondary a { font-weight: 700; color: var(--ld-brand); }
-.ld-hero-photo { border-radius: 16px; overflow: hidden; box-shadow: 0 12px 40px rgba(19, 41, 61, .18); aspect-ratio: 4 / 3; }
-.ld-hero-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.ld-hero-points { display: flex; gap: 18px; margin-top: 20px; flex-wrap: wrap; font-size: 13px; font-weight: 600; color: #33475c; }
-.ld-hero-points span::before { content: '✓ '; color: var(--ld-brand); font-weight: 800; }
-
-/* ── Section scaffolding ── */
-.ld-section { padding: 46px 0; }
-.ld-section--tint { background: #f6f8fb; }
-.ld-kicker { font-size: 12px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; color: var(--ld-brand); }
-.ld-h2 { font-size: clamp(22px, 3vw, 30px); font-weight: 800; letter-spacing: -0.5px; margin-top: 6px; }
-.ld-section-sub { color: #4a5d70; margin-top: 8px; max-width: 62ch; }
-
-/* ── Inventory grid ── */
-.ld-inv-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.ld-inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-top: 20px; }
-.ld-inv-card { border: 1px solid #e2e7ed; border-radius: 14px; overflow: hidden; background: #fff; display: flex; flex-direction: column; box-shadow: 0 1px 4px rgba(19,41,61,.05); }
-.ld-inv-photo { aspect-ratio: 16 / 9; background: linear-gradient(135deg, #cbd5e8, #a8bfdf); position: relative; }
-.ld-inv-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.ld-inv-grade { position: absolute; top: 8px; right: 8px; color: #fff; font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 5px; }
-.ld-inv-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
-.ld-inv-title { font-size: 15px; font-weight: 800; }
-.ld-inv-meta { font-size: 12px; color: #5b6b7c; }
-.ld-inv-price { font-size: 21px; font-weight: 800; font-family: var(--mono); letter-spacing: -0.3px; margin-top: 6px; }
-.ld-inv-price small { font-size: 12px; color: #5b6b7c; font-weight: 600; font-family: var(--sans); }
-.ld-inv-delivered { font-size: 12px; font-weight: 700; color: #1B7A5A; }
-.ld-inv-cta { margin-top: 10px; }
-.ld-spec-list { font-size: 12px; color: #5b6b7c; margin: 4px 0 0; padding: 0; list-style: none; }
-.ld-spec-list li { padding: 1px 0; }
-
-/* ── How it works ── */
-.ld-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 24px; counter-reset: step; }
-.ld-step { background: #fff; border: 1px solid #e2e7ed; border-radius: 14px; padding: 18px; }
-.ld-step-num { width: 32px; height: 32px; border-radius: 50%; background: var(--ld-brand); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; margin-bottom: 10px; }
-.ld-step b { font-size: 15px; display: block; margin-bottom: 4px; }
-.ld-step p { font-size: 13px; color: #4a5d70; }
-
-/* ── Trust band ── */
-.ld-trust-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 24px; }
-.ld-trust-card { border-left: 3px solid var(--ld-accent); background: #fff; border-radius: 0 12px 12px 0; padding: 16px 18px; box-shadow: 0 1px 4px rgba(19,41,61,.06); }
-.ld-trust-card b { display: block; font-size: 15px; margin-bottom: 4px; }
-.ld-trust-card p { font-size: 13px; color: #4a5d70; }
-.ld-quotes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 22px; }
-.ld-quote { background: #fff; border: 1px solid #e2e7ed; border-radius: 14px; padding: 18px; font-size: 14px; }
-.ld-quote footer { margin-top: 10px; font-size: 12px; color: #5b6b7c; font-weight: 600; }
-
-/* ── Teasers ── */
-.ld-teasers { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-.ld-teaser { border: 1px solid #e2e7ed; border-radius: 16px; padding: 26px; background: linear-gradient(150deg, #fff, #f2f7fc); }
-.ld-teaser h3 { font-size: 20px; font-weight: 800; }
-.ld-teaser p { font-size: 14px; color: #4a5d70; margin: 10px 0 16px; }
-.ld-teaser ul { margin: 0 0 16px; padding-left: 18px; font-size: 13px; color: #4a5d70; }
-
-/* ── FAQ ── */
-.ld-faq { margin-top: 20px; max-width: 840px; }
-.ld-faq details { border-bottom: 1px solid #e2e7ed; padding: 4px 0; }
-.ld-faq summary { cursor: pointer; font-size: 16px; font-weight: 700; padding: 12px 0; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
-.ld-faq summary::-webkit-details-marker { display: none; }
-.ld-faq summary::after { content: '+'; color: var(--ld-brand); font-weight: 800; font-size: 18px; }
-.ld-faq details[open] summary::after { content: '–'; }
-.ld-faq p { font-size: 14px; color: #3d5166; padding: 0 0 16px; max-width: 72ch; }
-
-/* ── Email capture ── */
-.ld-capture { background: var(--ld-ink); color: #fff; border-radius: 18px; padding: 30px; display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
-.ld-capture h3 { font-size: 20px; font-weight: 800; }
-.ld-capture p { font-size: 13px; opacity: .8; margin-top: 4px; }
-.ld-capture form { display: flex; gap: 10px; flex-wrap: wrap; }
-.ld-capture input { padding: 12px 16px; border-radius: 999px; border: none; font: 600 14px var(--sans); min-width: 240px; }
-
-/* ── Footer ── */
-.ld-footer { background: #0e1f30; color: #c3d0dd; padding: 44px 0 90px; font-size: 13px; }
-.ld-footer a { color: #c3d0dd; text-decoration: none; }
-.ld-footer a:hover { color: #fff; }
-.ld-footer-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 28px; }
-.ld-footer h4 { color: #fff; font-size: 13px; letter-spacing: 1px; text-transform: uppercase; margin: 0 0 10px; }
-.ld-footer ul { list-style: none; margin: 0; padding: 0; }
-.ld-footer li { padding: 3px 0; }
-.ld-footer-bottom { border-top: 1px solid #24374a; margin-top: 30px; padding-top: 18px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; opacity: .75; }
-
-/* ── Sticky mobile call bar ── */
-.ld-callbar { display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 60; background: #fff; border-top: 1px solid #e2e7ee; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); gap: 8px; }
-.ld-callbar .ld-btn { flex: 1; padding: 12px 8px; font-size: 13px; }
-
-/* ── Lead form ── */
-.ld-lead-form { display: grid; gap: 10px; margin-top: 14px; }
-.ld-lead-form input, .ld-lead-form select {
-  padding: 11px 14px; border: 1.5px solid #c8d1dc; border-radius: 10px; font: 600 14px var(--sans); width: 100%;
-}
-.ld-lead-ok { background: #E6F4EE; color: #1B7A5A; border-radius: 10px; padding: 12px 14px; font-size: 14px; font-weight: 700; }
-.ld-lead-err { background: #FDECEA; color: #B3261E; border-radius: 10px; padding: 10px 14px; font-size: 13px; }
-
-/* ── Responsive ── */
-@media (max-width: 940px) {
-  .ld-nav-links { display: none; }
-  .ld-nav-burger { display: block; }
-  .ld-hero-grid { grid-template-columns: 1fr; padding: 30px 0; }
-  .ld-hero-photo { order: -1; aspect-ratio: 16 / 9; }
-  .ld-teasers { grid-template-columns: 1fr; }
-  .ld-footer-grid { grid-template-columns: 1fr 1fr; }
-  .ld-callbar { display: flex; }
-  .ld-nav-phone { display: none; }
-}
-/* Small phones: the Contact pill (still in the burger) yields to
-   page-specific controls (cart/profile on the shop). The company name
-   always stays visible — it just shrinks to fit. */
-@media (max-width: 600px) { .ld-nav-contact { display: none; } }
-@media (max-width: 480px) {
-  .ld-logo { font-size: 15px; gap: 7px; min-width: 0; }
-  .ld-logo-word { overflow: hidden; text-overflow: ellipsis; }
-  .ld-logo-mark { width: 32px; height: 32px; }
-}
-@media (max-width: 360px) { .ld-logo { font-size: 13.5px; } }
-@media (max-width: 520px) {
-  .ld-footer-grid { grid-template-columns: 1fr; }
-  .ld-zip-form .ld-btn { flex: 1; }
-}
-
-/* Portal hero: the one-line search pill stacks on small phones. */
 @media (max-width: 560px) {
+  .ld-hero { min-height: 0; }
+  .ld-hero-layout { padding: 36px 20px 44px; }
+  .ld-hero-sub { margin-bottom: 22px; }
+  .ld-hero-benefits { gap: 8px 16px; margin-bottom: 24px; }
   .ld-searchbar { flex-direction: column; gap: 10px; border-radius: 22px; padding: 12px; }
   .ld-zipwrap { width: 100%; }
   /* Symmetric padding so the centred ZIP stays centred with the × in place. */
   .ld-searchbar input { width: 100%; text-align: center; padding: 8px 34px; }
   .ld-searchbar .ld-btn { width: 100%; }
+}
+
+/* ── Shared section furniture ── */
+.ld-section-head { text-align: center; max-width: 620px; margin: 0 auto 44px; }
+.ld-kicker {
+  font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ld-accent); margin-bottom: 8px;
+}
+.ld-h2 {
+  font-size: clamp(1.75rem, 3.5vw, 2.25rem); font-weight: 700;
+  letter-spacing: -.02em; color: var(--navy); margin-bottom: 12px;
+}
+.ld-section-sub { font-size: 1.05rem; color: var(--slate-600); line-height: 1.55; }
+
+/* ── Lifetime warranty bar ── */
+.ld-warranty { background: var(--slate-50); border-bottom: 1px solid var(--slate-200); padding: 16px 0; }
+.ld-warranty-row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.ld-warranty-icon { color: var(--success); flex-shrink: 0; }
+.ld-warranty-row strong { display: block; font-size: 15px; color: var(--navy); }
+.ld-warranty-row span { font-size: 14px; color: var(--slate-600); }
+.ld-warranty-row .ld-btn { margin-left: auto; }
+
+/* ── Partner CTA bar ── */
+.ld-partnercta { background: var(--navy); border-bottom: 1px solid rgba(255, 255, 255, .08); padding: 28px 0; }
+.ld-partnercta-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.ld-partnercta-card {
+  display: flex; flex-direction: column; gap: 4px; padding: 20px 22px;
+  border-radius: var(--radius); border: 1px solid rgba(255, 255, 255, .12);
+  background: rgba(255, 255, 255, .06); color: #fff;
+  transition: background .15s, border-color .15s, transform .1s;
+}
+.ld-partnercta-card:hover {
+  background: rgba(255, 255, 255, .1); border-color: rgba(255, 255, 255, .25);
+  transform: translateY(-1px);
+}
+.ld-partnercta-eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: rgba(255, 255, 255, .5);
+}
+.ld-partnercta-card strong { font-size: 1.05rem; font-weight: 700; line-height: 1.3; }
+.ld-partnercta-card--reseller strong { color: var(--flame); }
+.ld-partnercta-card--driver strong { color: #6ee7b7; }
+.ld-partnercta-hint { font-size: 13px; color: rgba(255, 255, 255, .65); margin-top: 2px; }
+@media (min-width: 700px) { .ld-partnercta-grid { grid-template-columns: 1fr 1fr; gap: 16px; } }
+
+/* ── Partners strip ── */
+.ld-partners { padding: 72px 0; background: #fff; border-bottom: 1px solid var(--slate-200); }
+.ld-partners-grid { display: grid; grid-template-columns: 1fr; gap: 24px; }
+.ld-partner-card {
+  background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: var(--radius-lg);
+  padding: 32px 28px; display: flex; flex-direction: column; gap: 12px;
+  transition: box-shadow .2s, border-color .2s;
+}
+.ld-partner-card:hover { box-shadow: var(--shadow); border-color: var(--slate-300); }
+.ld-partner-icon {
+  width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;
+  background: var(--navy); color: #fff; border-radius: 12px; margin-bottom: 4px;
+}
+.ld-partner-card h3 { font-size: 1.25rem; font-weight: 700; }
+.ld-partner-card > p { font-size: 14px; color: var(--slate-600); line-height: 1.55; }
+.ld-partner-points { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 12px; }
+.ld-partner-points li { position: relative; padding-left: 20px; font-size: 14px; color: var(--slate-700); }
+.ld-partner-points li::before {
+  content: ""; position: absolute; left: 0; top: 8px;
+  width: 8px; height: 8px; border-radius: 50%; background: var(--ld-accent);
+}
+.ld-partner-card .ld-btn { align-self: flex-start; margin-top: auto; }
+@media (min-width: 768px) { .ld-partners-grid { grid-template-columns: 1fr 1fr; gap: 28px; } }
+
+/* ── How it works ── */
+.ld-how { padding: 80px 0; background: var(--slate-50); }
+.ld-steps-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+.ld-step-card {
+  background: #fff; border: 1px solid var(--slate-200); border-radius: var(--radius-lg);
+  padding: 28px 24px; transition: box-shadow .2s, border-color .2s;
+}
+.ld-step-card:hover { box-shadow: var(--shadow); border-color: var(--slate-300); }
+.ld-step-num { font-family: var(--mono, ui-monospace, monospace); font-size: 13px; font-weight: 600; color: var(--ld-accent); margin-bottom: 12px; }
+.ld-step-card h3 { font-size: 1.125rem; font-weight: 600; margin-bottom: 8px; }
+.ld-step-card p { font-size: 14px; color: var(--slate-600); line-height: 1.5; margin-bottom: 16px; }
+.ld-step-link { font-size: 14px; font-weight: 600; color: var(--ld-brand); }
+.ld-step-link:hover { text-decoration: underline; }
+@media (min-width: 640px) { .ld-steps-grid { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 960px) { .ld-steps-grid { grid-template-columns: repeat(4, 1fr); } }
+
+/* ── Why us ── */
+.ld-why { padding: 80px 0; background: #fff; }
+.ld-why-grid { display: grid; grid-template-columns: 1fr; gap: 24px; margin-bottom: 44px; }
+.ld-why-card {
+  background: #fff; border: 1px solid var(--slate-100); border-radius: var(--radius-lg);
+  padding: 28px 24px; box-shadow: var(--shadow);
+}
+.ld-why-icon {
+  width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;
+  background: #fff4ed; color: var(--ld-accent); border-radius: 12px; margin-bottom: 16px;
+}
+.ld-why-card h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 8px; }
+.ld-why-card p { font-size: 14px; color: var(--slate-600); line-height: 1.55; }
+@media (min-width: 640px) { .ld-why-grid { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 960px) { .ld-why-grid { grid-template-columns: repeat(4, 1fr); } }
+
+.ld-quotes { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 24px; }
+.ld-quote {
+  margin: 0; background: #fff; border-left: 3px solid var(--ld-accent);
+  padding: 20px 20px 20px 24px; border-radius: 0 var(--radius) var(--radius) 0;
+  box-shadow: var(--shadow);
+}
+.ld-quote p { font-size: 15px; font-style: italic; color: var(--slate-700); line-height: 1.5; }
+.ld-quote footer { margin-top: 8px; font-size: 13px; font-weight: 600; color: var(--slate-500); font-style: normal; }
+.ld-reviews-link { text-align: center; }
+.ld-reviews-link a { font-weight: 600; color: var(--ld-brand); font-size: 15px; }
+.ld-reviews-link a:hover { text-decoration: underline; }
+@media (min-width: 768px) { .ld-quotes { grid-template-columns: repeat(3, 1fr); } }
+
+/* ── Rentals CTA ── */
+.ld-rentals { padding: 64px 0; background: #fff; }
+.ld-rentals-card {
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-mid) 100%);
+  border-radius: var(--radius-lg); padding: 48px 40px; color: #fff; box-shadow: var(--shadow-lg);
+}
+.ld-rentals-card .ld-kicker { color: var(--flame); }
+.ld-rentals-card .ld-h2 { color: #fff; margin: 8px 0 12px; }
+.ld-rentals-card > p { color: rgba(255, 255, 255, .85); max-width: 48ch; margin-bottom: 24px; }
+.ld-rentals-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.ld-rentals-card .ld-btn--ghost { color: #fff; border-color: rgba(255, 255, 255, .4); }
+.ld-rentals-card .ld-btn--ghost:hover { background: rgba(255, 255, 255, .1); border-color: rgba(255, 255, 255, .7); }
+.ld-rentals-card .ld-lead-form { max-width: 420px; }
+@media (max-width: 560px) { .ld-rentals-card { padding: 32px 22px; } }
+
+/* ── Lead capture form (rentals, driver applications) ── */
+.ld-lead-form { display: grid; gap: 10px; margin-top: 14px; }
+.ld-lead-form input {
+  padding: 12px 14px; border: 1px solid var(--slate-300); border-radius: 10px;
+  font: 400 15px/1.3 var(--sans); outline: none; background: #fff; color: var(--slate-700);
+}
+.ld-lead-form input:focus { border-color: var(--ld-brand); box-shadow: 0 0 0 3px rgba(0, 87, 184, .15); }
+.ld-lead-ok { background: #e6f4ee; color: #1b7a5a; border-radius: 10px; padding: 12px 14px; font-size: 14px; font-weight: 700; }
+.ld-lead-err { background: #fdecea; color: #b3261e; border-radius: 10px; padding: 10px 14px; font-size: 13px; }
+
+/* ── FAQ ── */
+.ld-faq { padding: 80px 0; background: var(--slate-50); }
+.ld-faq-list { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.ld-faq-item { background: #fff; border: 1px solid var(--slate-200); border-radius: var(--radius); overflow: hidden; }
+.ld-faq-item summary {
+  padding: 18px 20px; font-weight: 600; font-size: 15px; color: var(--navy);
+  cursor: pointer; list-style: none;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.ld-faq-item summary::-webkit-details-marker { display: none; }
+.ld-faq-item summary::after { content: "+"; font-size: 20px; font-weight: 400; color: var(--slate-400); flex-shrink: 0; }
+.ld-faq-item[open] summary::after { content: "−"; }
+.ld-faq-answer { padding: 0 20px 20px; font-size: 14px; color: var(--slate-600); line-height: 1.6; }
+
+/* ── Newsletter ── */
+.ld-newsletter { padding: 64px 0; background: #fff; }
+.ld-newsletter-card {
+  background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: var(--radius-lg);
+  padding: 40px; display: flex; flex-direction: column; gap: 24px; align-items: flex-start;
+}
+.ld-newsletter-card h2 { font-size: 1.35rem; font-weight: 700; margin-bottom: 6px; }
+.ld-newsletter-card p { font-size: 14px; color: var(--slate-600); }
+.ld-newsletter-form { display: flex; gap: 8px; width: 100%; max-width: 400px; }
+.ld-newsletter-form input {
+  flex: 1; min-width: 0; padding: 12px 16px; border: 1px solid var(--slate-300);
+  border-radius: 999px; font: 400 15px/1.3 var(--sans); outline: none;
+}
+.ld-newsletter-form input:focus { border-color: var(--ld-brand); box-shadow: 0 0 0 3px rgba(0, 87, 184, .15); }
+.ld-newsletter-ok { font-weight: 700; color: var(--success); }
+@media (min-width: 768px) {
+  .ld-newsletter-card { flex-direction: row; align-items: center; justify-content: space-between; }
+}
+@media (max-width: 560px) { .ld-newsletter-card { padding: 26px 20px; } }
+
+/* ── Drive for us ── */
+.ld-drive { padding: 48px 0 80px; background: #fff; }
+.ld-drive-card { text-align: center; padding: 40px 24px; border: 1px dashed var(--slate-300); border-radius: var(--radius-lg); }
+.ld-drive-card h2 { font-size: 1.35rem; font-weight: 700; margin-bottom: 8px; }
+.ld-drive-card > p { font-size: 15px; color: var(--slate-600); max-width: 48ch; margin: 0 auto 20px; }
+.ld-drive-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.ld-drive-card .ld-lead-form { max-width: 420px; margin: 0 auto; text-align: left; }
+
+/* ── Footer ── */
+.ld-footer { background: var(--navy); color: rgba(255, 255, 255, .8); padding: 64px 0 32px; }
+.ld-footer a { color: rgba(255, 255, 255, .85); }
+.ld-footer a:hover { color: #fff; text-decoration: underline; }
+.ld-footer-grid { display: grid; grid-template-columns: 1fr; gap: 36px; margin-bottom: 44px; }
+.ld-footer-brand img { width: 250px; max-width: 100%; height: auto; margin-bottom: 14px; }
+.ld-footer-brand p { font-size: 14px; line-height: 1.55; margin-bottom: 10px; max-width: 34ch; }
+.ld-footer-phone a { font-weight: 700; color: #fff; }
+.ld-footer h4 {
+  font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  color: rgba(255, 255, 255, .5); margin: 0 0 16px;
+}
+.ld-footer ul li { margin-bottom: 10px; font-size: 14px; }
+.ld-footer-bottom {
+  display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between;
+  padding-top: 24px; border-top: 1px solid rgba(255, 255, 255, .12);
+  font-size: 13px; color: rgba(255, 255, 255, .5);
+}
+@media (min-width: 700px) { .ld-footer-grid { grid-template-columns: 2fr 1fr 1fr 1fr; gap: 32px; } }
+
+/* ── Sticky mobile call bar ── */
+.ld-callbar {
+  display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 90;
+  background: #fff; border-top: 1px solid var(--slate-200); gap: 10px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, .08);
+}
+.ld-callbar .ld-btn { flex: 1; padding: 12px 8px; font-size: 14px; }
+@media (max-width: 767px) {
+  .ld-callbar { display: flex; }
+  .ld { padding-bottom: 72px; }
+}
+
+/* ── "Not built yet" toast ── */
+.ld-toast {
+  position: fixed; top: calc(var(--nav-h) + 16px); left: 50%; transform: translateX(-50%);
+  z-index: 500; display: flex; align-items: center; gap: 16px;
+  max-width: calc(100% - 32px);
+  background: var(--navy); color: #fff; padding: 14px 20px;
+  border-radius: var(--radius); box-shadow: var(--shadow-lg);
+  font-size: 14px; font-weight: 500;
+}
+.ld-toast button {
+  background: none; border: none; color: rgba(255, 255, 255, .7);
+  font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px;
+}
+.ld-toast button:hover { color: #fff; }
+@media (prefers-reduced-motion: no-preference) {
+  .ld-toast { animation: ld-toast-in .25s ease; }
+  @keyframes ld-toast-in {
+    from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+}
+
+/* ── Reseller-branded nav (ZIP resolves into a partner's territory) ── */
+.ld-logo-badge {
+  width: 40px; height: 40px; flex-shrink: 0; border-radius: 9px;
+  display: grid; place-items: center;
+}
+.ld-logo-word--reseller {
+  display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15;
+}
+.ld-logo-powered {
+  font-size: 9px; font-weight: 600; letter-spacing: .4px;
+  color: rgba(255, 255, 255, .62); white-space: nowrap;
 }
