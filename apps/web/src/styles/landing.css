@@ -253,7 +253,10 @@
 }
 @media (max-width: 560px) {
   .ld-hero { min-height: 0; }
-  .ld-hero-layout { padding: 36px 20px 44px; }
+  .ld-hero-layout { padding: 28px 20px 40px; }
+  /* At 14px the eyebrow wraps to two lines on a 412px phone and pushes the
+     headline down the screen — the one thing the mobile hero can't spare. */
+  .ld-hero-eyebrow { font-size: 11px; letter-spacing: .03em; margin-bottom: 10px; }
   .ld-hero-sub { margin-bottom: 22px; }
   .ld-hero-benefits { gap: 8px 16px; margin-bottom: 24px; }
   .ld-searchbar { flex-direction: column; gap: 10px; border-radius: 22px; padding: 12px; }
