@@ -6,6 +6,11 @@ signable agreement. Rationale and structure live here; the *tasks* live in
 
 **Status:** MOU at v0.4 (Aug 2026), non-binding. No agreement drafted.
 
+The MOU's text lives in `docs/build-aarcadian-mou.cjs` and the `.docx` is generated
+from it (`node docs/build-aarcadian-mou.cjs out.docx`, needs `npm i docx --no-save`).
+It is negotiated over weeks and regenerated each round — keeping the source in git
+means no version is one lost file away from being unrecoverable.
+
 ---
 
 ## 1. It is three agreements, not one
