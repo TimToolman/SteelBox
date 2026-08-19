@@ -3,7 +3,7 @@
 // Shared across Marketplace, Admin, and Field surfaces
 // ============================================================
 
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -202,6 +202,13 @@ interface ModalProps {
 
 export function Modal({ open, onClose, children, maxWidth = 500, noPadding = false, closeVariant = 'light', closeLabel, zIndex = 600 }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
+  // Zoomed phones: position:fixed anchors to the LAYOUT viewport, but a
+  // pinch- or auto-zoomed browser shows only the smaller VISUAL viewport —
+  // so a dialog laid out correctly still renders with its right edge (and
+  // the Close button) cropped off-screen. While zoomed, follow the visual
+  // viewport instead of inset:0. Null when not zoomed, so the common case
+  // is untouched and URL-bar resizes don't thrash layout.
+  const [vvRect, setVvRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -210,9 +217,21 @@ export function Modal({ open, onClose, children, maxWidth = 500, noPadding = fal
     }
     document.addEventListener('keydown', handleKey)
     document.body.style.overflow = 'hidden'
+    const vv = window.visualViewport
+    const track = () => {
+      if (!vv) return
+      const zoomed = vv.scale > 1.02 || vv.offsetLeft > 1 || vv.offsetTop > 1
+      setVvRect(zoomed ? { left: vv.offsetLeft, top: vv.offsetTop, width: vv.width, height: vv.height } : null)
+    }
+    track()
+    vv?.addEventListener('resize', track)
+    vv?.addEventListener('scroll', track)
     return () => {
       document.removeEventListener('keydown', handleKey)
       document.body.style.overflow = ''
+      vv?.removeEventListener('resize', track)
+      vv?.removeEventListener('scroll', track)
+      setVvRect(null)
     }
   }, [open, onClose])
 
@@ -224,7 +243,9 @@ export function Modal({ open, onClose, children, maxWidth = 500, noPadding = fal
       onClick={(e) => { if (e.target === overlayRef.current) onClose() }}
       style={{
         position: 'fixed',
-        inset: 0,
+        ...(vvRect
+          ? { left: vvRect.left, top: vvRect.top, width: vvRect.width, height: vvRect.height }
+          : { inset: 0 }),
         zIndex,
         background: 'rgba(0,0,0,0.52)',
         backdropFilter: 'blur(5px)',
