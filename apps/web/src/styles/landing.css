@@ -247,6 +247,26 @@
 }
 .ld-hubcard-img { width: 100%; height: auto; display: block; border-radius: 8px; }
 
+/* Stat badges sitting on the map's corners — the two numbers the picture is
+   arguing for, so they land before the reader parses the map. */
+.ld-hubcard { position: relative; }
+.ld-hubstat {
+  position: absolute; display: flex; flex-direction: column; gap: 1px;
+  padding: 8px 14px; border-radius: 12px;
+  background: rgba(10, 20, 36, .82); border: 1px solid rgba(255, 255, 255, .14);
+  backdrop-filter: blur(8px); box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+}
+.ld-hubstat--delivery { top: 34px; left: -14px; }
+/* Bottom-left, not bottom-right: the south-east corner of the map is where
+   Jacksonville, Tampa and Miami sit, and a badge there buries all three. */
+.ld-hubstat--hubs { bottom: 22px; left: -14px; }
+.ld-hubstat-v { font-size: 15px; font-weight: 600; color: #fff; line-height: 1.15; white-space: nowrap; }
+.ld-hubstat-v b { font-size: 21px; font-weight: 700; color: var(--flame); }
+.ld-hubstat-k {
+  font-size: 9.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+  color: rgba(255, 255, 255, .5);
+}
+
 @media (min-width: 960px) {
   .ld-hero-layout { grid-template-columns: 1fr minmax(320px, 420px); gap: 40px; }
   .ld-hero-map { display: block; }

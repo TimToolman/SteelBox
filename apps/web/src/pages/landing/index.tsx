@@ -254,9 +254,8 @@ function Hero({ tenant }: { tenant: Tenant }) {
             <span className="ld-hero-accent">Pick · Ship</span>
           </h1>
           <p className="ld-hero-sub">
-            {tenant.name} is your nationwide marketplace connecting multiple resellers
-            together to help save you time, money, and headaches when sourcing your steel
-            box containers.
+            One marketplace. Dozens of resellers. Your exact box — real photos — delivered
+            by local partners in days, not weeks.
           </p>
           <ul className="ld-hero-benefits">
             {HERO_BENEFITS.map(b => <li key={b}><Check />{b}</li>)}
@@ -304,9 +303,19 @@ function Hero({ tenant }: { tenant: Tenant }) {
           <div className="ld-hubcard">
             <p className="ld-hubcard-label">Nationwide hub network</p>
             <img
-              className="ld-hubcard-img" src={u('hub-network-map.svg')} width="1200" height="700"
+              className="ld-hubcard-img" src={u('hub-network-map.svg')} width="460" height="268"
               alt="Central hub connected to regional port hubs: Houston, New Orleans, Mobile, Tampa, Miami, Jacksonville, Savannah, Charleston, Wilmington, Atlanta and Jackson."
             />
+            {/* The two numbers the map is making an argument about, pulled out
+                of it so they read before the map does. */}
+            <div className="ld-hubstat ld-hubstat--delivery">
+              <span className="ld-hubstat-v"><b>3</b>–5 days</span>
+              <span className="ld-hubstat-k">Avg delivery</span>
+            </div>
+            <div className="ld-hubstat ld-hubstat--hubs">
+              <span className="ld-hubstat-v"><b>11</b>+</span>
+              <span className="ld-hubstat-k">Active hubs</span>
+            </div>
           </div>
         </aside>
       </div>
