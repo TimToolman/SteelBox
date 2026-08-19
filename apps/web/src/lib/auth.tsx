@@ -366,12 +366,13 @@ export function RequireRole({ roles, title, children }: {
   return (
     <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#F4F6FB', fontFamily: 'system-ui, -apple-system, sans-serif', padding: '20px' }}>
       <div style={{ width: '100%', maxWidth: '400px', boxSizing: 'border-box', background: '#fff', borderRadius: '18px', border: '1px solid #E3E5EE', boxShadow: '0 8px 30px rgba(26,28,46,.08)', padding: '30px 28px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-          <div style={{ width: '34px', height: '34px', borderRadius: '9px', background: '#0057B8', display: 'grid', placeItems: 'center' }}>
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><rect x="1" y="6" width="22" height="14" rx="2" /><line x1="6" y1="6" x2="6" y2="20" /><line x1="11" y1="6" x2="11" y2="20" /><line x1="16" y1="6" x2="16" y2="20" /></svg>
-          </div>
-          <span style={{ fontSize: '19px', fontWeight: 700 }}><span style={{ color: '#2B7FD4' }}>MVP&nbsp;</span><span style={{ color: '#E65100' }}>Container</span></span>
-        </div>
+        {/* The sign-in card is the one compact place the full lockup fits —
+            400px wide, nothing competing with it. */}
+        <img
+          src={`${import.meta.env.BASE_URL}logo-nsb.png`} alt="National SteelBox"
+          width="720" height="496"
+          style={{ width: '186px', maxWidth: '100%', height: 'auto', display: 'block', margin: '0 auto 4px' }}
+        />
         <h1 style={{ fontSize: '18px', fontWeight: 700, margin: '10px 0 2px' }}>{title}</h1>
         {user ? (
           <div>
