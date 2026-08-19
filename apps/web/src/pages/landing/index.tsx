@@ -11,6 +11,7 @@
 // ============================================================
 
 import React, { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import '../../styles/landing.css'
 import { quotes, isZipCovered, type Seller } from '../../lib/api'
 import type { Tenant } from '../../tenant'
@@ -732,11 +733,15 @@ export function CallBar({ tenant }: { tenant: Tenant }) {
 }
 
 // ── Back to top (mobile) ──────────────────────────────────
-// The mobile page is nine screens tall and the ZIP checker — the thing a
-// shopper most wants back — lives at the very top. Appears once the hero
-// is well off-screen; sits above the call bar, left of the report tab.
+// Long mobile pages across the site: the landing (raised above its call
+// bar), the marketplace (no bottom bar — sits at the edge), and the field
+// app (raised above its bottom nav). Appears once the top is well
+// off-screen. Portaled to <body> so a transformed or filtered ancestor
+// can never turn position:fixed into position:absolute; z-index stays
+// BELOW every sheet and modal (they start at 40) so an open overlay
+// always covers it.
 
-export function ScrollTopButton() {
+export function ScrollTopButton({ raised = true }: { raised?: boolean }) {
   const [shown, setShown] = useState(false)
   useEffect(() => {
     let ticking = false
@@ -757,13 +762,17 @@ export function ScrollTopButton() {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' })
   }
-  return (
-    <button className="ld-totop" type="button" onClick={toTop} aria-label="Back to top" title="Back to top">
+  const btn = (
+    <button
+      className={`ld-totop${raised ? ' ld-totop--raised' : ''}`}
+      type="button" onClick={toTop} aria-label="Back to top" title="Back to top"
+    >
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M12 19V5M5 12l7-7 7 7" />
       </svg>
     </button>
   )
+  return typeof document === 'undefined' ? btn : createPortal(btn, document.body)
 }
 
 // ── Page ──────────────────────────────────────────────────

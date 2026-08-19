@@ -8,6 +8,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useSnackbar, useAuth, useFavicon, useLive } from '../../hooks'
 import { Snackbar, ProgressRing } from '../../components/ui'
+import { ScrollTopButton } from '../landing'
 import { GradeScreen, FlowGradeCard, GradeReviewScreen } from './grade'
 import { DriverProfileScreen } from './Profile'
 import { ReportDamageSheet } from './ReportDamage'
@@ -1657,6 +1658,8 @@ export default function FieldAppPage() {
         {screens[screen]}
       </div>
       <BottomNav active={navActive} onNav={goTo} unread={unreadCount} />
+      {/* Raised above the 72px bottom nav; hides under any open sheet. */}
+      <ScrollTopButton />
       {reportDamage && activeJob && (
         <ReportDamageSheet
           container={containerList.find(c => c.id === activeJob.containerId || c.sku === activeJob.sku) ?? null}

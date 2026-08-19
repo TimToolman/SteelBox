@@ -16,7 +16,7 @@ import SupplierPortalPage from '../supplier'
 import ShipperReviewPage from '../shipper'
 import { GRADE_META } from '../../lib/specs'
 import { sellerForZip, relayQuote, type RelayQuote } from '../../lib/territory'
-import { SiteNav } from '../landing'
+import { SiteNav, ScrollTopButton } from '../landing'
 import { resolveTenant } from '../../tenant'
 import { SIZE_OPTIONS, condOf, useFavorites, type Tab, type SortKey, type CartMode, type CartItem, type CheckoutDetails } from './shared'
 import { Chip, ChipRow } from '../../components/filters'
@@ -994,6 +994,8 @@ export default function MarketplacePage() {
       />
 
       <Snackbar message={message} open={snackOpen} onClose={snackClose} />
+      {/* No bottom bar on the shop, so the button sits at the edge. */}
+      <ScrollTopButton raised={false} />
     </div>
   )
 }

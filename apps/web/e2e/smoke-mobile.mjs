@@ -148,6 +148,52 @@ await g.waitForTimeout(1500)
 ok(attachedDuring, 'the file input lives in the DOM while the camera is open (iOS GC guard)')
 ok(await g.evaluate(() => !document.querySelector('body > input[type="file"]')), 'and is cleaned up after the shot lands')
 
+// ── Back-to-top on the field app + marketplace ──
+// Same component as the landing; here we prove the two behaviours the
+// landing sweep can't: the field portal survives the app column, and
+// the shop's edge (non-raised) offset.
+// A real phone viewport (~740px tall like a Pixel with browser chrome) —
+// at 915 the Profile screen's max scroll lands under the button's 600px
+// appearance threshold and the check can't exercise it.
+const ftCtx = await browser.newContext({ viewport: { width: 412, height: 740 }, hasTouch: true, isMobile: true })
+const ft = await ftCtx.newPage()
+await ft.goto('http://localhost:4890/SteelBox/field', { waitUntil: 'load' })
+await ft.waitForTimeout(1500)
+await ft.fill('input[type="email"]', 'mike@mvpcontainer.com')
+await ft.fill('input[type="password"]', 'x')
+await ft.getByRole('button', { name: /sign in/i }).click()
+await ft.waitForTimeout(2000)
+await ft.getByText('Profile', { exact: true }).last().click()
+await ft.waitForTimeout(800)
+await ft.evaluate(() => window.scrollTo(0, 99999))
+await ft.waitForTimeout(600)
+const ftUp = await ft.locator('.ld-totop').boundingBox().catch(() => null)
+ok(!!ftUp, 'field app: back-to-top appears on a long screen (Profile)')
+if (ftUp) {
+  const win = await ft.evaluate(() => window.innerHeight)
+  ok(win - (ftUp.y + ftUp.height) > 80, `and floats above the bottom nav (${Math.round(win - ftUp.y - ftUp.height)}px up)`)
+  await ft.locator('.ld-totop').click()
+  await ft.waitForTimeout(1200)
+  ok((await ft.evaluate(() => window.scrollY)) === 0, 'tapping it returns to the top')
+}
+await ftCtx.close()
+
+const shopCtx = await browser.newContext({ viewport: { width: 412, height: 915 }, hasTouch: true, isMobile: true })
+const shop = await shopCtx.newPage()
+await shop.addInitScript(() => sessionStorage.setItem('sbx_zip_prompted', '1'))
+await shop.goto('http://localhost:4890/SteelBox/shop', { waitUntil: 'load' })
+await shop.waitForTimeout(2200)
+await shop.evaluate(() => window.scrollTo(0, 2500))
+await shop.waitForTimeout(500)
+const shUp = await shop.locator('.ld-totop').boundingBox().catch(() => null)
+ok(!!shUp, 'marketplace: back-to-top appears after scrolling')
+if (shUp) {
+  const win = await shop.evaluate(() => window.innerHeight)
+  const gap = Math.round(win - shUp.y - shUp.height)
+  ok(gap > 8 && gap < 40, `and sits at the screen edge — no phantom call-bar offset (${gap}px)`)
+}
+await shopCtx.close()
+
 console.log(`\n${pass} passed, ${fail} failed`)
 await browser.close()
 process.exit(fail ? 1 : 0)
