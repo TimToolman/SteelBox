@@ -225,33 +225,50 @@ Recurring billing, once the till works.
 
 Runs alongside the phases above, on the partner's calendar rather than ours.
 Rationale and the full term-sheet breakdown: `AARCADIAN-AGREEMENT.md`.
-MOU is at v0.3 (`SteelBox-Aarcadian-MOU-v0.3.docx`) — non-binding.
+MOU is at v0.4 (`SteelBox-Aarcadian-MOU-v0.4.docx`) — non-binding.
+Charted alongside the phases in `roadmap.html`.
 
 **Paper (blocks nothing technical, but blocks the relationship):**
 
-- [ ] Mutual NDA + IP assignment signed **before** the workflow design sessions — MOU §6
+- [ ] **Return the MOU with comments** — both teams mark up v0.4 and send back.
+      *Week 1 · 1 week · both teams.*
+- [ ] **Mutual NDA + IP assignment** signed **before** the workflow design sessions — MOU §7
       asks Aarcadian to help design the repair→estimate→shipper flow, and contributed
       design with no assignment clause is a claim waiting to happen.
-- [ ] Settle the three MOU §9 questions in one working session: the 50/50 basis
-      (recovery vs. estimate — recommendation is recovery plus a fixed inspection fee),
-      repair-yard selection and the estimate approval threshold, and whether the 45-mile
-      free radius covers gate-buys.
-- [ ] Counsel drafts the master agreement + Schedule A (supply & consignment),
-      Schedule B (damage, estimates, 50/50), Schedule C (platform licence).
+      *Weeks 1–2 · counsel, both sides.*
+- [ ] **Sign the MOU** at the working session, and settle the three §10 questions there:
+      the 50/50 basis (recovery vs. estimate — recommendation is recovery plus a fixed
+      inspection fee), repair-yard selection and the estimate approval threshold, and
+      whether the 45-mile free radius covers gate-buys. *Week 2 · one session.*
+- [ ] **Identify containers for the New Orleans reseller (MVP)** — the first unit list:
+      sizes, grades, wholesale pricing, which depot each sits at, and how many go to the
+      transfer station first. This is the deliverable that turns the MOU into inventory.
+      *Weeks 2–4 · Aarcadian + SteelBox.*
+- [ ] **Establish the contract docs** — counsel drafts the master agreement + Schedule A
+      (supply & consignment), Schedule B (damage, estimates, 50/50), Schedule C (platform
+      licence); both sides review; executed. *Weeks 3–8 · counsel-paced, chase weekly.*
+- [ ] **Repair → estimate → shipper workflow design sessions** with Aarcadian — what an
+      estimate must contain to be accepted, which damage classes are repaired vs. sold
+      as-is, which yards, what each line pays on. *Weeks 4–6 · joint, gated on the NDA.*
+- [ ] **First units staged and listed** — units at a transfer station, documented, graded
+      and live on the marketplace. *Weeks 5–6 · SteelBox.*
 
 **Build — what the agreement promises that the platform can't do yet:**
 
 - [ ] **Consignment ownership** on containers: owned vs. held-on-consignment, the
       consignor of record, and title passing at a named moment. Gated on the Postgres
-      move in P1 for the same reason payments are.
+      move in P1 for the same reason payments are. *Weeks 6–11 · with the settlement
+      ledger below, one piece of work.*
 - [ ] **Settlement ledger** — what is owed to the consignor per sold unit, when it was
       paid, and a statement either side can pull. Today the money side stops at the order.
+      *Weeks 6–11.*
 - [ ] **Damage split fields** on claims: split basis, amount recovered from the line,
       amount paid out and to whom. `estimateAmount` alone can't settle a 50/50.
+      *Weeks 10–14.*
 - [ ] **Transfer stations** as a location type holding another party's inventory —
-      depots exist, stations don't.
+      depots exist, stations don't. *Weeks 10–14.*
 - [ ] **Supplier access audit trail** — who at the supplier viewed or changed what,
-      which is what makes the Schedule C licence enforceable.
+      which is what makes the Schedule C licence enforceable. *Weeks 10–14.*
 - [x] As-is damaged listings: grade `D` with 1–5 severity, damage photos on the listing
       and a pre-filled discount ladder, kept distinct from `R` (Refurbished). The shared
       grade badge now renders `D` instead of falling back to an unlabelled grey chip —

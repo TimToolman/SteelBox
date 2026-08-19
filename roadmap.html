@@ -161,6 +161,8 @@ h1, h2, h3 {
 .stat.is-launch { border-color: var(--orange); }
 .stat.is-launch .n { color: var(--orange); }
 .stat.is-blue .n { color: var(--blue); }
+.stat.is-green { border-color: var(--green); }
+.stat.is-green .n { color: var(--green); }
 
 /* ---------- section ---------- */
 .section { display: flex; flex-direction: column; gap: 18px; }
@@ -292,6 +294,16 @@ h1, h2, h3 {
   flex: none;
 }
 .bar.gated { background: var(--amber); }
+.barnote {
+  z-index: 2;
+  align-self: center;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-3);
+  padding-left: 8px;
+  white-space: nowrap;
+}
 .bar.rev { background: var(--green); }
 .bar.later { background: var(--blue); opacity: .58; }
 
@@ -337,6 +349,24 @@ h1, h2, h3 {
 .legend i.a { background: var(--amber); }
 .legend i.l { background: var(--blue); opacity: .58; }
 .legend i.m { width: 11px; height: 11px; background: var(--orange); transform: rotate(45deg); border-radius: 2px; }
+.legend i.pm { width: 11px; height: 11px; background: var(--green); transform: rotate(45deg); border-radius: 2px; }
+
+.band {
+  grid-column: 1 / -1;
+  z-index: 3;
+  background: var(--surface-2);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 9px 18px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.milestone.partner .dia { background: var(--green); }
+.milestone.partner .txt { color: var(--green); }
 
 /* ---------- gates ---------- */
 .gates {
@@ -482,9 +512,9 @@ footer a { color: var(--blue); }
 
   <section class="stats">
     <div class="stat is-blue">
-      <div class="n">70</div>
+      <div class="n">82</div>
       <div class="k">Open items</div>
-      <div class="d">61 inside the phases below, 9 loose ends outside them.</div>
+      <div class="d">61 in the phases, 12 in the Aarcadian track, 9 loose ends.</div>
     </div>
     <div class="stat is-launch">
       <div class="n">9</div>
@@ -501,6 +531,11 @@ footer a { color: var(--blue); }
       <div class="k">Gates we don't control</div>
       <div class="d">Stripe, 10DLC and legal. All three start week 1.</div>
     </div>
+    <div class="stat is-green">
+      <div class="n">8</div>
+      <div class="k">Contracts executed — week</div>
+      <div class="d">Aarcadian supply, consignment and platform licence.</div>
+    </div>
   </section>
 
   <section class="section">
@@ -508,7 +543,8 @@ footer a { color: var(--blue); }
       <h2>The 28 weeks</h2>
       <p class="lede">Each bar is a phase; the number on it is how many open items it
         carries. Amber phases are the ones waiting on an outside party — those bars start
-        early because their length isn't ours to shorten.</p>
+        early because their length isn't ours to shorten. The Aarcadian track runs in its
+        own band underneath, on the partner's calendar rather than ours.</p>
     </header>
 
     <div class="chart">
@@ -610,12 +646,46 @@ footer a { color: var(--blue); }
           <div class="label" style="grid-row: 14"><span class="p">P11</span><span class="t">Executive reporting</span><span class="s">Attribution models, ROI by territory</span></div>
           <div class="bar later" style="grid-row: 14; grid-column: 28 / 30"><span class="c">3 items</span></div>
 
+          <div class="band" style="grid-row: 15">Aarcadian partnership — supply, consignment, damage split</div>
+          <div class="rowline" style="grid-row: 16"></div>
+          <div class="label" style="grid-row: 16"><span class="p">A1</span><span class="t">MOU returned with comments</span><span class="s">Both teams mark up v0.4</span></div>
+          <div class="bar gated" style="grid-row: 16; grid-column: 2 / 3"></div>
+          <div class="barnote" style="grid-row: 16; grid-column: 3 / 8">1 wk</div>
+          <div class="rowline" style="grid-row: 17"></div>
+          <div class="label" style="grid-row: 17"><span class="p">A2</span><span class="t">NDA + IP assignment</span><span class="s">Counsel, both sides</span></div>
+          <div class="bar gated" style="grid-row: 17; grid-column: 2 / 4"><span class="c">2 wks</span></div>
+          <div class="rowline" style="grid-row: 18"></div>
+          <div class="label" style="grid-row: 18"><span class="p">MILESTONE</span><span class="t">MOU signed</span><span class="s">At the working session</span></div>
+          <div class="milestone partner" style="grid-row: 18; grid-column: 3 / 10"><span class="dia"></span><span class="txt">Aligned in spirit</span></div>
+          <div class="rowline" style="grid-row: 19"></div>
+          <div class="label" style="grid-row: 19"><span class="p">A3</span><span class="t">New Orleans unit list — MVP</span><span class="s">Aarcadian + SteelBox</span></div>
+          <div class="bar" style="grid-row: 19; grid-column: 3 / 6"><span class="c">3 wks</span></div>
+          <div class="rowline" style="grid-row: 20"></div>
+          <div class="label" style="grid-row: 20"><span class="p">A4</span><span class="t">Contract docs — master + A/B/C</span><span class="s">Counsel-paced; chase weekly</span></div>
+          <div class="bar gated" style="grid-row: 20; grid-column: 4 / 10"><span class="c">6 wks</span></div>
+          <div class="rowline" style="grid-row: 21"></div>
+          <div class="label" style="grid-row: 21"><span class="p">A5</span><span class="t">Claims workflow design sessions</span><span class="s">Joint; gated on the NDA</span></div>
+          <div class="bar" style="grid-row: 21; grid-column: 5 / 8"><span class="c">3 wks</span></div>
+          <div class="rowline" style="grid-row: 22"></div>
+          <div class="label" style="grid-row: 22"><span class="p">A6</span><span class="t">First units staged &amp; listed</span><span class="s">SteelBox — documented, graded</span></div>
+          <div class="bar" style="grid-row: 22; grid-column: 6 / 8"><span class="c">2 wks</span></div>
+          <div class="rowline" style="grid-row: 23"></div>
+          <div class="label" style="grid-row: 23"><span class="p">MILESTONE</span><span class="t">Contracts executed</span><span class="s">Supply, consignment, licence</span></div>
+          <div class="milestone partner" style="grid-row: 23; grid-column: 9 / 16"><span class="dia"></span><span class="txt">Binding terms in force</span></div>
+          <div class="rowline" style="grid-row: 24"></div>
+          <div class="label" style="grid-row: 24"><span class="p">A7</span><span class="t">Consignment + settlement ledger</span><span class="s">Build — needs Postgres (P1)</span></div>
+          <div class="bar" style="grid-row: 24; grid-column: 7 / 13"><span class="c">6 wks</span></div>
+          <div class="rowline" style="grid-row: 25"></div>
+          <div class="label" style="grid-row: 25"><span class="p">A8</span><span class="t">Damage split, stations, audit</span><span class="s">Build — 3 items</span></div>
+          <div class="bar" style="grid-row: 25; grid-column: 11 / 16"><span class="c">5 wks</span></div>
+
         </div>
       </div>
       <div class="legend">
         <span><i class="b"></i> Build — our own pace</span>
         <span><i class="a"></i> ◆ Gated by an outside party</span>
         <span><i class="m"></i> Revenue milestone</span>
+        <span><i class="pm"></i> Partnership milestone</span>
         <span><i class="l"></i> Post-launch marketing build-out</span>
       </div>
     </div>
@@ -803,6 +873,107 @@ footer a { color: var(--blue); }
 
   <section class="section">
     <header>
+      <h2>The Aarcadian track</h2>
+      <p class="lede">Aarcadian is the supply side of this business — containers,
+        consignment, and the damage economics that turn a written-off box into a listed
+        one. Almost none of it is engineering; most of it is two teams and a lawyer, which
+        is why it starts in week 1 and why the estimates below are calendar, not effort.</p>
+    </header>
+    <div class="cards">
+
+      <div class="card">
+        <div class="top"><span class="id">A1 · A2</span><span class="wk">Weeks 1–2</span></div>
+        <h3>Markup, NDA, signature</h3>
+        <ul>
+          <li>Both teams return MOU v0.4 with comments</li>
+          <li>Mutual NDA + IP assignment — <strong>before</strong> the design sessions, not after</li>
+          <li>Working session: sign, and settle the three open questions in the room</li>
+        </ul>
+        <div class="foot"><span>1 wk + 2 wks</span><span>Both teams</span></div>
+      </div>
+
+      <div class="card">
+        <div class="top"><span class="id">A3</span><span class="wk">Weeks 2–4</span></div>
+        <h3>New Orleans unit list — MVP</h3>
+        <ul>
+          <li>Sizes, grades and wholesale pricing for the first reseller</li>
+          <li>Which depot each unit sits at today</li>
+          <li>How many move to the transfer station first</li>
+        </ul>
+        <div class="foot"><span>3 wks</span><span>MOU → inventory</span></div>
+      </div>
+
+      <div class="card">
+        <div class="top"><span class="id">A4</span><span class="wk">Weeks 3–8</span></div>
+        <h3>Contract docs</h3>
+        <ul>
+          <li>Master agreement + Schedule A — supply &amp; consignment</li>
+          <li>Schedule B — damage, estimates, the 50/50</li>
+          <li>Schedule C — platform licence, data ownership, exit</li>
+        </ul>
+        <div class="foot"><span>6 wks</span><span>Counsel-paced</span></div>
+      </div>
+
+      <div class="card">
+        <div class="top"><span class="id">A5 · A6</span><span class="wk">Weeks 4–6</span></div>
+        <h3>Workflow design &amp; first units</h3>
+        <ul>
+          <li>What an estimate must contain for a line to accept it</li>
+          <li>Which damage classes are repaired vs. sold as-is, and which yards</li>
+          <li>First units staged, documented, graded and live on the marketplace</li>
+        </ul>
+        <div class="foot"><span>3 wks + 2 wks</span><span>Gated on the NDA</span></div>
+      </div>
+
+      <div class="card">
+        <div class="top"><span class="id">A7</span><span class="wk">Weeks 6–11</span></div>
+        <h3>Consignment + settlement ledger</h3>
+        <ul>
+          <li>Owned vs. held-on-consignment, and the consignor of record</li>
+          <li>Title passing at a named moment, not an implied one</li>
+          <li>What is owed per sold unit, when it was paid, statement on demand</li>
+        </ul>
+        <div class="foot"><span>6 wks · build</span><span>Needs Postgres (P1)</span></div>
+      </div>
+
+      <div class="card">
+        <div class="top"><span class="id">A8</span><span class="wk">Weeks 10–14</span></div>
+        <h3>Damage split, stations, audit</h3>
+        <ul>
+          <li>Split basis, amount recovered, amount paid and to whom</li>
+          <li>Transfer stations as a location holding another party's stock</li>
+          <li>Supplier access audit trail — what makes Schedule C enforceable</li>
+        </ul>
+        <div class="foot"><span>5 wks · build</span><span>3 items</span></div>
+      </div>
+
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>Aarcadian deliverables and estimates. Calendar weeks, not effort —
+          five of the ten wait on someone outside the building.</caption>
+        <thead>
+          <tr><th>Deliverable</th><th>Weeks</th><th>Estimate</th><th>Owner</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>A1 · MOU returned with comments</td><td class="num">1</td><td class="num">1 wk</td><td>Both teams</td></tr>
+          <tr><td>A2 · NDA + IP assignment</td><td class="num">1–2</td><td class="num">2 wks</td><td>Counsel, both sides</td></tr>
+          <tr class="hl"><td>◆ MOU signed</td><td class="num">2</td><td class="num">1 session</td><td>Both teams</td></tr>
+          <tr><td>A3 · New Orleans unit list (MVP)</td><td class="num">2–4</td><td class="num">3 wks</td><td>Aarcadian + SteelBox</td></tr>
+          <tr><td>A4 · Contract docs — master + A/B/C</td><td class="num">3–8</td><td class="num">6 wks</td><td>Counsel</td></tr>
+          <tr><td>A5 · Claims workflow design sessions</td><td class="num">4–6</td><td class="num">3 wks</td><td>Joint</td></tr>
+          <tr><td>A6 · First units staged &amp; listed</td><td class="num">5–6</td><td class="num">2 wks</td><td>SteelBox</td></tr>
+          <tr class="hl"><td>◆ Contracts executed</td><td class="num">8</td><td class="num">—</td><td>Both teams</td></tr>
+          <tr><td>A7 · Consignment + settlement ledger</td><td class="num">6–11</td><td class="num">6 wks</td><td>SteelBox — build</td></tr>
+          <tr><td>A8 · Damage split, stations, audit trail</td><td class="num">10–14</td><td class="num">5 wks</td><td>SteelBox — build</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <header>
       <h2>The numbers behind the bars</h2>
     </header>
     <div class="tablewrap">
@@ -849,6 +1020,7 @@ footer a { color: var(--blue); }
         <li><span class="warn">!</span><span><b>Legal review runs long.</b> Checkout cannot go live without a refund policy on the page — this is the likeliest slip.</span></li>
         <li><span class="warn">!</span><span><b>Postgres migration overruns.</b> Everything downstream is behind it; it is deliberately first and alone.</span></li>
         <li><span class="warn">!</span><span><b>10DLC rejection.</b> Costs weeks, but hits SMS in week 9 — not the retail launch itself.</span></li>
+        <li><span class="warn">!</span><span><b>Aarcadian contracts slip.</b> Retail launch does not depend on them — but the New Orleans reseller's inventory does, and week 8 is already tight for counsel on three schedules.</span></li>
         <li><span class="warn">!</span><span><b>Scope added at the door.</b> Rentals, multi-tenancy and SMS are already sequenced after launch. Keeping them there is what protects the date.</span></li>
       </ul>
     </div>

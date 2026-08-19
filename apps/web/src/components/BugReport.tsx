@@ -12,7 +12,8 @@
 
 import React, { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { issuesApi } from '../lib/api'
+import { issuesApi, fileToDataUrl } from '../lib/api'
+import { pickFile } from '../lib/capture'
 
 // ── Console-error ring buffer ─────────────────────────────
 // Installed once at app start (this module is imported by main.tsx).
@@ -38,10 +39,17 @@ if (typeof window !== 'undefined' && !(window as unknown as Record<string, unkno
   }
 }
 
-// ── Screenshot of this tab ────────────────────────────────
-// getDisplayMedia is the only capture the browser allows a page; the
-// user gets the standard share prompt (pick this tab) — clunky but
-// honest. Unsupported or declined → the report just goes without one.
+// ── Screenshot ────────────────────────────────────────────
+// Two routes, because phones have neither of the desktop one.
+// Desktop: getDisplayMedia is the only capture a page is allowed —
+// the user gets the standard share prompt (pick this tab).
+// Mobile: no getDisplayMedia at all, so the button opens the photo
+// picker and the reporter attaches the screenshot they already took.
+// Before this, mobile silently did nothing at all.
+
+const canCaptureTab = () =>
+  typeof navigator !== 'undefined' &&
+  !!(navigator.mediaDevices as MediaDevices & { getDisplayMedia?: unknown } | undefined)?.getDisplayMedia
 async function grabTabScreenshot(): Promise<string | null> {
   try {
     const md = navigator.mediaDevices as MediaDevices & { getDisplayMedia?: (o?: object) => Promise<MediaStream> }
@@ -154,10 +162,21 @@ export function BugReportTab() {
                     <button onClick={() => setShot(null)} style={{ background: 'none', border: 'none', color: '#B3261E', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer', padding: 0 }}>Remove</button>
                   </>
                 ) : (
-                  <button disabled={busy === 'shot'} onClick={async () => { setBusy('shot'); setShot(await grabTabScreenshot()); setBusy(null) }}
+                  <button disabled={busy === 'shot'} onClick={async () => {
+                    setBusy('shot'); setError('')
+                    // Tab capture where it exists, photo picker everywhere else.
+                    let img = canCaptureTab() ? await grabTabScreenshot() : null
+                    if (!img) {
+                      const f = await pickFile('image/*')
+                      if (f) img = await fileToDataUrl(f, 1600, 0.72)
+                    }
+                    if (img) setShot(img)
+                    else setError('No image attached — send the report without one, or try again.')
+                    setBusy(null)
+                  }}
                     style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 13px', borderRadius: '999px', border: '1.5px solid #E2E4E9', background: '#fff', color: '#0D0E12', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3v11H4V8Z" /><circle cx="12" cy="13" r="3.2" /></svg>
-                    {busy === 'shot' ? 'Capturing…' : 'Attach a screenshot of this tab'}
+                    {busy === 'shot' ? 'Capturing…' : canCaptureTab() ? 'Attach a screenshot of this tab' : 'Attach a screenshot'}
                   </button>
                 )}
               </div>

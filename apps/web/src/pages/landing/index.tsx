@@ -270,16 +270,21 @@ function Hero({ tenant }: { tenant: Tenant }) {
         </p>
         <form className="ld-searchbar ld-rise ld-rise--3" onSubmit={submit}>
           <label htmlFor="hero-zip" style={{ position: 'absolute', left: '-9999px' }}>Delivery ZIP code</label>
-          <input
-            id="hero-zip" ref={zipRef} inputMode="numeric" pattern="[0-9]{5}"
-            placeholder="Enter your delivery ZIP" value={input} maxLength={5}
-            onChange={e => setInput(e.target.value.replace(/\D/g, ''))}
-          />
-          {input && (
-            <button type="button" className="ld-zip-clear" onClick={clearZip} aria-label="Clear ZIP code" title="Clear ZIP code">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
-            </button>
-          )}
+          {/* The input and its clear button travel together. Without the wrapper
+              the × becomes its own flex item, and on a phone — where the pill
+              stacks — it dropped onto a row of its own below the field. */}
+          <div className="ld-zipwrap">
+            <input
+              id="hero-zip" ref={zipRef} inputMode="numeric" pattern="[0-9]{5}"
+              placeholder="Enter your delivery ZIP" value={input} maxLength={5}
+              onChange={e => setInput(e.target.value.replace(/\D/g, ''))}
+            />
+            {input && (
+              <button type="button" className="ld-zip-clear" onClick={clearZip} aria-label="Clear ZIP code" title="Clear ZIP code">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+              </button>
+            )}
+          </div>
           <button className="ld-btn ld-btn--brand" type="submit">Check delivery</button>
         </form>
         {/* Coverage answer — a slim status label under the pill. The single

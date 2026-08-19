@@ -1,10 +1,10 @@
 # Aarcadian — Phase 1 agreement
 
-What has to happen between the MOU (`SteelBox-Aarcadian-MOU-v0.3.docx`) and a
+What has to happen between the MOU (`SteelBox-Aarcadian-MOU-v0.4.docx`) and a
 signable agreement. Rationale and structure live here; the *tasks* live in
 `TODO.md` under the Aarcadian section, per the one-list rule.
 
-**Status:** MOU at v0.3 (Aug 2026), non-binding. No agreement drafted.
+**Status:** MOU at v0.4 (Aug 2026), non-binding. No agreement drafted.
 
 ---
 
@@ -32,7 +32,7 @@ the company's main asset.
 
 ### Must be nailed down
 
-- **Title and risk.** Title stays with Aarcadian until sale (MOU §5). Say
+- **Title and risk.** Title stays with Aarcadian until sale (MOU §6). Say
   explicitly *when* it passes — at customer payment, at pickup from the transfer
   station, or at delivery — and who insures the unit for each leg. Today the MOU
   implies payment-then-pickup; the agreement has to make it a single named moment.
@@ -50,7 +50,7 @@ the company's main asset.
 - **Unsold units.** How long may a consigned unit sit before Aarcadian can recall
   it, who pays the move back, and does SteelBox get notice.
 - **Pricing.** Wholesale for gate-buys, the consignment realization split, and
-  whether volume tiers exist (MOU §9 open question).
+  whether volume tiers exist (MOU §10 open question).
 - **Exclusivity.** The MOU wants it mutual and volume-triggered. Either put real
   numbers in or leave it out of Phase 1 — a vague exclusivity clause is worse than
   none, because it binds without a test for compliance.
@@ -84,7 +84,7 @@ party pays. Every one of those is a place to argue.
 Recommendation: **split on recovery**, with a floor — a per-unit inspection and
 documentation fee SteelBox earns regardless of outcome. That pays for the work
 without letting either side profit from an inflated estimate. Flagged as an open
-question in MOU §9 so both teams answer it in writing.
+question in MOU §10 so both teams answer it in writing.
 
 ### Also required
 
@@ -94,7 +94,7 @@ question in MOU §9 so both teams answer it in writing.
   standard already exists in the field app — pointing the contract at it is what
   makes the estimate defensible to a shipping line.
 - **Who chooses the repair yard**, and an approval threshold above which the
-  other side signs off on an estimate (MOU §9).
+  other side signs off on an estimate (MOU §10).
 - **Timeline.** Days from intake to inspection, inspection to estimate, estimate
   to submission. A claim's value decays with age; a deadline is the only thing
   that keeps it moving.
@@ -118,7 +118,7 @@ question in MOU §9 so both teams answer it in writing.
 ## 4. Schedule C — the platform licence
 
 Aarcadian uses SteelBox's driver-management, photo-collection and AI-grading
-software to move units from depot to transfer station (MOU §5). That is a
+software to move units from depot to transfer station (MOU §6). That is a
 software licence and it needs the ordinary terms:
 
 - **Grant.** Non-exclusive, non-transferable, revocable, limited to Aarcadian's
@@ -142,7 +142,7 @@ software licence and it needs the ordinary terms:
     Absent this clause the exit becomes a negotiation at the worst moment.
 - **IP.** SteelBox owns the platform, the grading model, and anything derived from
   aggregate usage. Feedback and workflow design contributed by Aarcadian — and MOU
-  §6 explicitly asks them to help design the repair→estimate→shipper workflow —
+  §7 explicitly asks them to help design the repair→estimate→shipper workflow —
   is licensed to SteelBox freely and without claim. **Get this in writing before
   the design sessions start, not after.**
 - **Confidentiality.** Mutual NDA covering pricing, unit costs, customer data and
@@ -189,22 +189,49 @@ gated on the Postgres move in P1 for the same reason payments are.
 
 ## 6. Sequence
 
-| When | What |
-|---|---|
-| Before design sessions | Mutual NDA + IP assignment for contributed workflow design |
-| Week of 8/24 | Both teams mark up MOU v0.3 |
-| Week of 8/31 | Working session — settle the 50/50 basis, the radius scope, the repair-yard question |
-| Then | Counsel drafts master + Schedules A/B/C from the settled answers |
-| In parallel | Build gaps 1–5 above so Phase 1 can operate the way the agreement describes |
+Charted alongside the platform phases in `roadmap.html`, in its own band.
+
+| # | Deliverable | Weeks | Estimate | Owner |
+|---|---|---|---|---|
+| A1 | **Return the MOU with comments** — both teams mark up v0.4 | 1 | 1 wk | Both teams |
+| A2 | **NDA + IP assignment** — before the design sessions, not after | 1–2 | 2 wks | Counsel, both sides |
+| ◆ | **MOU signed** — and the three §10 questions settled in the room | 2 | 1 session | Both teams |
+| A3 | **New Orleans unit list (MVP)** — sizes, grades, wholesale pricing, depot of record | 2–4 | 3 wks | Aarcadian + SteelBox |
+| A4 | **Contract docs** — master + Schedules A/B/C drafted, reviewed, executed | 3–8 | 6 wks | Counsel |
+| A5 | **Claims workflow design sessions** | 4–6 | 3 wks | Joint |
+| A6 | **First units staged & listed** — documented, graded, live | 5–6 | 2 wks | SteelBox |
+| ◆ | **Contracts executed** — binding terms in force | 8 | — | Both teams |
+| A7 | **Consignment ownership + settlement ledger** (gaps 1–2) | 6–11 | 6 wks | SteelBox — build |
+| A8 | **Damage split, transfer stations, audit trail** (gaps 3–5) | 10–14 | 5 wks | SteelBox — build |
+
+The estimates are calendar, not effort: five of these wait on someone outside the
+building, and no amount of our own speed shortens them.
 
 Do not let the drafting wait on the build, or the build wait on the drafting. The
-questions in MOU §9 are what blocks both, and they are answerable in one meeting.
+questions in MOU §10 are what blocks both, and they are answerable in one meeting.
+A3 is the one worth watching — it is the deliverable that turns a document into
+inventory, and nothing about the New Orleans reseller is real until that list exists.
 
 ---
 
-## 7. Where this touches the product
+## 7. The benefits case (MOU §5)
 
-- The **repair → estimate → shipper workflow** (MOU §6) is already built end to
+The MOU now carries a three-party benefits table, because the deal has to pay
+three sides and only two of them are signing it. The resellers are the ones who
+actually sell and deliver the boxes, and they are the column most easily
+forgotten — they get inventory with no capital outlay, no unsold-unit risk, stock
+within 45 miles of their territory, and a listing complete enough to sell from
+without a phone call. If any column in that table looks thin at the working
+session, that is the part of the deal to renegotiate rather than paper over.
+
+The honest test, written into the MOU: if Aarcadian could do this alone tomorrow
+they should, and if a reseller can buy the same unit cheaper elsewhere they will.
+
+---
+
+## 8. Where this touches the product
+
+- The **repair → estimate → shipper workflow** (MOU §7) is already built end to
   end: guided walk-around → inspector review → estimate with the repair shop's own
   document → handoff to the supplier → submission to the line, with a printable
   claim document and a signed share link. Aarcadian's input refines it; it is not

@@ -178,9 +178,13 @@
   transform: scale(1.025);
   box-shadow: 0 18px 48px rgba(4, 16, 32, .5), 0 0 0 4px rgba(255, 158, 74, .42);
 }
+/* Input + its clear button as one unit, so the × can never break onto
+   a row of its own when the pill stacks on a phone. */
+.ld-zipwrap { position: relative; display: flex; align-items: center; flex: 1; min-width: 0; }
 .ld-searchbar input {
   flex: 1; min-width: 0; border: none; outline: none; background: transparent;
   font: 600 17px var(--sans); color: var(--ld-ink); letter-spacing: .5px;
+  padding-right: 32px;
 }
 .ld-searchbar input::placeholder { color: #7b8b9c; }
 .ld-searchbar .ld-btn { flex-shrink: 0; border-radius: 13px; }
@@ -226,9 +230,10 @@
 }
 @media (max-width: 560px) { .ld-zipres { font-size: 14px; padding: 10px 15px; } }
 
-/* Clear (reset) the typed ZIP — sits inside the pill, left of the button. */
+/* Clear (reset) the typed ZIP — pinned inside the field's right edge. */
 .ld-zip-clear {
-  flex-shrink: 0; width: 30px; height: 30px; border: none; border-radius: 50%;
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  width: 30px; height: 30px; border: none; border-radius: 50%;
   background: transparent; color: #8496a8; display: grid; place-items: center;
   cursor: pointer; padding: 0; transition: background .16s ease, color .16s ease;
 }
@@ -460,6 +465,8 @@
 /* Portal hero: the one-line search pill stacks on small phones. */
 @media (max-width: 560px) {
   .ld-searchbar { flex-direction: column; gap: 10px; border-radius: 22px; padding: 12px; }
-  .ld-searchbar input { width: 100%; text-align: center; padding: 8px 0; }
+  .ld-zipwrap { width: 100%; }
+  /* Symmetric padding so the centred ZIP stays centred with the × in place. */
+  .ld-searchbar input { width: 100%; text-align: center; padding: 8px 34px; }
   .ld-searchbar .ld-btn { width: 100%; }
 }
