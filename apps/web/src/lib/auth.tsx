@@ -102,7 +102,9 @@ export function useAuth(): AuthContextValue {
 // ── Sign-in form (shared by the portal gates + marketplace) ──
 
 const label: React.CSSProperties = { display: 'block', fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: '#6B7280', marginBottom: '5px' }
-const input: React.CSSProperties = { width: '100%', padding: '11px 13px', border: '1.5px solid #D9DBE4', borderRadius: '10px', fontSize: '14px', outline: 'none', marginBottom: '12px', fontFamily: 'inherit', boxSizing: 'border-box' }
+// 16px, not 14: mobile browsers auto-zoom the page when focusing an input
+// with smaller text, and the zoom outlives the field — cropping dialogs.
+const input: React.CSSProperties = { width: '100%', padding: '11px 13px', border: '1.5px solid #D9DBE4', borderRadius: '10px', fontSize: '16px', outline: 'none', marginBottom: '12px', fontFamily: 'inherit', boxSizing: 'border-box' }
 const primaryBtn = (busy: boolean): React.CSSProperties => ({ width: '100%', padding: '13px', borderRadius: '999px', background: '#0057B8', color: '#fff', fontSize: '14px', fontWeight: 700, border: 'none', cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.7 : 1 })
 const linkBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#0057B8', fontWeight: 700, cursor: 'pointer', fontSize: '12px', padding: 0 }
 const errorBox: React.CSSProperties = { background: '#FDECEA', border: '1px solid #F5C6C0', color: '#B3261E', borderRadius: '8px', padding: '9px 12px', fontSize: '12px', lineHeight: 1.5, marginBottom: '12px' }
@@ -269,7 +271,7 @@ export function LoginForm({ onDone, allowRegister = false, subtitle }: {
         {mode === 'login' && (
           <>
             <button onClick={() => go('forgot')} style={linkBtn}>Forgot password?</button>
-            {allowRegister && <span>New to MVP Container? <button onClick={() => go('register')} style={linkBtn}>Create an account</button></span>}
+            {allowRegister && <span>New to National SteelBox? <button onClick={() => go('register')} style={linkBtn}>Create an account</button></span>}
           </>
         )}
         {mode === 'register' && <span>Already have an account? <button onClick={() => go('login')} style={linkBtn}>Sign in</button></span>}
