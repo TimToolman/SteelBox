@@ -520,8 +520,10 @@
    report tab lives. Desktop scrolling doesn't need it — the wheel and
    Home key are right there. */
 .ld-totop {
-  display: none; position: fixed; z-index: 95;
-  right: 14px; bottom: calc(86px + env(safe-area-inset-bottom));
+  /* z 30: above page chrome (field bottom nav is 20), BELOW every sheet
+     and modal (they start at 40) so an open overlay always covers it. */
+  display: none; position: fixed; z-index: 30;
+  right: 14px; bottom: calc(18px + env(safe-area-inset-bottom));
   width: 44px; height: 44px; border-radius: 50%;
   background: var(--navy); color: #fff;
   border: 1px solid rgba(255, 255, 255, .25);
@@ -529,6 +531,8 @@
   cursor: pointer; padding: 0;
   align-items: center; justify-content: center;
 }
+/* Raised: above a ~72px bottom bar (landing call bar, field bottom nav). */
+.ld-totop--raised { bottom: calc(86px + env(safe-area-inset-bottom)); }
 .ld-totop:active { transform: scale(.94); }
 .ld-totop:focus-visible { outline: 3px solid var(--ld-brand); outline-offset: 2px; }
 @media (max-width: 767px) {

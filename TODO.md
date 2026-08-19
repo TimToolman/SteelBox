@@ -333,6 +333,10 @@ destinations the site does not have. Both currently say so out loud via the
 - [ ] Decide where **Insights** lives. The redesign gave its nav slot to
       Partners; the shop tab still works by URL but nothing links to it.
 
+- [ ] The marketplace overflows ~11px horizontally on a 412px phone (scrollWidth 423)
+      — found while placing the back-to-top button; some element in the shop grid is
+      wider than the viewport. Cosmetic but it makes fixed elements anchor oddly.
+
 ## Nice-to-have / later
 
 - [ ] Code-split the web bundle (HEIC converter + background-removal model warn at >500 kB).
