@@ -514,3 +514,30 @@
   font-size: 9px; font-weight: 600; letter-spacing: .4px;
   color: rgba(255, 255, 255, .62); white-space: nowrap;
 }
+
+/* ── Back to top (mobile only) ──
+   Above the call bar, and kept off the right edge where the beta
+   report tab lives. Desktop scrolling doesn't need it — the wheel and
+   Home key are right there. */
+.ld-totop {
+  display: none; position: fixed; z-index: 95;
+  right: 14px; bottom: calc(86px + env(safe-area-inset-bottom));
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--navy); color: #fff;
+  border: 1px solid rgba(255, 255, 255, .25);
+  box-shadow: 0 6px 20px rgba(12, 30, 58, .35);
+  cursor: pointer; padding: 0;
+  align-items: center; justify-content: center;
+}
+.ld-totop:active { transform: scale(.94); }
+.ld-totop:focus-visible { outline: 3px solid var(--ld-brand); outline-offset: 2px; }
+@media (max-width: 767px) {
+  .ld-totop { display: flex; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ld-totop { animation: ld-totop-in .2s ease; }
+  @keyframes ld-totop-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
