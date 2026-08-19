@@ -1,6 +1,6 @@
 # SteelBox Marketplace Platform — Test Plan
 
-Grouped by persona & login · **updated August 18, 2026**
+Grouped by persona & login · **updated August 19, 2026**
 For the manual test team, and the coverage map of Claude's automated regression.
 
 ## Before you start
@@ -181,8 +181,8 @@ End-to-end flows that cross portals.
 |---|---|---|
 | Types | `cd apps/web && npx tsc --noEmit` | clean |
 | Demo build | `cd apps/web && VITE_DEMO_STATIC=1 npm run build` | clean |
-| API suite (api) | `cd apps/api && node test.mjs  (throwaway DATA_DIR)` | 205 checks |
-| Browser sweeps | `node apps/web/e2e/run-all.mjs — smoke-admin · smoke-claims · smoke-inspections · smoke-mobile · smoke-viewer, all against the built demo (see apps/web/e2e/README.md)` | 139 checks |
+| API suite (api) | `cd apps/api && node test.mjs  (throwaway DATA_DIR)` | 208 checks |
+| Browser sweeps | `node apps/web/e2e/run-all.mjs — smoke-admin · smoke-claims · smoke-inspections · smoke-mobile · smoke-viewer, all against the built demo (see apps/web/e2e/README.md)` | 146 checks |
 
 Playwright notes for whoever extends the sweeps: dismiss (or pre-seed
 `sessionStorage.sbx_zip_prompted`) before hovering marketplace cards; admin left-nav
