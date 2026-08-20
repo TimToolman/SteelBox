@@ -100,7 +100,7 @@ ok(/9 \/ 9/.test(await text(p)), 'and lands on the 3D slot')
 
 // ══ 4. The claim page ══
 section('4 · Claim workspace galleries')
-const ws = await open(browser, { path: 'supplier', email: 'supplier@oceanbox.com' })
+const ws = await open(browser, { path: 'supplier', email: 'supplier@ntlsb.com' })
 await nav(ws, 'claim?id=clm_demo2')
 await ws.waitForSelector('text=/1 · Review/', { timeout: 15000 })
 await ws.waitForTimeout(600)
@@ -130,7 +130,7 @@ await ws.keyboard.press('Escape')
 
 // ══ 5. Shipper evidence ══
 section('5 · Shipper evidence strip')
-const shp = await open(browser, { path: 'shipper', email: 'shipper@meridianlines.com' })
+const shp = await open(browser, { path: 'shipper', email: 'shipper@ntlsb.com' })
 const ev = shp.locator('div[style*="overflow-x"] img').first()
 if (await ev.count()) {
   ok(await ev.evaluate(el => getComputedStyle(el).cursor) === 'zoom-in', 'evidence photos signal they open')

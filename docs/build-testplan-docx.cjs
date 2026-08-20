@@ -159,9 +159,10 @@ while (i < lines.length) {
   i++
 }
 
-// Column widths per table shape: the 5-col case tables and the 3-col
-// regression table are the only two the document contains.
+// Column widths per table shape: the 5-col case tables, the 4-col demo
+// accounts roster, and the 3-col regression table.
 const CASE_W = [780, 1900, 4400, 4900, 1700]
+const ACCT_W = [2600, 3200, 2800, 5080]
 const REG_W = [2600, 7480, 3600]
 
 const children = []
@@ -198,7 +199,7 @@ for (const b of blocks) {
   }
   if (b.type === 'table') {
     const [header, ...rows] = b.rows
-    const widths = header.length === 5 ? CASE_W : REG_W
+    const widths = header.length === 5 ? CASE_W : header.length === 4 ? ACCT_W : REG_W
     if (header.length === 5) caseCount += rows.length
     children.push(table(widths, header, rows))
     children.push(new Paragraph({ spacing: { after: 120 }, children: [] }))

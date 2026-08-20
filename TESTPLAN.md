@@ -1,6 +1,6 @@
 # SteelBox Marketplace Platform — Test Plan
 
-Grouped by persona & login · **updated August 19, 2026**
+Grouped by persona & login · **updated August 20, 2026**
 For the manual test team, and the coverage map of Claude's automated regression.
 
 ## Before you start
@@ -10,6 +10,31 @@ For the manual test team, and the coverage map of Claude's automated regression.
 - **Demo data:** Changes last for your browser session only and reset on page reload — finish a scenario (e.g. grant a role, then try it) in the same tab without refreshing.
 - **Found something?:** Use the blue "Report an issue" tab on the right edge of any page — it captures the page, your browser, and recent console errors automatically. Write what you expected vs. what happened; attach a screenshot of the tab when the problem is visual. Reports appear under Admin → Beta Issues.
 - **Coverage column:** Auto = Claude runs this in the automated regression before every ship (suite named). Manual = only you can catch it — please prioritize those.
+
+## Demo accounts — all logins are @ntlsb.com
+
+Any password works; the email decides who you are. The old company-flavored
+addresses (…@mvpcontainer.com, supplier@oceanbox.com, tgmoore@gmail.com, …)
+still sign in and quietly land on the renamed account.
+
+| Persona | Email | Name | Role / lands on |
+|---|---|---|---|
+| CU · Customer | customer@ntlsb.com | Demo Customer | Walk-up shopper · /shop |
+| BR · Bulk customer | br.dispatch@ntlsb.com | BR Construction Dispatch | Repeat buyer with order history · /shop |
+| D · Driver | mike@ntlsb.com | Mike Torres | Field app · /field |
+| D · Driver | dan@ntlsb.com | Dan Park | Field app · /field |
+| D · Driver | luis@ntlsb.com | Luis Mendez | Field app · /field |
+| D · Driver | sara@ntlsb.com | Sara Kim | Field app · /field |
+| D · Driver | justin@ntlsb.com | Justin Martin | Field app · /field |
+| D · Driver | denise@ntlsb.com | Denise Walker | Field app · /field |
+| D · Driver | marcus@ntlsb.com | Marcus Lee | Field app · /field |
+| I · Inspector | inspector@ntlsb.com | Container Inspector | Field app + AI grading + claims · /field |
+| SU · Supplier | supplier@ntlsb.com | Dana Reyes | OceanBox Supply Co portal · /shop → portal tabs |
+| SH · Shipping line | shipper@ntlsb.com | Kofi Mensah | Meridian Lines claims review · /shipper |
+| RA · Reseller admin | mvp.admin@ntlsb.com | Marie Landry | MVP Container · /admin |
+| RA · Reseller admin | demo.admin@ntlsb.com | Dana Whitfield | Demo Container Corp · /admin |
+| X · Marketing | marketing@ntlsb.com | Josie Trahan | Marketing tools (MVP) · /admin |
+| HQ · Platform admin | hq@ntlsb.com | Tim Moore | Everything, all resellers · /admin |
 
 ## G · Guest shopper — no login
 
@@ -33,7 +58,7 @@ Anyone browsing the marketplace before signing in.
 
 ## CU · Customer
 
-**Sign in:** demo@mvpcontainers.com (any password) · start at /shop — or Create an account (code 123456)
+**Sign in:** customer@ntlsb.com (any password) · start at /shop — or Create an account (code 123456)
 A buyer or renter with an account.
 
 | # | Feature | Steps | Expect | Coverage |
@@ -47,7 +72,7 @@ A buyer or renter with an account.
 
 ## D · Driver
 
-**Sign in:** mike@mvpcontainer.com (any password) · start at /field — best on a phone
+**Sign in:** mike@ntlsb.com (any password) · start at /field — best on a phone
 Field crew: pickups, deliveries, photo documentation. May inspect, never required to.
 
 | # | Feature | Steps | Expect | Coverage |
@@ -70,7 +95,7 @@ Field crew: pickups, deliveries, photo documentation. May inspect, never require
 
 ## I · Inspector
 
-**Sign in:** inspector@mvpcontainer.com (any password) · start at /field
+**Sign in:** inspector@ntlsb.com (any password) · start at /field
 Final grader. Verifies field-crew findings, releases holds, raises claims.
 
 | # | Feature | Steps | Expect | Coverage |
@@ -87,7 +112,7 @@ Final grader. Verifies field-crew findings, releases holds, raises claims.
 
 ## SU · Supplier
 
-**Sign in:** supplier@oceanbox.com (any password) · start at /shop → portal tabs
+**Sign in:** supplier@ntlsb.com (any password) · start at /shop → portal tabs
 Container owner: pricing, damage claims, repair decisions.
 
 | # | Feature | Steps | Expect | Coverage |
@@ -106,7 +131,7 @@ Container owner: pricing, damage claims, repair decisions.
 
 ## SH · Shipper
 
-**Sign in:** shipper@meridianlines.com (any password) · start at /shipper (or the Claims Review tab on /shop)
+**Sign in:** shipper@ntlsb.com (any password) · start at /shipper (or the Claims Review tab on /shop)
 The shipping line’s claims reviewer. Works for exactly ONE line.
 
 | # | Feature | Steps | Expect | Coverage |
@@ -120,7 +145,7 @@ The shipping line’s claims reviewer. Works for exactly ONE line.
 
 ## HQ · HQ admin — SteelBox Co.
 
-**Sign in:** tgmoore@gmail.com (any password) · start at /admin
+**Sign in:** hq@ntlsb.com (any password) · start at /admin
 Platform-wide scope: every reseller, the directories, access control, beta triage.
 
 | # | Feature | Steps | Expect | Coverage |
@@ -139,7 +164,7 @@ Platform-wide scope: every reseller, the directories, access control, beta triag
 
 ## RA · Reseller admins
 
-**Sign in:** admin@mvpcontainer.com (MVP · Marie Landry) and admin@democontainercorp.com (Demo Corp · Dana Whitfield) · start at /admin
+**Sign in:** mvp.admin@ntlsb.com (MVP · Marie Landry) and demo.admin@ntlsb.com (Demo Corp · Dana Whitfield) · start at /admin
 Tenant-scoped operations. Verify both tenants see ONLY their own world.
 
 | # | Feature | Steps | Expect | Coverage |

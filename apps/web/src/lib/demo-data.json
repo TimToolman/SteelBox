@@ -204,7 +204,7 @@
    "inspectionKind": "damage",
    "inspectionFlaggedBy": "Mike Torres",
    "inspectionFlaggedAt": "2026-08-16T14:20:00.000Z",
-   "inspectionReason": "Rust — bottom rail, ocean side; Dent — rear left corner post",
+   "inspectionReason": "Rust \u2014 bottom rail, ocean side; Dent \u2014 rear left corner post",
    "inspectionFindings": "[{\"station\": \"Seams & rails\", \"question\": \"rust\", \"level\": \"major\", \"reasons\": [\"Rust\"], \"note\": \"Bottom rail, ocean side \\u2014 flaking through\", \"photo\": \"/photos/gen/new-beige-2.webp\", \"at\": \"2026-08-16T14:18:00.000Z\", \"by\": \"Mike Torres\"}, {\"station\": \"Back end\", \"question\": \"Spotted on the walk\", \"level\": \"minor\", \"reasons\": [\"Dent\"], \"note\": \"Rear left corner post, about 3in\", \"photo\": \"/photos/gen/new-beige-3.webp\", \"at\": \"2026-08-16T14:19:00.000Z\", \"by\": \"Mike Torres\"}]",
    "inspectionAnswers": "{\"doors\": 0, \"structure\": 1, \"rust\": 2, \"floor\": 0, \"light\": 0}"
   },
@@ -4383,7 +4383,7 @@
    "tag": "POPULAR",
    "description": "Single or double roll-up doors for easy forklift access.",
    "features": [
-    "8×7 roll-up",
+    "8\u00d77 roll-up",
     "Galvanized steel",
     "Lockable"
    ],
@@ -4462,7 +4462,7 @@
    "brandAccent": "#E65100",
    "phone": "(504) 555-0190",
    "email": "sales@mvpcontainers.com",
-   "tos": "Service agreement — MVP Container LLC. Delivery within 3–5 business days of confirmed payment, performed by MVP Container drivers and equipment. Payment is authorized at checkout and captured only after the container is set and inspected on site. 30-day wind-and-watertight guarantee on all graded units. Rentals bill monthly in advance; pickup is scheduled within 5 business days of the end of term. Site must provide the clearances published on the listing.",
+   "tos": "Service agreement \u2014 MVP Container LLC. Delivery within 3\u20135 business days of confirmed payment, performed by MVP Container drivers and equipment. Payment is authorized at checkout and captured only after the container is set and inspected on site. 30-day wind-and-watertight guarantee on all graded units. Rentals bill monthly in advance; pickup is scheduled within 5 business days of the end of term. Site must provide the clearances published on the listing.",
    "active": true,
    "createdAt": "2026-08-06T02:49:06.256Z",
    "territoryZips": "700-716,770-778,300-312,398-399",
@@ -4476,7 +4476,7 @@
    "brandAccent": "#7C3AED",
    "phone": "(410) 555-0155",
    "email": "sales@democontainercorp.com",
-   "tos": "Service agreement — Demo Container Corporation. Deliveries are fulfilled by Demo Container Corp within 5 business days of confirmed payment. All units carry a 14-day defect guarantee from the day of delivery. Payment terms, scheduling, and post-sale support are handled directly by Demo Container Corp — National SteelBox Corp operates the marketplace only.",
+   "tos": "Service agreement \u2014 Demo Container Corporation. Deliveries are fulfilled by Demo Container Corp within 5 business days of confirmed payment. All units carry a 14-day defect guarantee from the day of delivery. Payment terms, scheduling, and post-sale support are handled directly by Demo Container Corp \u2014 National SteelBox Corp operates the marketplace only.",
    "active": true,
    "createdAt": "2026-08-06T02:49:06.257Z",
    "territoryZips": "206-219,220-246,270-289,320-339,350-374",
@@ -4790,7 +4790,7 @@
    "city": "Katy",
    "state": "TX",
    "zip": "77494",
-   "notes": "Repeat buyer — 20ft units",
+   "notes": "Repeat buyer \u2014 20ft units",
    "active": true,
    "createdAt": "2026-05-02T09:00:00.000Z",
    "notifySms": true,
@@ -4816,7 +4816,7 @@
    "id": "cus_13",
    "name": "B&R Construction",
    "company": "B&R Construction",
-   "email": "dispatch@brconstruction.com",
+   "email": "br.dispatch@ntlsb.com",
    "phone": "(936) 555-0170",
    "address": "305 Loop 336",
    "city": "Conroe",
@@ -4927,8 +4927,8 @@
   {
    "id": "cus_mr5bcwn8580",
    "name": "Mike Torres",
-   "company": "yomama",
-   "email": "mike@steelbox.co",
+   "company": "",
+   "email": "mike@ntlsb.com",
    "phone": "(504) 555-0110",
    "address": "",
    "city": "",
@@ -5055,7 +5055,7 @@
    "containerSku": "HOU-20-0001",
    "customerId": "cus_13",
    "customerName": "B&R Construction",
-   "customerEmail": "dispatch@brconstruction.com",
+   "customerEmail": "br.dispatch@ntlsb.com",
    "customerPhone": "(936) 555-0170",
    "deliveryAddress": "305 Loop 336, Conroe, TX 77301",
    "deliveryZip": "77301",
@@ -5457,7 +5457,7 @@
    "sku": "NOLA-20-0004",
    "containerId": "ctr_0067",
    "actor": "Mike Torres",
-   "location": "NOLA Depot · Bay 4",
+   "location": "NOLA Depot \u00b7 Bay 4",
    "note": "12/12 photos uploaded"
   },
   {
@@ -5468,7 +5468,7 @@
    "sku": "NOLA-20-0004",
    "containerId": "ctr_0067",
    "actor": "Mike Torres",
-   "location": "NOLA Depot · Bay 4",
+   "location": "NOLA Depot \u00b7 Bay 4",
    "note": "Arrived on site"
   }
  ],
@@ -5490,8 +5490,8 @@
    "toRole": "driver",
    "toName": "Marcus Lee",
    "toEmail": "",
-   "subject": "New delivery — CDI-20-0003 on 2026-08-07",
-   "body": "You've been assigned CDI-20-0003 on 2026-08-07.\n\nDeliver to: 7200 Washington Blvd, Elkridge, MD 21075\nCustomer: Patapsco Farm Supply · (410) 555-0456\nOrder: ORD-0095 ($2,525 purchase)",
+   "subject": "New delivery \u2014 CDI-20-0003 on 2026-08-07",
+   "body": "You've been assigned CDI-20-0003 on 2026-08-07.\n\nDeliver to: 7200 Washington Blvd, Elkridge, MD 21075\nCustomer: Patapsco Farm Supply \u00b7 (410) 555-0456\nOrder: ORD-0095 ($2,525 purchase)",
    "createdAt": "2026-08-06T03:31:09.729Z",
    "read": false,
    "trashed": false
@@ -5505,8 +5505,8 @@
    "toRole": "driver",
    "toName": "Denise Walker",
    "toEmail": "",
-   "subject": "New delivery — CDI-20-0002 on 2026-08-07",
-   "body": "You've been assigned CDI-20-0002 on 2026-08-07.\n\nDeliver to: 801 Key Hwy, Baltimore, MD 21230\nCustomer: Chesapeake Event Rentals · (443) 555-0187\nOrder: ORD-0094 ($570 rental)",
+   "subject": "New delivery \u2014 CDI-20-0002 on 2026-08-07",
+   "body": "You've been assigned CDI-20-0002 on 2026-08-07.\n\nDeliver to: 801 Key Hwy, Baltimore, MD 21230\nCustomer: Chesapeake Event Rentals \u00b7 (443) 555-0187\nOrder: ORD-0094 ($570 rental)",
    "createdAt": "2026-08-06T03:31:09.724Z",
    "read": false,
    "trashed": false
@@ -5521,7 +5521,7 @@
    "toName": "Mike Torres",
    "toEmail": "",
    "subject": "Gate code for delivery",
-   "body": "Hi — the yard gate code is 4821. Forklift is on site if you need it. Ask for Manny.",
+   "body": "Hi \u2014 the yard gate code is 4821. Forklift is on site if you need it. Ask for Manny.",
    "createdAt": "2026-06-30T18:05:00.000Z",
    "read": true,
    "trashed": false
@@ -5530,12 +5530,12 @@
    "id": "msg_seed01",
    "fromRole": "admin",
    "fromName": "Dispatch (James R.)",
-   "fromEmail": "ops@steelbox.co",
+   "fromEmail": "dispatch@ntlsb.com",
    "toDriverId": "drv_01",
    "toRole": "driver",
    "toName": "Mike Torres",
    "toEmail": "",
-   "subject": "Route change — HOU-40-0001",
+   "subject": "Route change \u2014 HOU-40-0001",
    "body": "Customer moved the Katy delivery to the afternoon. Please start the run after 1 PM and call ahead. Thanks.",
    "createdAt": "2026-06-30T15:30:00.000Z",
    "read": true,
@@ -5545,7 +5545,7 @@
    "id": "msg_seed03",
    "fromRole": "admin",
    "fromName": "Dispatch (James R.)",
-   "fromEmail": "ops@steelbox.co",
+   "fromEmail": "dispatch@ntlsb.com",
    "toDriverId": "drv_01",
    "toRole": "driver",
    "toName": "Mike Torres",
@@ -5560,7 +5560,7 @@
  "users": [
   {
    "id": "usr_mr59yc5s3od",
-   "email": "tgmoore@gmail.com",
+   "email": "hq@ntlsb.com",
    "role": "admin",
    "name": "Tim Moore",
    "phone": "",
@@ -5576,7 +5576,7 @@
   },
   {
    "id": "usr_mr59yc6h70l",
-   "email": "mike@mvpcontainer.com",
+   "email": "mike@ntlsb.com",
    "role": "driver",
    "name": "Mike Torres",
    "phone": "(504) 555-0110",
@@ -5592,7 +5592,7 @@
   },
   {
    "id": "usr_mr59yc74xp",
-   "email": "dan@mvpcontainer.com",
+   "email": "dan@ntlsb.com",
    "role": "driver",
    "name": "Dan Park",
    "phone": "(504) 555-0121",
@@ -5608,7 +5608,7 @@
   },
   {
    "id": "usr_mr59yc7q123",
-   "email": "luis@mvpcontainer.com",
+   "email": "luis@ntlsb.com",
    "role": "driver",
    "name": "Luis Mendez",
    "phone": "(504) 555-0132",
@@ -5623,40 +5623,8 @@
    ]
   },
   {
-   "id": "usr_mr59yc8c7lp",
-   "email": "sara@steelbox.co",
-   "role": "driver",
-   "name": "Sara Kim",
-   "phone": "(504) 555-0143",
-   "driverId": "drv_04",
-   "customerId": "",
-   "phoneVerified": false,
-   "active": true,
-   "createdAt": "2026-07-03T18:36:22.785Z",
-   "sellerId": "",
-   "roles": [
-    "marketplace"
-   ]
-  },
-  {
-   "id": "usr_mr59yc8y2j4",
-   "email": "justin@steelbox.co",
-   "role": "driver",
-   "name": "Justin Martin",
-   "phone": "(504) 555-0154",
-   "driverId": "drv_mr2w07ddh2",
-   "customerId": "",
-   "phoneVerified": false,
-   "active": true,
-   "createdAt": "2026-07-03T18:36:22.807Z",
-   "sellerId": "",
-   "roles": [
-    "marketplace"
-   ]
-  },
-  {
    "id": "usr_mrdvccx5e03465ab8f",
-   "email": "justin@mvpcontainer.com",
+   "email": "justin@ntlsb.com",
    "role": "driver",
    "name": "Justin Martin",
    "phone": "(504) 555-0154",
@@ -5672,7 +5640,7 @@
   },
   {
    "id": "usr_mrjlpzx3db89287de3",
-   "email": "sara@mvpcontainer.com",
+   "email": "sara@ntlsb.com",
    "role": "driver",
    "name": "Sara Kim",
    "phone": "(504) 555-0143",
@@ -5688,7 +5656,7 @@
   },
   {
    "id": "usr_msgyxy492e15352f4b",
-   "email": "denise@mvpcontainer.com",
+   "email": "denise@ntlsb.com",
    "role": "driver",
    "name": "Denise Walker",
    "phone": "(410) 555-0171",
@@ -5704,7 +5672,7 @@
   },
   {
    "id": "usr_msgyxy4z99d16cc20f",
-   "email": "marcus@mvpcontainer.com",
+   "email": "marcus@ntlsb.com",
    "role": "driver",
    "name": "Marcus Lee",
    "phone": "(410) 555-0184",
@@ -5720,7 +5688,7 @@
   },
   {
    "id": "usr_sup01",
-   "email": "supplier@oceanbox.com",
+   "email": "supplier@ntlsb.com",
    "role": "supplier",
    "name": "Dana Reyes",
    "phone": "",
@@ -5738,7 +5706,7 @@
   },
   {
    "id": "usr_shp01",
-   "email": "shipper@meridianlines.com",
+   "email": "shipper@ntlsb.com",
    "role": "shipper",
    "name": "Kofi Mensah",
    "phone": "",
@@ -5756,7 +5724,7 @@
   },
   {
    "id": "usr_mvpadmin01",
-   "email": "admin@mvpcontainer.com",
+   "email": "mvp.admin@ntlsb.com",
    "role": "admin",
    "name": "Marie Landry",
    "phone": "",
@@ -5773,7 +5741,7 @@
   },
   {
    "id": "usr_demoadmin01",
-   "email": "admin@democontainercorp.com",
+   "email": "demo.admin@ntlsb.com",
    "role": "admin",
    "name": "Dana Whitfield",
    "phone": "",
@@ -5790,7 +5758,7 @@
   },
   {
    "id": "usr_mvpmkt01",
-   "email": "marketing@mvpcontainer.com",
+   "email": "marketing@ntlsb.com",
    "role": "customer",
    "name": "Josie Trahan",
    "phone": "",
@@ -5807,7 +5775,7 @@
   },
   {
    "id": "usr_brc01",
-   "email": "dispatch@brconstruction.com",
+   "email": "br.dispatch@ntlsb.com",
    "role": "customer",
    "name": "BR Construction Dispatch",
    "phone": "(225) 555-0170",
@@ -5824,7 +5792,7 @@
    "id": "sup_01",
    "name": "OceanBox Supply Co",
    "contactName": "Dana Reyes",
-   "email": "supplier@oceanbox.com",
+   "email": "supplier@ntlsb.com",
    "phone": "(504) 555-0230",
    "active": true,
    "createdAt": "2026-08-07T14:00:00.000Z"
@@ -5844,7 +5812,7 @@
    "id": "shp_01",
    "name": "Meridian Lines",
    "line": "Trans-Pacific",
-   "email": "shipper@meridianlines.com",
+   "email": "shipper@ntlsb.com",
    "phone": "(310) 555-0252",
    "active": true,
    "createdAt": "2026-08-07T14:00:00.000Z",
@@ -5941,7 +5909,7 @@
    "inspectorName": "J. Alvarez",
    "inspectedAt": "2026-08-05T15:10:00.000Z",
    "createdAt": "2026-08-04T12:00:00.000Z",
-   "events": "[{\"t\":\"2026-08-04T12:00:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Claim filed against Meridian Lines (MV KESTREL 221E)\"},{\"t\":\"2026-08-05T15:10:00Z\",\"actor\":\"J. Alvarez\",\"text\":\"Damage inspected — severity D·3\"}]",
+   "events": "[{\"t\":\"2026-08-04T12:00:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Claim filed against Meridian Lines (MV KESTREL 221E)\"},{\"t\":\"2026-08-05T15:10:00Z\",\"actor\":\"J. Alvarez\",\"text\":\"Damage inspected \u2014 severity D\u00b73\"}]",
    "photoReasons": [
     "Rust",
     "Bent"
@@ -5980,7 +5948,7 @@
    "inspectorName": "J. Alvarez",
    "inspectedAt": "2026-08-03T10:30:00.000Z",
    "createdAt": "2026-08-02T09:00:00.000Z",
-   "events": "[{\"t\":\"2026-08-02T09:00:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Claim filed against Meridian Lines (MV PELICAN 087W)\"},{\"t\":\"2026-08-03T10:30:00Z\",\"actor\":\"J. Alvarez\",\"text\":\"Damage inspected — severity D·4\"},{\"t\":\"2026-08-04T08:15:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Repair estimate $2,400 submitted to Meridian Lines\"},{\"t\":\"2026-08-04T08:16:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Estimate shared with Meridian Lines by email (login link)\"}]",
+   "events": "[{\"t\":\"2026-08-02T09:00:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Claim filed against Meridian Lines (MV PELICAN 087W)\"},{\"t\":\"2026-08-03T10:30:00Z\",\"actor\":\"J. Alvarez\",\"text\":\"Damage inspected \u2014 severity D\u00b74\"},{\"t\":\"2026-08-04T08:15:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Repair estimate $2,400 submitted to Meridian Lines\"},{\"t\":\"2026-08-04T08:16:00Z\",\"actor\":\"Dana Reyes\",\"text\":\"Estimate shared with Meridian Lines by email (login link)\"}]",
    "sharedAt": "2026-08-04T08:16:00Z",
    "photoReasons": [
     "Hole",
@@ -6019,13 +5987,13 @@
    "inspectorName": "M. Torres",
    "inspectedAt": "2026-08-05T09:00:00.000Z",
    "createdAt": "2026-08-01T08:00:00.000Z",
-   "events": "[{\"t\":\"2026-08-01T08:00:00Z\",\"actor\":\"Marcus Webb\",\"text\":\"Claim filed against Austral Shipping (MV IBIS 314N)\"},{\"t\":\"2026-08-05T09:00:00Z\",\"actor\":\"M. Torres\",\"text\":\"Damage inspected — severity D·2\"},{\"t\":\"2026-08-05T14:00:00Z\",\"actor\":\"Marcus Webb\",\"text\":\"Repair estimate $1,150 submitted to Austral Shipping\"},{\"t\":\"2026-08-06T19:45:00Z\",\"actor\":\"Austral Shipping\",\"text\":\"Shipper signed in and viewed the claim\"},{\"t\":\"2026-08-06T20:00:00Z\",\"actor\":\"Austral Shipping\",\"text\":\"Shipper approved the estimate — “Approved at quoted amount”\"}]",
+   "events": "[{\"t\":\"2026-08-01T08:00:00Z\",\"actor\":\"Marcus Webb\",\"text\":\"Claim filed against Austral Shipping (MV IBIS 314N)\"},{\"t\":\"2026-08-05T09:00:00Z\",\"actor\":\"M. Torres\",\"text\":\"Damage inspected \u2014 severity D\u00b72\"},{\"t\":\"2026-08-05T14:00:00Z\",\"actor\":\"Marcus Webb\",\"text\":\"Repair estimate $1,150 submitted to Austral Shipping\"},{\"t\":\"2026-08-06T19:45:00Z\",\"actor\":\"Austral Shipping\",\"text\":\"Shipper signed in and viewed the claim\"},{\"t\":\"2026-08-06T20:00:00Z\",\"actor\":\"Austral Shipping\",\"text\":\"Shipper approved the estimate \u2014 \u201cApproved at quoted amount\u201d\"}]",
    "shipperViewedAt": "2026-08-06T19:45:00Z",
    "photoReasons": [
     "Warped"
    ],
    "photoNotes": [
-    "Door frame out of square — will not seal"
+    "Door frame out of square \u2014 will not seal"
    ]
   }
  ],
@@ -6035,7 +6003,7 @@
    "name": "I-85 Charlotte Relay Yard",
    "address": "4200 Freight Ln, Charlotte, NC",
    "zip": "28208",
-   "notes": "Border: Southeast ↔ Mid-Atlantic",
+   "notes": "Border: Southeast \u2194 Mid-Atlantic",
    "active": true
   },
   {
@@ -6043,7 +6011,7 @@
    "name": "I-10 Mobile Relay Yard",
    "address": "880 Port Access Rd, Mobile, AL",
    "zip": "36602",
-   "notes": "Border: Gulf Coast ↔ Southeast",
+   "notes": "Border: Gulf Coast \u2194 Southeast",
    "active": true
   },
   {
@@ -6226,7 +6194,7 @@
    "name": "Spring Yard Clearance",
    "type": "email",
    "status": "sent",
-   "subject": "20ft one-trip specials — this week only",
+   "subject": "20ft one-trip specials \u2014 this week only",
    "content": "Hi {{firstName}}, graded 20ft units from $2,150 delivered to {{zip}}. Every unit photographed and AI-graded.",
    "platform": "",
    "cta": "Shop Inventory",
@@ -6302,7 +6270,7 @@
    "type": "email",
    "status": "sent",
    "subject": "Containers now delivering in the DMV",
-   "content": "Demo Container Corp now serves {{zip}} — graded used units with all-in delivered pricing.",
+   "content": "Demo Container Corp now serves {{zip}} \u2014 graded used units with all-in delivered pricing.",
    "platform": "",
    "cta": "Browse Local Stock",
    "audienceKind": "all",
@@ -6363,7 +6331,7 @@
     "40ft"
    ],
    "experienceYears": 9,
-   "notes": "Hauled port drayage out of NOLA 2019–2024. Own truck, clean MVR.",
+   "notes": "Hauled port drayage out of NOLA 2019\u20132024. Own truck, clean MVR.",
    "status": "new",
    "createdAt": "2026-08-15T00:00:00.000Z",
    "decidedAt": null,

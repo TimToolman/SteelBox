@@ -12,7 +12,7 @@ const browser = await launch()
 
 // ══ 1. Driver's walk ends in exactly two ways ══
 section('1 · Driver end-of-walk options')
-const drv = await open(browser, { path: 'field', email: 'mike@mvpcontainer.com', width: 480, height: 900 })
+const drv = await open(browser, { path: 'field', email: 'mike@ntlsb.com', width: 480, height: 900 })
 await drv.getByRole('button', { name: /Pickups & Returns/ }).click()
 await drv.waitForTimeout(900)
 await drv.locator('text=/Pickup · NOLA-20-0006/').first().click()
@@ -54,7 +54,7 @@ ok(!/Damage review/.test(drvQueues), 'but no Damage review queue without inspect
 await drv.screenshot({ path: `${SHOTS}/ins-driver-queues.png` })
 
 // ══ 3. The inspector gets all three ══
-const ins = await open(browser, { path: 'field', email: 'inspector@mvpcontainer.com', width: 480, height: 900 })
+const ins = await open(browser, { path: 'field', email: 'inspector@ntlsb.com', width: 480, height: 900 })
 await ins.getByRole('button', { name: /Inspections/i }).first().click()
 await ins.waitForTimeout(1200)
 const insQueues = await text(ins)
@@ -96,7 +96,7 @@ if (await firstUnit.count()) {
 
 // ══ 6. The desk: marketplace Inspections tab ══
 section('5 · Marketplace Inspections tab')
-const desk = await openVia(browser, { gate: 'field', path: 'shop', email: 'inspector@mvpcontainer.com' })
+const desk = await openVia(browser, { gate: 'field', path: 'shop', email: 'inspector@ntlsb.com' })
 const deskTab = desk.getByRole('button', { name: 'Inspections', exact: true })
 ok(await deskTab.count() === 1, 'an inspector gets an Inspections tab on the marketplace')
 await deskTab.click()

@@ -23,7 +23,7 @@ import { Icon } from '../../components/icons'
 const FALLBACK_DRIVER_ID = 'drv_01'
 const ACTOR = 'Mike Torres'
 // Company dispatch identity for driver ⇄ admin messaging (single place to change).
-const DISPATCH = { name: 'Dispatch (James R.)', email: 'ops@mvpcontainer.co' }
+const DISPATCH = { name: 'Dispatch (James R.)', email: 'dispatch@ntlsb.com' }
 
 // ── Job model + workflows ─────────────────────────────────
 
