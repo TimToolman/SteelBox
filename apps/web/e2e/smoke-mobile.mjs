@@ -34,7 +34,7 @@ const reload = async (p) => { await p.reload({ waitUntil: 'load' }); await p.wai
 
 // ══ 1. THE reported bug: Report damage sheet survives the camera reload ══
 console.log('1 · Report damage sheet survives a reload')
-const p = await phone('mike@mvpcontainer.com')
+const p = await phone('mike@ntlsb.com')
 await p.getByRole('button', { name: /Pickups & Returns/ }).click()
 await p.waitForTimeout(900)
 await p.locator('text=/Pickup · NOLA-20-0006/').first().click()
@@ -77,7 +77,7 @@ ok(/NOLA-20-0006/.test(await body(p)), 'while the job itself still resumes')
 
 // ══ 2. The walk-around survives a reload mid-station ══
 console.log('2 · Walk-around survives a reload')
-const w = await phone('inspector@mvpcontainer.com')
+const w = await phone('inspector@ntlsb.com')
 await w.getByRole('button', { name: /Inspections/i }).first().click()
 await w.waitForTimeout(1200)
 await w.locator('text=/NOLA-20-0006/').first().click()
@@ -99,7 +99,7 @@ await w.screenshot({ path: `${SP}/mb-walk-restored.png` })
 
 // ══ 3. Claim workspace estimate survives a reload ══
 console.log('3 · Claim workspace survives a reload')
-const c = await phone('inspector@mvpcontainer.com')
+const c = await phone('inspector@ntlsb.com')
 await c.getByRole('button', { name: /Inspections/i }).first().click()
 await c.waitForTimeout(900)
 await c.getByRole('button', { name: /^Reviewed/ }).click()
@@ -117,7 +117,7 @@ await c.screenshot({ path: `${SP}/mb-claim-restored.png` })
 
 // ══ 4. Plain tab restore: Profile stays Profile ══
 console.log('4 · Tab position survives')
-const t = await phone('mike@mvpcontainer.com')
+const t = await phone('mike@ntlsb.com')
 await t.getByRole('button', { name: /^Profile$/ }).first().click()
 await t.waitForTimeout(900)
 await reload(t)
@@ -125,7 +125,7 @@ ok(/Schedule & availability|Profile/i.test(await body(t)), 'a plain tab (Profile
 
 // ══ 5. The picker itself: DOM-attached while the camera is up ══
 console.log('5 · Picker hygiene')
-const g = await phone('mike@mvpcontainer.com')
+const g = await phone('mike@ntlsb.com')
 await g.getByRole('button', { name: /Pickups & Returns/ }).click()
 await g.waitForTimeout(800)
 await g.locator('text=/Pickup · NOLA-20-0006/').first().click()
@@ -159,7 +159,7 @@ const ftCtx = await browser.newContext({ viewport: { width: 412, height: 740 }, 
 const ft = await ftCtx.newPage()
 await ft.goto('http://localhost:4890/SteelBox/field', { waitUntil: 'load' })
 await ft.waitForTimeout(1500)
-await ft.fill('input[type="email"]', 'mike@mvpcontainer.com')
+await ft.fill('input[type="email"]', 'mike@ntlsb.com')
 await ft.fill('input[type="password"]', 'x')
 await ft.getByRole('button', { name: /sign in/i }).click()
 await ft.waitForTimeout(2000)

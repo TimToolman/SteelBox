@@ -67,7 +67,7 @@ const ACTIVITY_META: Record<string, { label: string; color: string; bg: string }
 
 // Company dispatch identity used when messaging drivers / logging admin actions
 // (kept in sync with the field app's DISPATCH constant).
-const DISPATCH = { name: 'Dispatch (James R.)', email: 'ops@mvpcontainer.co' }
+const DISPATCH = { name: 'Dispatch (James R.)', email: 'dispatch@ntlsb.com' }
 
 // ── Combined delivery/return schedule (types from lib/api) ─
 
@@ -840,7 +840,7 @@ function UserModal({ target, drivers, sellers, suppliers, shipperLines, sellerId
       <label style={lbl}>Name</label>
       <input style={inp} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Jane Smith" />
       <label style={lbl}>Email {isNew ? '' : '(fixed)'}</label>
-      <input style={{ ...inp, background: isNew ? undefined : 'var(--surf1)' }} value={form.email} disabled={!isNew} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="user@mvpcontainer.co" />
+      <input style={{ ...inp, background: isNew ? undefined : 'var(--surf1)' }} value={form.email} disabled={!isNew} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="user@ntlsb.com" />
       <label style={lbl}>Role</label>
       <select style={inp} value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value as Role }))}>
         <option value="admin">Admin — full portal access</option>

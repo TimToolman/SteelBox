@@ -551,22 +551,22 @@ function ensureSeedUsers() {
     changed = true
     console.log(`Seeded ${fields.role} account: ${email} / test1234`)
   }
-  ensure('tgmoore@gmail.com', { role: 'admin', name: 'Tim Moore' })
+  ensure('hq@ntlsb.com', { role: 'admin', name: 'Tim Moore' })
   // Reseller admins — every reseller gets at least one admin of its own,
   // locked to that tenant (users.sellerId). The blank-sellerId account above
   // is SteelBox Co. HQ, which can spoof any tenant.
-  ensure('admin@mvpcontainer.com', { role: 'admin', name: 'Marie Landry', sellerId: 'sel_mvp', roles: ['marketplace', 'marketing'] })
-  ensure('admin@democontainercorp.com', { role: 'admin', name: 'Dana Whitfield', sellerId: 'sel_demo', roles: ['marketplace', 'marketing'] })
+  ensure('mvp.admin@ntlsb.com', { role: 'admin', name: 'Marie Landry', sellerId: 'sel_mvp', roles: ['marketplace', 'marketing'] })
+  ensure('demo.admin@ntlsb.com', { role: 'admin', name: 'Dana Whitfield', sellerId: 'sel_demo', roles: ['marketplace', 'marketing'] })
   // Reseller marketing persona — Marketing portal tab behind the single
   // marketplace login, scoped to their reseller's contacts and campaigns.
-  ensure('marketing@mvpcontainer.com', { role: 'customer', name: 'Josie Trahan', sellerId: 'sel_mvp', roles: ['marketplace', 'marketing'] })
+  ensure('marketing@ntlsb.com', { role: 'customer', name: 'Josie Trahan', sellerId: 'sel_mvp', roles: ['marketplace', 'marketing'] })
   // Damage-claim personas: the container owner and the shipping line.
-  ensure('supplier@oceanbox.com', { role: 'supplier', name: 'Dana Reyes', supplierId: 'sup_01', roles: ['marketplace', 'supplier'] })
-  ensure('shipper@meridianlines.com', { role: 'shipper', name: 'Kofi Mensah', shipperId: 'shp_01', roles: ['marketplace', 'shipper'] })
+  ensure('supplier@ntlsb.com', { role: 'supplier', name: 'Dana Reyes', supplierId: 'sup_01', roles: ['marketplace', 'supplier'] })
+  ensure('shipper@ntlsb.com', { role: 'shipper', name: 'Kofi Mensah', shipperId: 'shp_01', roles: ['marketplace', 'shipper'] })
   for (const d of readTable('drivers')) {
     if (d.active === false) continue
     const first = (d.name || 'driver').trim().split(/\s+/)[0].toLowerCase()
-    ensure(`${first}@mvpcontainer.com`, { role: 'driver', name: d.name, driverId: d.id, phone: d.cellPhone || '' })
+    ensure(`${first}@ntlsb.com`, { role: 'driver', name: d.name, driverId: d.id, phone: d.cellPhone || '' })
   }
   if (changed) writeTable('users', users)
 }
@@ -767,14 +767,14 @@ function notifyClaimParty(link, subject, body) {
 function ensureSeedClaimTables() {
   if (readTable('suppliers').length === 0) {
     writeTable('suppliers', [
-      { id: 'sup_01', name: 'OceanBox Supply Co', contactName: 'Dana Reyes', email: 'supplier@oceanbox.com', phone: '(504) 555-0230', active: true, createdAt: new Date().toISOString() },
+      { id: 'sup_01', name: 'OceanBox Supply Co', contactName: 'Dana Reyes', email: 'supplier@ntlsb.com', phone: '(504) 555-0230', active: true, createdAt: new Date().toISOString() },
       { id: 'sup_02', name: 'Gulf Container Traders', contactName: 'Marcus Webb', email: 'ops@gulfcontainer.co', phone: '(713) 555-0241', active: true, createdAt: new Date().toISOString() },
     ])
     console.log('Seeded suppliers (2)')
   }
   if (readTable('shippers').length === 0) {
     writeTable('shippers', [
-      { id: 'shp_01', name: 'Meridian Lines', line: 'Trans-Pacific', contactName: 'Kofi Mensah', email: 'shipper@meridianlines.com', phone: '(310) 555-0252', address: '1 Harbor Plaza, Long Beach, CA 90802', notes: '', active: true, createdAt: new Date().toISOString() },
+      { id: 'shp_01', name: 'Meridian Lines', line: 'Trans-Pacific', contactName: 'Kofi Mensah', email: 'shipper@ntlsb.com', phone: '(310) 555-0252', address: '1 Harbor Plaza, Long Beach, CA 90802', notes: '', active: true, createdAt: new Date().toISOString() },
       { id: 'shp_02', name: 'Austral Shipping', line: 'Gulf-Atlantic', contactName: 'Ines Duarte', email: 'claims@australshipping.com', phone: '(305) 555-0263', address: '400 Port Blvd, Miami, FL 33132', notes: '', active: true, createdAt: new Date().toISOString() },
     ])
     console.log('Seeded shippers (2)')
@@ -3763,5 +3763,5 @@ ensureSeedCustomBuilds()
 server.listen(PORT, () => {
   console.log(`MVP Container API (CSV-backed) listening on http://localhost:${PORT}`)
   console.log(`Data directory: ${DATA_DIR}`)
-  console.log(`Default admin: tgmoore@gmail.com / test1234`)
+  console.log(`Default admin: hq@ntlsb.com / test1234`)
 })

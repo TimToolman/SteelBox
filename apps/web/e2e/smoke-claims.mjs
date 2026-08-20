@@ -19,7 +19,7 @@ const browser = await launch()
 
 // ══ 1. Supplier claims list ══
 section('1 · Supplier claims list')
-const sup = await open(browser, { path: 'supplier', email: 'supplier@oceanbox.com' })
+const sup = await open(browser, { path: 'supplier', email: 'supplier@ntlsb.com' })
 const list = await text(sup)
 ok(/Damage Claims/i.test(list), 'the claims list renders')
 for (const gone of ['Email packet', 'Email full package', 'Download .zip', 'Copy share link', 'Claim packet (PDF)']) {
@@ -56,7 +56,7 @@ if (ws) {
 
 // ══ 3. Inspector hands to the supplier instead ══
 section('3 · Inspector hand-off')
-const ins = await open(browser, { path: 'field', email: 'inspector@mvpcontainer.com', width: 480, height: 900 })
+const ins = await open(browser, { path: 'field', email: 'inspector@ntlsb.com', width: 480, height: 900 })
 await ins.getByRole('button', { name: /Inspections/i }).first().click()
 await ins.waitForTimeout(1000)
 await ins.getByRole('button', { name: /^Reviewed/ }).click()
@@ -78,7 +78,7 @@ if (await clm.count()) {
 
 // ══ 4. Shipper must read before deciding ══
 section('4 · Shipper review gate')
-const shp = await open(browser, { path: 'shipper', email: 'shipper@meridianlines.com' })
+const shp = await open(browser, { path: 'shipper', email: 'shipper@ntlsb.com' })
 const before = await text(shp)
 ok(/Meridian Lines · Claims Review/.test(before), 'the header leads with the line name')
 ok(/Review the claim before deciding/.test(before), 'the decision is gated on a read')
@@ -99,7 +99,7 @@ ok(/Approve estimate/.test(after) && /Reject/.test(after), 'and only then unlock
 
 // ══ 5. Claims are a granted privilege for the field crew ══
 section('5 · Claims RBAC')
-const drv = await open(browser, { path: 'field', email: 'mike@mvpcontainer.com', width: 480, height: 900 })
+const drv = await open(browser, { path: 'field', email: 'mike@ntlsb.com', width: 480, height: 900 })
 await drv.getByRole('button', { name: /Inspections/i }).first().click()
 await drv.waitForTimeout(1100)
 ok(!/Damage review/.test(await text(drv)), 'a driver without the grant sees no damage queue')

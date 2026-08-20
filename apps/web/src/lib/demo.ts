@@ -56,7 +56,7 @@ const DEMO_USER_KEY = 'sbx_demo_user'
 
 function demoUser(overrides: Partial<AuthUser> = {}): AuthUser {
   return {
-    id: 'usr_demo', email: 'demo@mvpcontainers.com', role: 'customer',
+    id: 'usr_demo', email: 'customer@ntlsb.com', role: 'customer',
     name: 'Demo Customer', phone: '', driverId: '', customerId: '',
     phoneVerified: true, active: true, createdAt: new Date().toISOString(),
     twoFaVerified: true, mustChangePassword: false,
@@ -69,20 +69,44 @@ function demoUser(overrides: Partial<AuthUser> = {}): AuthUser {
 // Unknown emails do NOT get a session — new visitors go through Create an
 // account (profile + code), mirroring the API server. Returns null when the
 // email matches no seeded or session-created account.
+// Every demo login moved to @ntlsb.com; the old company-flavored addresses
+// keep signing in — an old bookmark or tester muscle memory quietly lands on
+// the renamed account.
+const LEGACY_LOGINS: Record<string, string> = {
+  'tgmoore@gmail.com': 'hq@ntlsb.com',
+  'admin@mvpcontainer.com': 'mvp.admin@ntlsb.com',
+  'admin@democontainercorp.com': 'demo.admin@ntlsb.com',
+  'marketing@mvpcontainer.com': 'marketing@ntlsb.com',
+  'demo@mvpcontainers.com': 'customer@ntlsb.com',
+  'inspector@mvpcontainer.com': 'inspector@ntlsb.com',
+  'supplier@oceanbox.com': 'supplier@ntlsb.com',
+  'supplier@oceanbox.co': 'supplier@ntlsb.com',
+  'shipper@meridianlines.com': 'shipper@ntlsb.com',
+  'dispatch@brconstruction.com': 'br.dispatch@ntlsb.com',
+  'mike@mvpcontainer.com': 'mike@ntlsb.com',
+  'mike@steelbox.co': 'mike@ntlsb.com',
+  'dan@mvpcontainer.com': 'dan@ntlsb.com',
+  'luis@mvpcontainer.com': 'luis@ntlsb.com',
+  'sara@mvpcontainer.com': 'sara@ntlsb.com',
+  'sara@steelbox.co': 'sara@ntlsb.com',
+  'justin@mvpcontainer.com': 'justin@ntlsb.com',
+  'justin@steelbox.co': 'justin@ntlsb.com',
+  'denise@mvpcontainer.com': 'denise@ntlsb.com',
+  'marcus@mvpcontainer.com': 'marcus@ntlsb.com',
+}
+
 function accountFor(email: string): Partial<AuthUser> | null {
   let norm = String(email || '').trim().toLowerCase()
+  norm = LEGACY_LOGINS[norm] || norm
   // Demo-only extra account: the inspector role — lands in the field app
   // with access to the AI condition-grading flow.
-  // still works; it was the same role under its previous name.
-  if (norm === 'inspector@mvpcontainer.com') {
+  if (norm === 'inspector@ntlsb.com') {
     // Carries the 'claims' grant an admin would tick, so the demo shows the
     // claim workspace; a driver without it sees inspections only.
     return { email: norm, role: 'inspector', name: 'Container Inspector', roles: ['marketplace', 'claims'] }
   }
   // The walk-up demo shopper from the tester guide.
-  if (norm === 'demo@mvpcontainers.com') return { email: norm, role: 'customer', name: 'Demo Customer' }
-  // Forgive the near-miss for the seeded supplier (.co → .com rename).
-  if (norm === 'supplier@oceanbox.co') norm = 'supplier@oceanbox.com'
+  if (norm === 'customer@ntlsb.com') return { email: norm, role: 'customer', name: 'Demo Customer' }
   const acct = db.users.find(u => String(u.email || '').toLowerCase() === norm && u.active !== false)
   return acct ? (acct as unknown as Partial<AuthUser>) : null
 }

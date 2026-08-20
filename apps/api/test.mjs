@@ -77,7 +77,7 @@ try {
 
   // ── Admin login: two-step with emailed code ──
   console.log('Admin 2FA login')
-  const l1 = await api('/auth/login', { method: 'POST', body: { email: 'tgmoore@gmail.com', password: 'test1234' } })
+  const l1 = await api('/auth/login', { method: 'POST', body: { email: 'hq@ntlsb.com', password: 'test1234' } })
   check('password step returns twoFaRequired', l1.status === 200 && l1.body?.twoFaRequired === true)
   check('dev code surfaced without SMTP', typeof l1.body?.devCode === 'string' && l1.body.devCode.length === 6)
   const bad = await api('/auth/login/verify', { method: 'POST', body: { pendingToken: l1.body.pendingToken, code: '000000' } })
@@ -90,7 +90,7 @@ try {
   // ── Change password clears the nag ──
   const chg = await api('/auth/change-password', { method: 'POST', token: admin, body: { current: 'test1234', next: 'a-real-password-1' } })
   check('change-password works', chg.status === 200 && chg.body?.changed === true)
-  const l3 = await api('/auth/login', { method: 'POST', body: { email: 'tgmoore@gmail.com', password: 'a-real-password-1' } })
+  const l3 = await api('/auth/login', { method: 'POST', body: { email: 'hq@ntlsb.com', password: 'a-real-password-1' } })
   check('new password logs in (2FA step)', l3.status === 200 && l3.body?.twoFaRequired === true)
 
   // ── Customer register: profile + verification required up front ──
@@ -163,10 +163,10 @@ try {
 
   // ── Damage-claim pipeline: supplier → inspection → estimate → shipper → sell as damaged ──
   console.log('Damage claims')
-  const supLogin = await api('/auth/login', { method: 'POST', body: { email: 'supplier@oceanbox.com', password: 'test1234' } })
+  const supLogin = await api('/auth/login', { method: 'POST', body: { email: 'supplier@ntlsb.com', password: 'test1234' } })
   check('supplier signs in', supLogin.status === 200 && !!supLogin.body?.token)
   const supplier = supLogin.body.token
-  const shpLogin = await api('/auth/login', { method: 'POST', body: { email: 'shipper@meridianlines.com', password: 'test1234' } })
+  const shpLogin = await api('/auth/login', { method: 'POST', body: { email: 'shipper@ntlsb.com', password: 'test1234' } })
   check('shipper signs in', shpLogin.status === 200 && !!shpLogin.body?.token)
   const shipper = shpLogin.body.token
 
@@ -209,11 +209,11 @@ try {
   const claimHandoff = await api(`/claims/${claimId}/share`, { method: 'POST', token: admin, body: { mode: 'handoff' } })
   check('an inspector can hand a priced claim to the supplier', claimHandoff.status === 200)
   const handMail = (await api('/outbox', { token: admin })).body.find(m => m.subject.startsWith('Claim ready to submit'))
-  check('the hand-off email goes to the supplier, not the line', !!handMail && handMail.to === 'supplier@oceanbox.com')
+  check('the hand-off email goes to the supplier, not the line', !!handMail && handMail.to === 'supplier@ntlsb.com')
   check('and carries the estimate and a link to the claim', !!handMail && handMail.body.includes('$2,400') && handMail.body.includes('/claim?id='))
   check('the timeline records the hand-off', JSON.parse(claimHandoff.body.events || '[]').some(e => /handed to .* to submit/.test(e.text)))
   const outboxShare = (await api('/outbox', { token: admin })).body
-  check('shipper share email queued with login link', outboxShare.some(m => m.to === 'shipper@meridianlines.com' && m.body.includes('/shipper?claim=')))
+  check('shipper share email queued with login link', outboxShare.some(m => m.to === 'shipper@ntlsb.com' && m.body.includes('/shipper?claim=')))
   const pref = await api('/auth/me', { method: 'PATCH', token: shipper, body: { digestFreq: 'weekly' } })
   check('digest preference saved', pref.status === 200 && pref.body?.digestFreq === 'weekly')
 
@@ -245,7 +245,7 @@ try {
   check('forged package links are rejected', badTok.status === 401 || badTok.status === 403)
   const pkgShare = await api(`/claims/${claimId}/share`, { method: 'POST', token: supplier, body: { mode: 'package' } })
   check('package can be emailed as a download link', pkgShare.status === 200)
-  const pkgMail = (await api('/outbox', { token: admin })).body.find(m => m.to === 'shipper@meridianlines.com' && m.body.includes('package.zip?t='))
+  const pkgMail = (await api('/outbox', { token: admin })).body.find(m => m.to === 'shipper@ntlsb.com' && m.body.includes('package.zip?t='))
   check('email carries the direct download link', !!pkgMail)
 
   // ── The claim document + estimate: review → estimate → send ──
@@ -327,7 +327,7 @@ try {
   check('Demo Corp holds the Mobile-Nashville corridor', (sellerRows.find(s => s.id === 'sel_demo')?.territoryZips || '').includes('350-374'))
   const stations = (await api('/meetpoints')).body
   check('3 transfer stations seeded incl. Nashville', stations.length >= 3 && stations.some(m => m.name.includes('Nashville')))
-  const rl1 = await api('/auth/login', { method: 'POST', body: { email: 'admin@mvpcontainer.com', password: 'test1234' } })
+  const rl1 = await api('/auth/login', { method: 'POST', body: { email: 'mvp.admin@ntlsb.com', password: 'test1234' } })
   const rl2 = await api('/auth/login/verify', { method: 'POST', body: { pendingToken: rl1.body?.pendingToken, code: rl1.body?.devCode } })
   check('reseller admin logs in scoped to MVP', rl2.status === 200 && rl2.body?.user?.sellerId === 'sel_mvp')
   const mvpAdmin = rl2.body.token
@@ -336,12 +336,12 @@ try {
   const tDrivers = (await api('/drivers', { token: mvpAdmin })).body
   check('drivers list scoped to the MVP fleet', tDrivers.length > 0 && tDrivers.every(d => (d.sellerId || 'sel_mvp') === 'sel_mvp'))
   const tUsers = (await api('/users', { token: mvpAdmin })).body
-  check('users list hides HQ and other resellers', tUsers.some(u => u.email === 'admin@mvpcontainer.com')
-    && !tUsers.some(u => u.email === 'tgmoore@gmail.com')
-    && !tUsers.some(u => u.email === 'admin@democontainercorp.com'))
+  check('users list hides HQ and other resellers', tUsers.some(u => u.email === 'mvp.admin@ntlsb.com')
+    && !tUsers.some(u => u.email === 'hq@ntlsb.com')
+    && !tUsers.some(u => u.email === 'demo.admin@ntlsb.com'))
   const hqUsers = (await api('/users', { token: admin })).body
-  check('HQ still sees every account', hqUsers.some(u => u.email === 'admin@democontainercorp.com') && hqUsers.some(u => u.email === 'admin@mvpcontainer.com'))
-  const demoAdminAcct = hqUsers.find(u => u.email === 'admin@democontainercorp.com')
+  check('HQ still sees every account', hqUsers.some(u => u.email === 'demo.admin@ntlsb.com') && hqUsers.some(u => u.email === 'mvp.admin@ntlsb.com'))
+  const demoAdminAcct = hqUsers.find(u => u.email === 'demo.admin@ntlsb.com')
   const forbid = await api(`/users/${demoAdminAcct.id}`, { method: 'PATCH', token: mvpAdmin, body: { name: 'Hijacked' } })
   check("editing another reseller's account is blocked", forbid.status === 403)
   const hqOrders = (await api('/orders', { token: admin })).body
@@ -373,21 +373,21 @@ try {
   console.log('Shipper accounts & line contacts')
   const noLine = await api('/users', { method: 'POST', token: admin, body: { email: 'lineless@test.dev', password: 'test1234x', role: 'shipper', name: 'No Line' } })
   check('a shipper account without a line is refused', noLine.status === 400 && /shipping line/i.test(noLine.body?.message || ''))
-  const withLine = await api('/users', { method: 'POST', token: admin, body: { email: 'tied@meridianlines.com', password: 'test1234x', role: 'shipper', name: 'Tied Reviewer', shipperId: 'shp_01' } })
+  const withLine = await api('/users', { method: 'POST', token: admin, body: { email: 'tied@ntlsb.com', password: 'test1234x', role: 'shipper', name: 'Tied Reviewer', shipperId: 'shp_01' } })
   check('tied to a line, the account is minted', withLine.status === 201 && withLine.body?.shipperId === 'shp_01')
   const untie = await api(`/users/${withLine.body.id}`, { method: 'PATCH', token: admin, body: { shipperId: '' } })
   check('and the line cannot be edited away later', untie.status === 400)
   // Contacts = the users tied to the line; invite mints a working login.
-  const inv = await api('/shippers/shp_01/invite', { method: 'POST', token: admin, body: { name: 'Ana Osei', email: 'ana.osei@meridianlines.com', phone: '(310) 555-0299' } })
+  const inv = await api('/shippers/shp_01/invite', { method: 'POST', token: admin, body: { name: 'Ana Osei', email: 'ana.osei@ntlsb.com', phone: '(310) 555-0299' } })
   check('inviting a contact mints a shipper login', inv.status === 201 && inv.body?.user?.shipperId === 'shp_01' && !!inv.body?.tempPassword)
-  const invMail = (await api('/outbox', { token: admin })).body.find(m => m.to === 'ana.osei@meridianlines.com')
+  const invMail = (await api('/outbox', { token: admin })).body.find(m => m.to === 'ana.osei@ntlsb.com')
   check('the invite email carries the portal link + temp password', !!invMail && invMail.body.includes('/shipper') && invMail.body.includes(inv.body.tempPassword))
-  const invLogin = await api('/auth/login', { method: 'POST', body: { email: 'ana.osei@meridianlines.com', password: inv.body.tempPassword } })
+  const invLogin = await api('/auth/login', { method: 'POST', body: { email: 'ana.osei@ntlsb.com', password: inv.body.tempPassword } })
   check('the invited contact can sign in with it', invLogin.status === 200 && !!invLogin.body?.token)
-  const invDup = await api('/shippers/shp_01/invite', { method: 'POST', token: admin, body: { name: 'Ana Again', email: 'ana.osei@meridianlines.com' } })
+  const invDup = await api('/shippers/shp_01/invite', { method: 'POST', token: admin, body: { name: 'Ana Again', email: 'ana.osei@ntlsb.com' } })
   check('a duplicate invite is refused', invDup.status === 409)
   const contacts = await api('/shippers/shp_01/contacts', { token: admin })
-  check('the contacts list shows everyone at the line', contacts.status === 200 && contacts.body.some(u => u.email === 'ana.osei@meridianlines.com') && contacts.body.some(u => u.email === 'tied@meridianlines.com'))
+  check('the contacts list shows everyone at the line', contacts.status === 200 && contacts.body.some(u => u.email === 'ana.osei@ntlsb.com') && contacts.body.some(u => u.email === 'tied@ntlsb.com'))
   // Hide = pull every grant ('blocked' sentinel keeps the row listed).
   const hide = await api(`/users/${inv.body.user.id}`, { method: 'PATCH', token: admin, body: { roles: [] } })
   check('hiding access empties the grants but keeps the contact', hide.status === 200 && Array.isArray(hide.body?.roles) && hide.body.roles.length === 0)
@@ -408,7 +408,7 @@ try {
   check('the screenshot lands on disk, not inline', /^\/photos\//.test(issGuest.body?.screenshotUrl || ''))
   check('console errors ride along', JSON.parse(issGuest.body.consoleErrors)[0].includes('TypeError'))
   const issSigned = await api('/issues', { method: 'POST', token: supplier, body: { details: 'Filter reset also cleared my ZIP', url: 'http://x/shop', route: '/shop' } })
-  check('a signed-in report carries who filed it', issSigned.status === 201 && issSigned.body?.reporterEmail === 'supplier@oceanbox.com')
+  check('a signed-in report carries who filed it', issSigned.status === 201 && issSigned.body?.reporterEmail === 'supplier@ntlsb.com')
   const issDenied = await api('/issues', { token: supplier })
   check('only admins read the list', issDenied.status === 403 || issDenied.status === 401)
   const issList = await api('/issues', { token: admin })
@@ -537,7 +537,7 @@ try {
 
   // ── Marketing portal: tenancy, CSV import, campaign funnel, plans ──
   console.log('Marketing portal')
-  const mkLogin = await api('/auth/login', { method: 'POST', body: { email: 'marketing@mvpcontainer.com', password: 'test1234' } })
+  const mkLogin = await api('/auth/login', { method: 'POST', body: { email: 'marketing@ntlsb.com', password: 'test1234' } })
   check('marketing persona signs in with the grant', mkLogin.status === 200 && !!mkLogin.body?.token && (mkLogin.body.user?.roles || []).includes('marketing'))
   const mkt = mkLogin.body.token
   const myContacts = await api('/marketing/contacts', { token: mkt })
@@ -574,7 +574,7 @@ try {
   // HQ manages campaigns on a reseller's behalf (managedBy stamp + sellerId routing)
   const hqCamp = await api('/marketing/campaigns', { method: 'POST', token: admin, body: { name: 'HQ boost for Demo Corp', type: 'social', platform: 'facebook', content: 'New arrivals in Baltimore', sellerId: 'sel_demo' } })
   check("HQ drafts on the reseller's behalf", hqCamp.status === 201 && hqCamp.body?.sellerId === 'sel_demo' && hqCamp.body?.managedBy === 'hq')
-  const demoLogin1 = await api('/auth/login', { method: 'POST', body: { email: 'admin@democontainercorp.com', password: 'test1234' } })
+  const demoLogin1 = await api('/auth/login', { method: 'POST', body: { email: 'demo.admin@ntlsb.com', password: 'test1234' } })
   const demoLogin2 = await api('/auth/login/verify', { method: 'POST', body: { pendingToken: demoLogin1.body?.pendingToken, code: demoLogin1.body?.devCode } })
   const demoSees = (await api('/marketing/campaigns', { token: demoLogin2.body.token })).body
   check('the reseller sees the HQ-managed campaign', demoSees.some(c => c.id === hqCamp.body.id && c.managedBy === 'hq'))
