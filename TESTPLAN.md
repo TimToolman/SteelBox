@@ -44,7 +44,8 @@ Anyone browsing the marketplace before signing in.
 | # | Feature | Steps | Expect | Coverage |
 |---|---|---|---|---|
 | G-1 | Hero on a phone | Open the home page on a phone | The headline sits right under the nav — no live-inventory badge, one short line of copy, and How It Works reachable on the first screen | Auto — smoke-admin |
-| G-2 | Delivery-ZIP prompt | Open /shop in a fresh tab | ZIP prompt appears once per session; enter a ZIP or pick Nationwide Search; it never re-appears this session | Manual only |
+| G-2 | Welcome gate | Open /shop in a fresh tab | Once per session: "Sign In — I already have an account" or "Continue as guest", with an optional Delivery ZIP field. A ZIP checked on the homepage carries over (shown as "Delivering to ZIP …" instead of the field); a visitor with a stored sign-in skips the gate entirely | Manual only |
+| G-2b | Homepage ZIP carry-over | On the home page check a ZIP, then Browse Inventory | /shop opens already scoped to that ZIP — left rail shows it under Zip Destination, welcome gate confirms it | Manual only |
 | G-3 | Left rail order | Look at the left rail top-to-bottom | Zip Destination → Sort By → divider → Filters/Reset header → Size → Grade…; Reset clears only the filters below it, never ZIP or sort | Auto — smoke-batch |
 | G-4 | Card hover magnifier | Hover any container card (desktop) | Card lifts, magnifying-glass circle fades in over the photo; clicking anywhere opens the detail | Auto — smoke-batch |
 | G-5 | Detail gallery | Open any unit | Tall hero (~280–440px); thumbnail strip below with the active shot ringed + underlined, others dimmed until hover | Auto — smoke-batch + smoke-viewer |
@@ -52,7 +53,7 @@ Anyone browsing the marketplace before signing in.
 | G-7 | Zoom in place | Scroll / pinch / double-tap the hero; drag while zoomed | Zooms up to 6× without leaving the page; drag pans; switching shots resets zoom | Auto — smoke-viewer |
 | G-8 | Full-screen viewer | Click the hero photo (or the Full screen pill) | Viewer opens with the same cluster + thumb strip UNDER the image; counter + shot name at the bottom by the controls; Close (✕) on the image box’s top-right | Auto — smoke-batch + smoke-viewer |
 | G-9 | Keyboard | In the viewer press ← → + − 0 Esc | Arrows move the photo ONLY (the container behind must not change); +/− zoom; 0 fits; Esc closes and page scroll returns | Auto — smoke-viewer |
-| G-10 | Show 3D View | Click the pill at the viewer’s top right | Viewer closes; gallery lands on the 3D slot (drag to rotate when no AI render exists) | Auto — smoke-batch |
+| G-10 | Show 3D View | Click the pill at the viewer’s top right | Viewer closes; gallery lands on the 3D slot (drag to rotate when no AI render exists); the box’s long sides carry orange length ("20 foot") and height (8′6″ / 9′6″ high-cube) callouts | Auto — smoke-batch |
 | G-11 | Damaged unit photos | Open a D-grade unit; tap a photo in the red "sold as-is" strip | Damage photos open in the same full-screen viewer | Manual only |
 | G-12 | Buy/Rent + price card | Toggle Buy/Rent; scroll the detail | Price switches; the price card stays visible (sticky); ZIP check answers territory/relay | Manual only |
 

@@ -49,7 +49,7 @@ const VIEW_TITLES: Record<AdminView, string> = {
   notifications: 'Alerts',
   depots:        'Depots',
   repairshops:   'Repair Shops',
-  sellers:       'Sellers',
+  sellers:       'Resellers',
   shippinglines: 'Shipping Lines',
   builds:        'Custom Builds',
   betaissues:    'Beta Issues',
@@ -1228,7 +1228,7 @@ function SellerModal({ target, onClose, onSaved }: { target: Seller | 'new' | nu
   return (
     <Modal open={target !== null} onClose={onClose} maxWidth={520}>
       <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '4px' }}>{isNew ? 'Add Seller' : 'Edit Seller'}</h2>
-      <p style={{ fontSize: '12px', color: 'var(--ink3)', marginBottom: '20px' }}>Sellers own depots and fulfill their own orders — logo colors, contact, and service agreement show on every listing they sell.</p>
+      <p style={{ fontSize: '12px', color: 'var(--ink3)', marginBottom: '20px' }}>Resellers own depots and fulfill their own orders — logo colors, contact, and service agreement show on every listing they sell.</p>
       {fld('Company name', 'name', 'Demo Container Corp')}
       {fld('Legal name', 'legalName', 'Demo Container Corporation')}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
@@ -1714,6 +1714,8 @@ export default function AdminPage() {
   const isMobile = useIsMobile()
   // Phones: the left nav becomes an off-canvas drawer behind a hamburger.
   const [navOpen, setNavOpen] = useState(false)
+  // Top-right account menu (avatar chip → who's signed in + sign out)
+  const [acctMenuOpen, setAcctMenuOpen] = useState(false)
   const go = (v: AdminView) => { setView(v); setNavOpen(false) }
   const [assignOpen, setAssignOpen] = useState(false)
   const [assignDriverId, setAssignDriverId] = useState<string | undefined>(undefined)
@@ -2400,7 +2402,7 @@ export default function AdminPage() {
           <NavItem active={view === 'betaissues'} onClick={() => go('betaissues')} label="Beta Issues" badge={issueList.filter(i => i.status === 'open').length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="11" r="4.2" /><path d="M10 6.8V4.5M6.9 8 5 6.2M13.1 8 15 6.2M5.8 11H3.5M16.5 11h-2.3M6.9 14 5 15.8M13.1 14 15 15.8" /></svg>} />
           <NavItem active={view === 'depots'} onClick={() => go('depots')} label="Depots" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2a5.5 5.5 0 0 0-5.5 5.5c0 4 5.5 10 5.5 10s5.5-6 5.5-10A5.5 5.5 0 0 0 10 2z" /><circle cx="10" cy="7.5" r="1.8" /></svg>} />
           <NavItem active={view === 'repairshops'} onClick={() => go('repairshops')} label="Repair Shops" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13.5 6.5a3.5 3.5 0 0 0-4.8-3.2l2.1 2.1-2.1 2.1-2.1-2.1a3.5 3.5 0 0 0 4.6 4.6l4.4 4.4a1.5 1.5 0 0 0 2.1-2.1l-4.4-4.4c.13-.44.2-.9.2-1.4z" /></svg>} />
-          {scope === 'global' && <NavItem active={view === 'sellers'} onClick={() => go('sellers')} label="Sellers" badge={sellerList.filter(x => x.active !== false).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7l1-4h12l1 4" /><path d="M3 7h14v10H3z" /><path d="M8 11h4" /></svg>} />}
+          {scope === 'global' && <NavItem active={view === 'sellers'} onClick={() => go('sellers')} label="Resellers" badge={sellerList.filter(x => x.active !== false).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7l1-4h12l1 4" /><path d="M3 7h14v10H3z" /><path d="M8 11h4" /></svg>} />}
           {scope === 'global' && <NavItem active={view === 'shippinglines'} onClick={() => go('shippinglines')} label="Shipping Lines" badge={shipperLines.filter(x => x.active !== false).length} icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 3v10" /><circle cx="10" cy="4.5" r="1.6" /><path d="M6.5 7h7" /><path d="M4 11c0 3.3 2.7 6 6 6s6-2.7 6-6l-2 1-2-1-2 1-2-1-2 1z" /></svg>} />}
           <NavItem active={view === 'builds'} onClick={() => go('builds')} label="Custom Builds" icon={<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5.5l2 2L7 15H5v-2z" /><path d="M11 7l2 2" /><rect x="2" y="4" width="16" height="13" rx="1.5" /></svg>} />
         </div>
@@ -2441,6 +2443,36 @@ export default function AdminPage() {
             <button onClick={refreshAll} style={{ width: '36px', height: '36px', borderRadius: '50%', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M17 10A7 7 0 113 10" /><polyline points="17,6 17,10 13,10" /></svg>
             </button>
+            {/* Account — avatar chip with a small menu: who's signed in + sign out
+                (the same identity block as the sidebar foot, reachable without
+                scrolling the nav). */}
+            <div style={{ position: 'relative' }}>
+              <button onClick={() => setAcctMenuOpen(o => !o)} aria-label="Account menu" aria-expanded={acctMenuOpen} title={adminUser?.email || 'Account'}
+                style={{ width: '34px', height: '34px', borderRadius: '50%', border: 'none', background: 'linear-gradient(135deg,#0057B8,#0048A3)', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {(adminUser?.name || 'A').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()}
+              </button>
+              {acctMenuOpen && (
+                <>
+                  <div onClick={() => setAcctMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 90 }} />
+                  <div style={{ position: 'absolute', right: 0, top: '42px', zIndex: 91, background: 'var(--surf-w)', border: '1px solid var(--div)', borderRadius: 'var(--r12)', boxShadow: '0 10px 28px rgba(15,23,42,.16)', minWidth: '230px', padding: '6px', boxSizing: 'border-box' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', borderBottom: '1px solid var(--div)', marginBottom: '4px' }}>
+                      <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg,#0057B8,#0048A3)', color: '#fff', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        {(adminUser?.name || 'A').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: '13px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adminUser?.name || 'Admin'}</div>
+                        <div style={{ fontSize: '10.5px', color: 'var(--ink3)', fontFamily: 'var(--mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adminUser?.email || 'Administrator'}</div>
+                      </div>
+                    </div>
+                    <button onClick={() => { setAcctMenuOpen(false); logout() }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '9px', width: '100%', padding: '9px 10px', borderRadius: 'var(--r8)', border: 'none', background: 'transparent', color: 'var(--ink)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', textAlign: 'left' }}>
+                      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="var(--ink2)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 17H4a1 1 0 01-1-1V4a1 1 0 011-1h4" /><polyline points="13,6 17,10 13,14" /><line x1="17" y1="10" x2="7" y2="10" /></svg>
+                      Sign out
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -3587,7 +3619,7 @@ export default function AdminPage() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                 <div>
-                  <div style={{ fontSize: '15px', fontWeight: 700 }}>Marketplace Sellers</div>
+                  <div style={{ fontSize: '15px', fontWeight: 700 }}>Marketplace Resellers</div>
                   <div style={{ fontSize: '12px', color: 'var(--ink3)', marginTop: '2px' }}>
                     Each seller owns depots and fulfills its own orders with its own drivers, pricing, and service agreement — National SteelBox runs the marketplace. Assign a depot to a seller from Depots → Edit.
                   </div>

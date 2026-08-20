@@ -279,18 +279,26 @@ export default function MarketplacePage() {
     }
   }, [areaZip, depotList])
 
-  // Ask for the ZIP up front when the shopper arrived without one — once per
-  // browser session, dismissible with "Skip for now".
+  // Welcome gate — once per browser session: sign in (already a user) or
+  // continue as guest, and grab the delivery ZIP if the homepage check
+  // didn't already provide one (that ZIP carries over via localStorage).
+  // A stored token means a returning signed-in visitor — no gate.
   useEffect(() => {
-    let prompted = false
-    try { prompted = sessionStorage.getItem('sbx_zip_prompted') === '1' } catch { /* private mode */ }
-    if (!areaZip && !prompted) setZipAskOpen(true)
+    let prompted = false, token = ''
+    try {
+      prompted = sessionStorage.getItem('sbx_zip_prompted') === '1'
+      token = localStorage.getItem('sbx_token') || ''
+    } catch { /* private mode */ }
+    if (!prompted && !token) setZipAskOpen(true)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const closeZipAsk = (zip?: string) => {
     setZipAskOpen(false)
     try { sessionStorage.setItem('sbx_zip_prompted', '1') } catch { /* private mode */ }
     if (zip && zip.length === 5) setAreaZip(zip)
   }
+  // "Sign In" from the gate: close it (keeping any ZIP typed there) and open
+  // the profile sheet, which shows the sign-in form to a signed-out visitor.
+  const welcomeSignIn = () => { closeZipAsk(zipAskInput); setProfileOpen(true) }
   // Who services the customer — resellers owning the in-range yards.
   const geoDepotNames = geoHits ? new Set(geoHits.map(h => h.depot.name)) : null
   const areaSellers = [...new Set(
@@ -550,7 +558,7 @@ export default function MarketplacePage() {
                 maxLength={5}
                 placeholder="Delivery ZIP"
                 onChange={e => setAreaZip(e.target.value.replace(/\D/g, '').slice(0, 5))}
-                style={{ width: '100%', padding: '9px 11px', border: `1.5px solid ${geoHits ? 'var(--primary)' : 'var(--div)'}`, borderRadius: 'var(--r8)', fontSize: '14px', fontFamily: 'var(--mono)', letterSpacing: '2px', fontWeight: 700, outline: 'none', boxSizing: 'border-box', background: 'var(--surf-w)' }}
+                style={{ width: '100%', padding: '9px 11px', border: `1.5px solid ${geoHits ? 'var(--primary)' : 'var(--div)'}`, borderRadius: 'var(--r8)', fontSize: '16px', fontFamily: 'var(--sans)', fontWeight: 600, outline: 'none', boxSizing: 'border-box', background: 'var(--surf-w)' }}
               />
               {geoHits && (
                 <div style={{ fontSize: '11px', color: 'var(--green)', fontWeight: 600, marginTop: '6px', lineHeight: 1.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -843,27 +851,37 @@ export default function MarketplacePage() {
 
       </div>{/* end shop-content wrapper */}
 
-      {/* ── First-visit ZIP prompt — sets branding + service-area filter ── */}
-      <Modal open={zipAskOpen} onClose={() => closeZipAsk()} maxWidth={400}>
-        <h2 style={{ fontSize: '19px', fontWeight: 700, marginBottom: '6px' }}>Where's your container headed?</h2>
-        <p style={{ fontSize: '13px', color: 'var(--ink3)', lineHeight: 1.55, marginBottom: '14px' }}>
-          What ZIP code would you like your container shipped to? We'll show the reseller
-          serving your area, their local inventory, and all-in delivered pricing.
-        </p>
-        <form onSubmit={e => { e.preventDefault(); if (zipAskInput.length === 5) closeZipAsk(zipAskInput) }}>
-          <input
-            autoFocus inputMode="numeric" maxLength={5} placeholder="Delivery ZIP"
-            value={zipAskInput}
-            onChange={e => setZipAskInput(e.target.value.replace(/\D/g, '').slice(0, 5))}
-            style={{ width: '100%', padding: '12px 14px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '16px', fontFamily: 'var(--mono)', letterSpacing: '2px', outline: 'none', boxSizing: 'border-box', marginBottom: '12px' }}
-          />
-          <button type="submit" disabled={zipAskInput.length !== 5}
-            style={{ width: '100%', padding: '12px', borderRadius: 'var(--pill)', border: 'none', background: zipAskInput.length === 5 ? 'var(--primary)' : 'var(--div)', color: zipAskInput.length === 5 ? '#fff' : 'var(--ink3)', fontSize: '14px', fontWeight: 700, cursor: zipAskInput.length === 5 ? 'pointer' : 'default' }}>
-            Show containers for my area
-          </button>
-        </form>
-        <button onClick={() => closeZipAsk()} style={{ width: '100%', marginTop: '8px', padding: '10px', borderRadius: 'var(--pill)', border: 'none', background: 'transparent', color: 'var(--ink3)', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
-          Skip for now
+      {/* ── Welcome gate — sign in or browse as guest; grabs the delivery
+          ZIP when the homepage check didn't already carry one over ── */}
+      <Modal open={zipAskOpen} onClose={() => closeZipAsk(zipAskInput)} maxWidth={400}>
+        <h2 style={{ fontSize: '19px', fontWeight: 700, marginBottom: '6px' }}>Welcome to the marketplace</h2>
+        {areaZip.length === 5 ? (
+          <p style={{ fontSize: '13px', color: 'var(--ink3)', lineHeight: 1.55, marginBottom: '14px' }}>
+            Delivering to <strong style={{ color: 'var(--ink)' }}>ZIP {areaZip}</strong> — showing
+            the reseller serving your area and all-in delivered pricing. Change it anytime
+            under Zip Destination.
+          </p>
+        ) : (
+          <>
+            <p style={{ fontSize: '13px', color: 'var(--ink3)', lineHeight: 1.55, marginBottom: '14px' }}>
+              What ZIP code would you like your container shipped to? We'll show the reseller
+              serving your area, their local inventory, and all-in delivered pricing.
+            </p>
+            <input
+              autoFocus inputMode="numeric" maxLength={5} placeholder="Delivery ZIP (optional)"
+              value={zipAskInput}
+              onChange={e => setZipAskInput(e.target.value.replace(/\D/g, '').slice(0, 5))}
+              style={{ width: '100%', padding: '12px 14px', border: '1.5px solid var(--div)', borderRadius: 'var(--r8)', fontSize: '16px', fontFamily: 'var(--sans)', fontWeight: 600, outline: 'none', boxSizing: 'border-box', marginBottom: '12px' }}
+            />
+          </>
+        )}
+        <button onClick={welcomeSignIn}
+          style={{ width: '100%', padding: '12px', borderRadius: 'var(--pill)', border: 'none', background: 'var(--primary)', color: '#fff', fontSize: '14px', fontWeight: 700, cursor: 'pointer' }}>
+          Sign In — I already have an account
+        </button>
+        <button onClick={() => closeZipAsk(zipAskInput)}
+          style={{ width: '100%', marginTop: '8px', padding: '11px', borderRadius: 'var(--pill)', border: '1.5px solid var(--div)', background: 'var(--surf-w)', color: 'var(--ink2)', fontSize: '13.5px', fontWeight: 700, cursor: 'pointer' }}>
+          Continue as guest
         </button>
       </Modal>
 
