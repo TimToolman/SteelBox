@@ -671,7 +671,7 @@ export function SiteFooter({ tenant }: { tenant: Tenant }) {
       <div className="ld-wrap">
         <div className="ld-footer-grid">
           <div className="ld-footer-brand">
-            <img src={u('logo-nsb.png')} alt={`${tenant.name} — buy, rent, finance`} width="720" height="496" />
+            <img src={u('logo-nsb.svg')} alt={`${tenant.name} — buy, rent, finance`} width="720" height="496" />
             <p>
               The marketplace for field-inspected shipping containers — real photos of your
               exact unit, local resellers, continental USA delivery.

@@ -371,7 +371,7 @@ export function RequireRole({ roles, title, children }: {
         {/* The sign-in card is the one compact place the full lockup fits —
             400px wide, nothing competing with it. */}
         <img
-          src={`${import.meta.env.BASE_URL}logo-nsb.png`} alt="National SteelBox"
+          src={`${import.meta.env.BASE_URL}logo-nsb.svg`} alt="National SteelBox"
           width="720" height="496"
           style={{ width: '186px', maxWidth: '100%', height: 'auto', display: 'block', margin: '0 auto 4px' }}
         />
