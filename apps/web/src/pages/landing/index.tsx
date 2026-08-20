@@ -233,13 +233,16 @@ function Check() {
 
 function Hero({ tenant }: { tenant: Tenant }) {
   const [input, setInput] = useState('')
-  // ZIP the shopper last checked ('' until they submit) — the form answers
-  // "do you deliver to me?", nothing more.
+  // ZIP the shopper last checked ('' until they submit). A checked ZIP is
+  // remembered (sbx_zip) so /shop opens already scoped to their area.
   const [checked, setChecked] = useState('')
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     const v = input.trim().slice(0, 5)
-    if (v.length === 5) setChecked(v)
+    if (v.length === 5) {
+      setChecked(v)
+      try { localStorage.setItem('sbx_zip', v) } catch { /* private mode */ }
+    }
   }
   return (
     <section className="ld-hero">

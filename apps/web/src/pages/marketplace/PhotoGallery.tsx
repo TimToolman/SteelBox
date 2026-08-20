@@ -27,19 +27,33 @@ function Container3D({ size, grade, rotY, rotX, tex }: { size: ContainerSize; gr
   const skin = (fallback: string, photo?: string): React.CSSProperties =>
     // Cutout photos have transparent backgrounds — back them with a steel tone.
     photo ? { backgroundColor: '#31517e', backgroundImage: `url(${photo})`, backgroundSize: 'cover', backgroundPosition: 'center' } : { background: fallback }
-  // Long sides: flat blue with the container length superimposed (double arrow
-  // + "20 foot"), matching the marketing mock.
-  const arrowW = W - 44
+  // Long sides: flat blue with the container dimensions superimposed — the
+  // length as a horizontal double arrow + "20 foot" (matching the marketing
+  // mock), and the height as a matching vertical double arrow on the right
+  // edge (8'6" standard, 9'6" high-cube).
+  const arrowW = W - (is10 ? 72 : 92)
+  const heightLabel = size.includes('-hc') ? '9′6″' : '8′6″'
+  const arrowH = H - 26
   const sideFace: React.CSSProperties = { background: '#33538A', display: 'grid', placeItems: 'center' }
   const sizeCallout = (
-    <div style={{ display: 'grid', justifyItems: 'center', gap: '3px' }}>
-      <span style={{ color: '#F5A623', fontWeight: 700, fontSize: is10 ? '13px' : '16px', fontFamily: 'var(--sans)', letterSpacing: '0.2px', textShadow: '0 1px 3px rgba(0,0,0,.4)' }}>{sizeLabel}</span>
-      <svg width={arrowW} height="16" viewBox={`0 0 ${arrowW} 16`} fill="none" stroke="#F5A623" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-        <path d={`M3 8 H${arrowW - 3}`} />
-        <path d="M12 2 L3 8 L12 14" />
-        <path d={`M${arrowW - 12} 2 L${arrowW - 3} 8 L${arrowW - 12} 14`} />
-      </svg>
-    </div>
+    <>
+      <div style={{ display: 'grid', justifyItems: 'center', gap: '3px' }}>
+        <span style={{ color: '#F5A623', fontWeight: 700, fontSize: is10 ? '13px' : '16px', fontFamily: 'var(--sans)', letterSpacing: '0.2px', textShadow: '0 1px 3px rgba(0,0,0,.4)' }}>{sizeLabel}</span>
+        <svg width={arrowW} height="16" viewBox={`0 0 ${arrowW} 16`} fill="none" stroke="#F5A623" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <path d={`M3 8 H${arrowW - 3}`} />
+          <path d="M12 2 L3 8 L12 14" />
+          <path d={`M${arrowW - 12} 2 L${arrowW - 3} 8 L${arrowW - 12} 14`} />
+        </svg>
+      </div>
+      <div style={{ position: 'absolute', right: '5px', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+        <span style={{ color: '#F5A623', fontWeight: 700, fontSize: is10 ? '10px' : '12px', fontFamily: 'var(--sans)', letterSpacing: '0.5px', textShadow: '0 1px 3px rgba(0,0,0,.4)', writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>{heightLabel}</span>
+        <svg width="14" height={arrowH} viewBox={`0 0 14 ${arrowH}`} fill="none" stroke="#F5A623" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <path d={`M7 3 V${arrowH - 3}`} />
+          <path d="M2 11 L7 3 L12 11" />
+          <path d={`M2 ${arrowH - 11} L7 ${arrowH - 3} L12 ${arrowH - 11}`} />
+        </svg>
+      </div>
+    </>
   )
   return (
     <div style={{ perspective: '1200px', width: '100%', height: '100%', display: 'grid', placeItems: 'center' }}>
