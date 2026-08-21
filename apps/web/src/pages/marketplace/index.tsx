@@ -126,8 +126,23 @@ export default function MarketplacePage() {
   const [signupGateOpen, setSignupGateOpen] = useState(false)
   const pendingCartRef = useRef<{ container: Container; mode: CartMode } | null>(null)
   // ?profile=1 deep link: the landing pages' profile icon lands here with
-  // the sign-in / profile sheet already open.
+  // the sign-in / profile sheet already open. Closing that sheet without
+  // doing anything should return to the page that launched it (the main
+  // website), not strand the visitor on /shop.
   const [profileOpen, setProfileOpen] = useState(() => qp('profile') === '1')
+  const profileFromLanding = useRef(qp('profile') === '1')
+  const closeProfile = () => {
+    setProfileOpen(false)
+    if (!profileFromLanding.current) return
+    profileFromLanding.current = false
+    // Same-origin referrer → real back-navigation (keeps scroll position on
+    // the landing/city page). A direct open (new tab, bookmark) has no
+    // history to go back to — send those to the homepage instead.
+    let sameOrigin = false
+    try { sameOrigin = !!document.referrer && new URL(document.referrer).origin === window.location.origin } catch { /* malformed referrer */ }
+    if (sameOrigin && window.history.length > 1) window.history.back()
+    else window.location.href = import.meta.env.BASE_URL
+  }
   const [accountOpen, setAccountOpen] = useState(false)
   const [accountTab, setAccountTab] = useState<ProfileTab>('account')
   const browseRef = useRef<HTMLDivElement>(null)
@@ -173,6 +188,9 @@ export default function MarketplacePage() {
     prevUserRef.current = user
     if (signedIn && profileOpen) {
       setProfileOpen(false)
+      // Signing in is a destination in itself — stay in the marketplace
+      // rather than bouncing back to the landing page.
+      profileFromLanding.current = false
       const portals = ['supplier', 'shipper', 'marketing'].filter(g => hasGrant(user, g as 'supplier' | 'shipper' | 'marketing'))
       toast(`Signed in as ${user!.name || user!.email}${portals.length ? ' — your portal tabs are below the menu' : ''}`)
     }
@@ -301,7 +319,9 @@ export default function MarketplacePage() {
       prompted = sessionStorage.getItem('sbx_zip_prompted') === '1'
       token = localStorage.getItem('sbx_token') || ''
     } catch { /* private mode */ }
-    if (!prompted && !token) setZipAskOpen(true)
+    // ?profile=1 arrivals came to sign in — the profile sheet is already
+    // open, so the welcome gate would just stack behind it.
+    if (!prompted && !token && qp('profile') !== '1') setZipAskOpen(true)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const closeZipAsk = (zip?: string) => {
     setZipAskOpen(false)
@@ -969,7 +989,7 @@ export default function MarketplacePage() {
       />
 
       {/* ── Profile menu — options only appear once signed in ── */}
-      <Modal open={profileOpen} onClose={() => setProfileOpen(false)} maxWidth={380} closeLabel="Close">
+      <Modal open={profileOpen} onClose={closeProfile} maxWidth={380} closeLabel="Close">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
           <div style={{ width: '46px', height: '46px', borderRadius: '50%', background: 'var(--primary-cont)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
             <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="6.5" r="3" /><path d="M3.5 17a6.5 6.5 0 0 1 13 0" /></svg>
