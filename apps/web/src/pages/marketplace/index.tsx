@@ -122,6 +122,9 @@ export default function MarketplacePage() {
   const { favs, toggleFav } = useFavorites()
   const [favOnly, setFavOnly] = useState(false)
   const [msgOpen, setMsgOpen] = useState(false)
+  // Add-to-cart sign-up gate (guests) + the item waiting to be added.
+  const [signupGateOpen, setSignupGateOpen] = useState(false)
+  const pendingCartRef = useRef<{ container: Container; mode: CartMode } | null>(null)
   // ?profile=1 deep link: the landing pages' profile icon lands here with
   // the sign-in / profile sheet already open.
   const [profileOpen, setProfileOpen] = useState(() => qp('profile') === '1')
@@ -172,6 +175,15 @@ export default function MarketplacePage() {
       setProfileOpen(false)
       const portals = ['supplier', 'shipper', 'marketing'].filter(g => hasGrant(user, g as 'supplier' | 'shipper' | 'marketing'))
       toast(`Signed in as ${user!.name || user!.email}${portals.length ? ' — your portal tabs are below the menu' : ''}`)
+    }
+    // Signing in through the add-to-cart gate finishes the interrupted add.
+    if (signedIn && signupGateOpen) setSignupGateOpen(false)
+    if (signedIn && pendingCartRef.current) {
+      const { container: c, mode } = pendingCartRef.current
+      pendingCartRef.current = null
+      setCart(prev => prev.some(i => i.container.id === c.id) ? prev : [...prev, { container: c, mode, rentTerm: 6 }])
+      setSelectedContainer(null)
+      toast(`Welcome, ${user!.name || user!.email} — ${c.sku} added to cart`)
     }
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
   const customerEmail = user?.email.toLowerCase() ?? ''
@@ -379,6 +391,15 @@ export default function MarketplacePage() {
   const inCart = (id: string) => cart.some(i => i.container.id === id)
 
   const addToCart = (c: Container, mode: CartMode) => {
+    // Guests browse freely, but the cart needs an account — sign-up is
+    // required to calculate final destination and container fees. The item
+    // is stashed and lands in the cart the moment they're signed in.
+    if (!user) {
+      pendingCartRef.current = { container: c, mode }
+      setSelectedContainer(null) // the detail modal would paint over the gate
+      setSignupGateOpen(true)
+      return
+    }
     if (inCart(c.id)) { setCartOpen(true); return }
     setCart(prev => [...prev, { container: c, mode, rentTerm: 6 }])
     setSelectedContainer(null)
@@ -905,6 +926,23 @@ export default function MarketplacePage() {
           if (next) setSelectedContainer(next)
         }}
       />
+
+      {/* ── Add-to-cart sign-up gate — guests must create an account before
+          the cart: sign-up is required to calculate final destination and
+          container fees. The pending item is added on successful sign-in. ── */}
+      <Modal open={signupGateOpen} onClose={() => { setSignupGateOpen(false); pendingCartRef.current = null }} maxWidth={420} closeLabel="Close">
+        {/* right padding keeps the title clear of the Modal's Close pill */}
+        <h2 style={{ fontSize: '19px', fontWeight: 700, marginBottom: '6px', paddingRight: '86px' }}>Create an account to add to cart</h2>
+        <div style={{ display: 'flex', gap: '9px', alignItems: 'flex-start', padding: '10px 12px', borderRadius: 'var(--r8)', background: 'var(--primary-cont, #E3F0FF)', border: '1px solid var(--primary)', marginBottom: '14px' }}>
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="var(--primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '1px' }}><circle cx="10" cy="10" r="8" /><line x1="10" y1="9" x2="10" y2="14" /><circle cx="10" cy="6" r="0.4" fill="var(--primary)" /></svg>
+          <p style={{ fontSize: '12.5px', color: 'var(--ink)', lineHeight: 1.55, margin: 0 }}>
+            Sign-up is required to calculate final destination and container fees —
+            your delivery address sets the all-in delivered price you'll see at checkout.
+          </p>
+        </div>
+        <LoginForm allowRegister initialMode="register" />
+      </Modal>
+
 
       {/* ── Cart / checkout ── */}
       <CartModal

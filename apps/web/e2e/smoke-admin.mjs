@@ -81,7 +81,19 @@ await shop.waitForTimeout(900)
 const quoted = ((await text(shop)).match(/\+\$([\d,]+)/) || [])[1]
 ok(!!quoted, `the unit page quotes a cross-territory relay (+$${quoted})`)
 await shop.getByRole('button', { name: /Add to Cart —/ }).click()
-await shop.waitForTimeout(900)
+await shop.waitForTimeout(800)
+// Guests can't cart directly — the sign-up gate steps in first, with the
+// destination-fees statement, and finishes the add after sign-in.
+const gateText = await text(shop)
+ok(/Create an account to add to cart/.test(gateText), 'guest add-to-cart raises the sign-up gate')
+ok(/Sign-up is required to calculate final destination and container fees/.test(gateText), 'with the destination-fees statement')
+await shop.getByRole('button', { name: 'Sign in', exact: true }).click() // "Already have an account?"
+await shop.waitForTimeout(400)
+await shop.locator('input[type="email"]').fill('customer@ntlsb.com')
+await shop.locator('input[type="password"]').first().fill('demo')
+await shop.getByRole('button', { name: 'Sign In', exact: true }).last().click()
+await shop.waitForTimeout(1800)
+ok(/added to cart/i.test(await text(shop)), 'signing in finishes the interrupted add')
 await shop.getByRole('button', { name: /^Cart/ }).first().click()
 await shop.waitForTimeout(1500)
 ok(await shop.locator('input[placeholder="77493"]').inputValue() === '21224', 'checkout opens with that ZIP already filled')

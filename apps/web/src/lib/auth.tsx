@@ -127,13 +127,16 @@ export function ShowPasswordButton({ shown, onToggle }: { shown: boolean; onTogg
 
 type FormMode = 'login' | 'register' | 'code' | 'forgot' | 'reset'
 
-export function LoginForm({ onDone, allowRegister = false, subtitle }: {
+export function LoginForm({ onDone, allowRegister = false, subtitle, initialMode = 'login' }: {
   onDone?: (u: AuthUser) => void
   allowRegister?: boolean
   subtitle?: string
+  // Gates that exist to create an account (e.g. add-to-cart) open on the
+  // sign-up form directly; the sign-in link is still one tap away.
+  initialMode?: 'login' | 'register'
 }) {
   const { login, verifyLogin, register } = useAuth()
-  const [mode, setMode] = useState<FormMode>('login')
+  const [mode, setMode] = useState<FormMode>(initialMode)
   const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', code: '', newPassword: '' })
   const [pending, setPending] = useState<PendingLogin | null>(null)
   const [notice, setNotice] = useState('')  // blue info banner (code sent, reset done…)
