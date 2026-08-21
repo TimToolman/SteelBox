@@ -67,7 +67,8 @@ A buyer or renter with an account.
 | CU-1 | Sign-up gate | Create a new account; stop before entering the code | Name + mobile + verification code 123456 required; an unverified sign-up cannot use the site | Auto — api |
 | CU-2 | Favorites | Heart a few units; reload is NOT allowed (demo) | Hearts toggle without opening the card and persist within the session | Manual only |
 | CU-3 | Territory & relay | Open an FC- (Atlanta) unit → ZIP check 21224 (Baltimore) | Relay via I-85 Charlotte with a fee and mileage; in-territory ZIPs show "delivery included" instead | Auto — api (fees) · UI manual |
-| CU-4 | Cart & checkout | Add to cart → checkout | Phone-payment explainer (no card fields); relay fee lands in Due Today; order confirmation + "we’ll call you" email in admin Outbox | Auto — api · UI manual |
+| CU-3b | Guest add-to-cart gate | As a guest (signed out), click Add to Cart | Sign-up gate opens on the Create Account form with the statement "Sign-up is required to calculate final destination and container fees"; "Already have an account? Sign in" switches to sign-in; on success the interrupted item lands in the cart automatically; closing the gate abandons the add | Auto — smoke-admin |
+| CU-4 | Cart & checkout | Add to cart (signed in) → checkout | Phone-payment explainer (no card fields); relay fee lands in Due Today; order confirmation + "we’ll call you" email in admin Outbox | Auto — api · UI manual |
 | CU-5 | Order tracking | Open the order after an admin advances it | Status steps update; rating available after delivery (1–5, buyer only) | Auto — api · UI manual |
 | CU-6 | Two-factor at order | Place an order | SMS code (see admin Outbox) required; codes expire; re-verification needed on later orders | Auto — api |
 
@@ -208,7 +209,7 @@ End-to-end flows that cross portals.
 | Types | `cd apps/web && npx tsc --noEmit` | clean |
 | Demo build | `cd apps/web && VITE_DEMO_STATIC=1 npm run build` | clean |
 | API suite (api) | `cd apps/api && node test.mjs  (throwaway DATA_DIR)` | 208 checks |
-| Browser sweeps | `node apps/web/e2e/run-all.mjs — smoke-admin · smoke-claims · smoke-inspections · smoke-mobile · smoke-viewer, all against the built demo (see apps/web/e2e/README.md)` | 146 checks |
+| Browser sweeps | `node apps/web/e2e/run-all.mjs — smoke-admin · smoke-claims · smoke-inspections · smoke-mobile · smoke-viewer, all against the built demo (see apps/web/e2e/README.md)` | 159 checks |
 
 Playwright notes for whoever extends the sweeps: dismiss (or pre-seed
 `sessionStorage.sbx_zip_prompted`) before hovering marketplace cards; admin left-nav
