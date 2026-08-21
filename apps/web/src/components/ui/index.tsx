@@ -266,7 +266,10 @@ export function Modal({ open, onClose, children, maxWidth = 500, noPadding = fal
           borderRadius: 'var(--r24)',
           boxShadow: 'var(--sh3)',
           position: 'relative',
-          animation: 'modalIn 0.22s cubic-bezier(0.34,1.56,0.64,1)',
+          // No overshoot: a springy bezier (y > 1) scales the dialog PAST its
+          // final size for a beat — on phones, where the sheet is nearly
+          // full-width, that reads as "opens too wide, then snaps in".
+          animation: 'modalIn 0.22s cubic-bezier(0.22,1,0.36,1)',
           margin: 'auto',
           overflow: 'hidden',
           padding: noPadding ? 0 : '28px',
