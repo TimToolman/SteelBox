@@ -118,8 +118,27 @@ Presentable version of this plan: **`roadmap.html`** (open it in a browser).
 
 Blocks payments, subscriptions and marketing. Nothing else starts until Postgres lands.
 
+- [x] **Hosting decision: Railway** (decided 2026-08-21 — account exists, owner is
+      familiar with the admin). Target architecture, one Railway project:
+      - **API service** — the Node API as one container/service. Single instance
+        until the Postgres migration lands (the CSV design must never run ×2);
+        Railway supports the SSE long-lived connections as-is.
+      - **Railway Postgres** — the P1 migration target; automated backups on, and
+        a restore rehearsed (item below).
+      - **Object storage for photos + claim packages** — Railway has no blob
+        store; use Cloudflare R2 (S3-compatible, no egress fees) in the same
+        region as the API. Replaces local-disk photo writes; the claim-package
+        zip streams read from it.
+      - **SPA** — static build served from the API service (same origin, no CORS)
+        or Railway static hosting; keep the GitHub Pages demo build separate.
+      - **Deploys** — Railway GitHub integration off `main`: build, run
+        migrations, deploy; rollback = redeploy previous build. Secrets live in
+        Railway environment variables, not files.
+      - **Escape hatch** — the shape (one service + Postgres + S3-compatible
+        store) ports to GCP Cloud Run/Cloud SQL/GCS unchanged if we outgrow it.
 - [ ] **Postgres migration** (promoted from Nice-to-have — it now blocks payments,
-- [ ] Hosting + CI: build, migrations and rollback on deploy.
+- [ ] Hosting + CI: build, migrations and rollback on deploy — via Railway's
+      GitHub integration per the architecture above.
 - [ ] Automated backups with a **restore actually tested**, not just configured.
 - [ ] Error tracking (Sentry) and uptime alerting — right now a 500 in production is
 - [ ] Secrets management: no keys in env files on a laptop.
