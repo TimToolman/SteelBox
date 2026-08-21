@@ -124,6 +124,10 @@ Blocks payments, subscriptions and marketing. Nothing else starts until Postgres
 - [ ] Error tracking (Sentry) and uptime alerting — right now a 500 in production is
 - [ ] Secrets management: no keys in env files on a laptop.
 - [ ] Rate limiting + bot protection on auth, checkout and the quote forms.
+- [ ] **Server-side auth on order placement** — the guest add-to-cart sign-up gate
+      (PR #86) is UI-only; the API still accepts an anonymous `POST /orders`. In
+      production the server must refuse orders without a valid session, so the
+      account requirement can't be bypassed by calling the API directly.
 - [ ] Load check: the API is single-instance by design (CSV + SSE). Confirm Postgres
 - [ ] Real photography to replace `demo-photos/` and the borrowed-photo fallback.
 
