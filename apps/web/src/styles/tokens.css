@@ -130,6 +130,14 @@ button, input, select, textarea {
   to   { opacity: 1; transform: none; }
 }
 
+/* Reduced motion: dialogs fade only — no scale/slide. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes modalIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.3; }
